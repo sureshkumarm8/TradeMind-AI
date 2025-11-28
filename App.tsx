@@ -5,7 +5,7 @@ import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink } from 'lucide-react';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
   name: "Intraday Trend System (Template)",
@@ -162,7 +162,12 @@ const App: React.FC = () => {
                   </div>
                   <div className="p-6 space-y-6">
                       <form onSubmit={handleSaveApiKey}>
-                          <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Gemini API Key</label>
+                          <div className="flex justify-between items-center mb-2">
+                             <label className="block text-xs font-bold text-slate-400 uppercase">Gemini API Key</label>
+                             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center">
+                                Get Key <ExternalLink size={10} className="ml-1"/>
+                             </a>
+                          </div>
                           <div className="relative mb-2">
                             <Key size={16} className="absolute left-3 top-3 text-slate-500"/>
                             <input 

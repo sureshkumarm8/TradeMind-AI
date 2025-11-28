@@ -1,9 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter } from 'lucide-react';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, OptionType } from '../types';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Hash } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
-import TradeList from './TradeList';
 
 interface DashboardProps {
   trades: Trade[];
@@ -18,6 +17,17 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
   
   // Interactive Filters
   const [selectedFilter, setSelectedFilter] = useState<{ type: string, value: string | number } | null>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to details when filter changes
+  useEffect(() => {
+    if (selectedFilter && detailsRef.current) {
+        // Small timeout to allow render
+        setTimeout(() => {
+            detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
+  }, [selectedFilter]);
 
   const stats: DashboardStats = useMemo(() => {
     const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
@@ -121,77 +131,65 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
      if (!selectedFilter) return [];
      
      const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
-     const sortedTrades = [...closedTrades].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
+     const sortedTrades = [...closedTrades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+     let result = [];
      switch (selectedFilter.type) {
         case 'all_closed':
-           return closedTrades;
+           result = closedTrades;
+           break;
         case 'wins':
-           return closedTrades.filter(t => t.outcome === TradeOutcome.WIN);
+           result = closedTrades.filter(t => t.outcome === TradeOutcome.WIN);
+           break;
         case 'losses':
-           return closedTrades.filter(t => t.outcome === TradeOutcome.LOSS);
+           result = closedTrades.filter(t => t.outcome === TradeOutcome.LOSS);
+           break;
         case 'best':
-           return sortedTrades.length > 0 ? [sortedTrades[0]] : [];
+           const sortedByPnL = [...closedTrades].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
+           result = sortedByPnL.length > 0 ? [sortedByPnL[0]] : [];
+           break;
         case 'worst':
-           return sortedTrades.length > 0 ? [sortedTrades[sortedTrades.length - 1]] : [];
+           const sortedByPnLW = [...closedTrades].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
+           result = sortedByPnLW.length > 0 ? [sortedByPnLW[sortedByPnLW.length - 1]] : [];
+           break;
         case 'day':
-           return trades.filter(t => new Date(t.date).getDay() === selectedFilter.value);
+           result = trades.filter(t => new Date(t.date).getDay() === selectedFilter.value);
+           break;
         case 'direction':
-           return trades.filter(t => t.direction === (selectedFilter.value === 'Long' ? TradeDirection.LONG : TradeDirection.SHORT));
+           result = trades.filter(t => t.direction === (selectedFilter.value === 'Long' ? TradeDirection.LONG : TradeDirection.SHORT));
+           break;
         case 'date':
-           return trades.filter(t => t.date === selectedFilter.value);
+           result = trades.filter(t => t.date === selectedFilter.value);
+           break;
         default:
-           return [];
+           result = [];
      }
+     // Always sort result by date descending
+     return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [selectedFilter, trades]);
+
+  const getFilterTitle = (filter: { type: string, value: string | number }) => {
+     switch(filter.type) {
+        case 'day': return `Performance on ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][filter.value as number]}s`;
+        case 'all_closed': return 'Net P&L Ledger';
+        case 'wins': return 'Winning Trades Execution';
+        case 'losses': return 'Losing Trades Analysis';
+        case 'best': return 'Best Performance Record';
+        case 'worst': return 'Worst Performance Record';
+        default: return filter.value;
+     }
+  }
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       
-      {/* Detail Overlay */}
-      {selectedFilter && (
-         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-             <div className="bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl border border-slate-700 overflow-hidden flex flex-col shadow-2xl">
-                 <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-850">
-                     <div className="flex items-center gap-3">
-                         <div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400">
-                             <ListFilter size={20}/>
-                         </div>
-                         <div>
-                             <h3 className="text-lg font-bold text-white">
-                                {selectedFilter.type === 'day' ? `Trades on ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][selectedFilter.value as number]}` : 
-                                 selectedFilter.type === 'all_closed' ? 'All Closed Trades' :
-                                 selectedFilter.type === 'wins' ? 'Winning Trades' :
-                                 selectedFilter.type === 'losses' ? 'Losing Trades' :
-                                 selectedFilter.type === 'best' ? 'Best Trade Record' :
-                                 selectedFilter.type === 'worst' ? 'Worst Trade Record' :
-                                 selectedFilter.value}
-                             </h3>
-                             <p className="text-xs text-slate-500">{filteredTrades.length} records found</p>
-                         </div>
-                     </div>
-                     <button onClick={() => setSelectedFilter(null)} className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"><X size={24}/></button>
-                 </div>
-                 <div className="overflow-y-auto p-4 flex-1 bg-slate-950/50">
-                     <TradeList 
-                        trades={filteredTrades} 
-                        strategyProfile={strategyProfile} 
-                        apiKey={apiKey}
-                        onEdit={()=>{}} onDelete={()=>{}} onAnalyze={()=>{}} onImport={()=>{}} isAnalyzing={false} 
-                        readOnly={true} 
-                     />
-                 </div>
-             </div>
-         </div>
-      )}
-
       {/* KPI Cards - Interactive Command Center */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Card 1: Net P&L (Show Ledger) */}
         <button 
            onClick={() => setSelectedFilter({ type: 'all_closed', value: 'All Closed' })}
-           className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border border-slate-700/50 shadow-lg hover:shadow-emerald-900/20 hover:border-emerald-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left"
+           className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'all_closed' ? 'border-emerald-500 ring-1 ring-emerald-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-emerald-900/20 hover:border-emerald-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
         >
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
              <TrendingUp size={64} />
@@ -207,14 +205,14 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
           </p>
           <div className="flex justify-between items-center mt-3 text-[10px] font-medium text-slate-500 uppercase relative z-10">
              <span>{stats.totalTrades} Trades</span>
-             <span className="group-hover:text-emerald-400 transition-colors">View All &rarr;</span>
+             <span className="group-hover:text-emerald-400 transition-colors flex items-center">View Ledger <ArrowRight size={10} className="ml-1"/></span>
           </div>
         </button>
 
         {/* Card 2: Win Rate (Show Wins) */}
         <button 
            onClick={() => setSelectedFilter({ type: 'wins', value: 'Wins' })}
-           className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border border-slate-700/50 shadow-lg hover:shadow-blue-900/20 hover:border-blue-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left"
+           className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'wins' ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-blue-900/20 hover:border-blue-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
         >
            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
              <Target size={64} />
@@ -232,14 +230,14 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
              <span className="text-blue-400">L: {stats.longWinRate.toFixed(0)}%</span>
              <span className="text-slate-600">|</span>
              <span className="text-amber-400">S: {stats.shortWinRate.toFixed(0)}%</span>
-             <span className="ml-auto text-slate-500 group-hover:text-blue-400 transition-colors">View Wins &rarr;</span>
+             <span className="ml-auto text-slate-500 group-hover:text-blue-400 transition-colors flex items-center">Analyze Wins <ArrowRight size={10} className="ml-1"/></span>
           </div>
         </button>
 
         {/* Card 3: Profit Factor (Show Losses/Leaks) */}
         <button 
            onClick={() => setSelectedFilter({ type: 'losses', value: 'Losses' })}
-           className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border border-slate-700/50 shadow-lg hover:shadow-rose-900/20 hover:border-rose-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left"
+           className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'losses' ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-rose-900/20 hover:border-rose-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
         >
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
              <ShieldAlert size={64} />
@@ -255,7 +253,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
           </p>
           <div className="mt-3 flex justify-between items-center text-[10px] text-slate-500 font-medium uppercase relative z-10">
             <span>Target: {'>'} 1.5</span>
-            <span className="group-hover:text-rose-400 transition-colors">Analyze Leaks &rarr;</span>
+            <span className="group-hover:text-rose-400 transition-colors flex items-center">Check Leaks <ArrowRight size={10} className="ml-1"/></span>
           </div>
         </button>
 
@@ -273,16 +271,16 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
           <div className="flex items-end justify-between gap-2 relative z-10 mt-2">
              <button 
                onClick={() => setSelectedFilter({ type: 'best', value: 'Best Trade' })}
-               className="flex-1 bg-emerald-500/5 hover:bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/20 transition text-left"
+               className="flex-1 bg-emerald-500/5 hover:bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/20 transition text-left group/btn"
              >
-                <div className="text-[10px] text-emerald-500/70 font-bold uppercase">Max Win</div>
+                <div className="text-[10px] text-emerald-500/70 font-bold uppercase mb-1">Max Win</div>
                 <div className="text-sm font-bold text-emerald-400">₹{stats.bestTrade.toFixed(0)}</div>
              </button>
              <button 
                onClick={() => setSelectedFilter({ type: 'worst', value: 'Worst Trade' })}
-               className="flex-1 bg-red-500/5 hover:bg-red-500/20 p-2 rounded-lg border border-red-500/20 transition text-right"
+               className="flex-1 bg-red-500/5 hover:bg-red-500/20 p-2 rounded-lg border border-red-500/20 transition text-right group/btn"
              >
-                <div className="text-[10px] text-red-500/70 font-bold uppercase">Max Loss</div>
+                <div className="text-[10px] text-red-500/70 font-bold uppercase mb-1">Max Loss</div>
                 <div className="text-sm font-bold text-red-400">-₹{Math.abs(stats.worstTrade).toFixed(0)}</div>
              </button>
           </div>
@@ -355,10 +353,10 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Equity Curve */}
         <div className="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-           <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wide">Account Growth (Click for Details)</h3>
+           <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wide">Account Growth</h3>
            <div className="h-64 w-full cursor-pointer">
              <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={equityCurveData} onClick={(data) => {
+               <AreaChart data={equityCurveData} onClick={(data: any) => {
                   if (data && data.activePayload && data.activePayload[0]) {
                       setSelectedFilter({ type: 'date', value: data.activePayload[0].payload.fullDate });
                   }
@@ -425,7 +423,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
             </div>
             <div className="h-56 w-full cursor-pointer">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dayOfWeekData} onClick={(data) => {
+                <BarChart data={dayOfWeekData} onClick={(data: any) => {
                      if (data && data.activePayload && data.activePayload[0]) {
                          setSelectedFilter({ type: 'day', value: data.activePayload[0].payload.index });
                      }
@@ -471,6 +469,103 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
             </div>
         </div>
       </div>
+
+      {/* --- Drill Down Section (Replaces Overlay) --- */}
+      <div ref={detailsRef} className="scroll-mt-24">
+        {selectedFilter && (
+            <div className="mt-8 bg-slate-900 rounded-xl border border-slate-700 overflow-hidden animate-fade-in-up shadow-2xl">
+                <div className="p-4 border-b border-slate-800 bg-slate-800/50 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400">
+                            <ListFilter size={20}/>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-white text-base">
+                                {getFilterTitle(selectedFilter)}
+                            </h3>
+                            <p className="text-xs text-slate-500">{filteredTrades.length} mission logs found</p>
+                        </div>
+                    </div>
+                    <button onClick={() => setSelectedFilter(null)} className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"><X size={20}/></button>
+                </div>
+                
+                {filteredTrades.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 italic">No records found for this filter criteria.</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800">
+                                <tr>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Date & Time</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Instrument</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Side</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider text-right">Result (PnL)</th>
+                                    <th className="px-6 py-4 font-bold tracking-wider">Setup & Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {filteredTrades.map(t => (
+                                    <tr key={t.id} className="hover:bg-slate-800/30 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-white font-medium text-xs">{t.date}</span>
+                                                <span className="text-slate-500 text-[10px] flex items-center gap-1 mt-0.5"><Clock size={10}/> {t.entryTime}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="text-indigo-300 font-bold text-xs">{t.instrument}</span>
+                                                <div className="flex gap-1 mt-1">
+                                                    {t.optionType && t.optionType !== OptionType.SPOT && (
+                                                        <span className={`text-[9px] px-1 rounded uppercase ${t.optionType === OptionType.CE ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>{t.optionType}</span>
+                                                    )}
+                                                    {t.strikePrice && <span className="text-[9px] bg-slate-800 text-slate-300 px-1 rounded">{t.strikePrice}</span>}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${t.direction === TradeDirection.LONG ? 'bg-blue-900/20 text-blue-400 border-blue-800/50' : 'bg-amber-900/20 text-amber-400 border-amber-800/50'}`}>
+                                                {t.direction}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            {t.outcome !== TradeOutcome.OPEN ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span className={`font-mono font-bold text-sm ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                        {t.pnl && t.pnl > 0 ? '+' : ''}₹{t.pnl?.toFixed(0)}
+                                                    </span>
+                                                    <span className={`text-[9px] uppercase font-bold mt-0.5 ${t.outcome === TradeOutcome.WIN ? 'text-emerald-600' : t.outcome === TradeOutcome.LOSS ? 'text-red-600' : 'text-slate-500'}`}>
+                                                        {t.outcome}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-500 italic text-xs">Open Position</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 max-w-xs">
+                                            <div className="truncate text-slate-300 text-xs" title={t.entryReason || t.setupName}>
+                                                {t.setupName ? <span className="text-white font-bold mr-1">[{t.setupName}]</span> : null}
+                                                {t.entryReason || '-'}
+                                            </div>
+                                            {t.mistakes && t.mistakes.length > 0 && (
+                                                <div className="flex gap-1 mt-1">
+                                                    {t.mistakes.slice(0, 2).map(m => (
+                                                        <span key={m} className="text-[9px] bg-red-500/10 text-red-400 px-1 rounded border border-red-500/20">{m}</span>
+                                                    ))}
+                                                    {t.mistakes.length > 2 && <span className="text-[9px] text-slate-500">+{t.mistakes.length - 2} more</span>}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        )}
+      </div>
+
     </div>
   );
 };

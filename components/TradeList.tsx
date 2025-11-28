@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON } from '../services/dataService';
 
@@ -94,6 +94,89 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
       d.setDate(d.getDate() + 7);
       setCurrentDate(d);
   }
+
+  // --- Render AI Feedback UI ---
+  const renderAiFeedback = (feedback: string) => {
+    if (!feedback) return null;
+
+    // Simple parser to separate the sections by newlines
+    const parts = feedback.split('\n');
+    let renderedParts = [];
+    let currentBlock = { title: "", content: "", style: "", icon: null as React.ReactNode };
+    
+    // Helper to flush current block
+    const flushBlock = () => {
+       if (currentBlock.content.trim()) {
+           renderedParts.push(
+               <div key={renderedParts.length} className={`p-4 rounded-xl border mb-3 flex gap-3 ${currentBlock.style}`}>
+                   <div className="mt-0.5 shrink-0">{currentBlock.icon}</div>
+                   <div>
+                       <h5 className="font-bold text-xs uppercase tracking-wider opacity-90 mb-1">{currentBlock.title}</h5>
+                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{currentBlock.content.trim()}</p>
+                   </div>
+               </div>
+           );
+       }
+    };
+
+    // Iterate lines to detect headers
+    for (const line of parts) {
+        if (line.includes("Reality Check")) {
+            flushBlock();
+            currentBlock = { 
+                title: "Reality Check", 
+                content: line.replace(/\*\*Reality Check\*\*|1\.|:/g, ''), 
+                style: "bg-blue-900/20 border-blue-500/30 text-blue-100", 
+                icon: <Activity size={18} className="text-blue-400"/> 
+            };
+        } else if (line.includes("Strategy Audit")) {
+            flushBlock();
+             currentBlock = { 
+                title: "Strategy Audit", 
+                content: line.replace(/\*\*Strategy Audit\*\*|2\.|:/g, ''), 
+                style: "bg-amber-900/20 border-amber-500/30 text-amber-100", 
+                icon: <ShieldAlert size={18} className="text-amber-400"/> 
+            };
+        } else if (line.includes("Coach's Command") || line.includes("Command")) {
+            flushBlock();
+             currentBlock = { 
+                title: "Coach's Command", 
+                content: line.replace(/\*\*Coach's Command\*\*|3\.|:/g, ''), 
+                style: "bg-emerald-900/20 border-emerald-500/30 text-emerald-100", 
+                icon: <Zap size={18} className="text-emerald-400"/> 
+            };
+        } else if (line.includes("Sources verified")) {
+             flushBlock();
+             currentBlock = {
+                 title: "Grounding Sources",
+                 content: line.replace(/\*\*Sources verified\*\*:|Sources verified:/g, ''),
+                 style: "bg-slate-900/40 border-slate-700 border-dashed text-slate-400 italic",
+                 icon: <ExternalLink size={16} className="text-slate-500"/>
+             }
+        } else {
+            // Continuation of previous block or just generic text
+            if (currentBlock.title) {
+                currentBlock.content += "\n" + line;
+            } else if (line.trim()) {
+                // If text appears before any header, put it in a generic block
+                 currentBlock = {
+                    title: "Analysis",
+                    content: line,
+                    style: "bg-slate-800/50 border-slate-700 text-slate-300",
+                    icon: <Bot size={18} className="text-slate-400"/>
+                 }
+            }
+        }
+    }
+    flushBlock();
+
+    if (renderedParts.length === 0) {
+        // Fallback for non-standard format
+        return <div className="text-sm text-slate-300 leading-7 whitespace-pre-wrap">{feedback}</div>;
+    }
+
+    return <div>{renderedParts}</div>;
+  };
 
   // --- Week View Logic ---
   const renderWeeklyView = () => {
@@ -586,9 +669,10 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                   </button>
                                 )}
                              </div>
+                             
                              {trade.aiFeedback ? (
-                               <div className="text-sm text-slate-300 leading-7 whitespace-pre-wrap font-sans relative z-10 border-l-2 border-indigo-500/50 pl-4">
-                                 {trade.aiFeedback}
+                               <div className="mt-4 space-y-3 relative z-10">
+                                  {renderAiFeedback(trade.aiFeedback)}
                                </div>
                              ) : (
                                <p className="text-xs text-slate-500 italic relative z-10 ml-12">
