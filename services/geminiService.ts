@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { Trade } from "../types";
+import { Trade, StrategyProfile } from "../types";
 
 const API_KEY = process.env.API_KEY || '';
 
@@ -8,36 +8,43 @@ const FAST_MODEL = 'gemini-2.5-flash';
 // Reasoning model for deep batch analysis (Weekly/Monthly reviews)
 const REASONING_MODEL = 'gemini-3-pro-preview';
 
-const USER_STRATEGY = `
-USER STRATEGY (Nifty 30-Point Scalp):
-1. Pre-market: Analyze prev day/month, S/R zones, predict direction.
-2. Open: Analyze Gap/Flat. Wait 5-15 mins before trading.
-3. Confirmation: Watch Sensibull OI vs Strike for S/R zones & Nifty 5m Chart.
-4. Execution: Buy CE/PE based on direction.
-5. Goal: Capture 30 points on Nifty Spot.
-6. Time Rule: 
-   - Checkpoint at 15 mins. 
-   - If target/SL not hit but thesis is valid, HOLD. 
-   - Max duration ~30 mins. Do not exit early if the setup is still valid.
-`;
+const formatStrategyForAI = (profile?: StrategyProfile) => {
+  if (!profile) return "Strategy: General Intraday Trading";
 
-export const analyzeTradeWithAI = async (trade: Trade): Promise<string> => {
+  const stepsText = profile.steps.map(s => `${s.title}: ${s.items.join(', ')}`).join('\n');
+  const rulesText = profile.rules.map(r => `Rule: ${r.title} - ${r.description}`).join('\n');
+
+  return `
+USER STRATEGY (${profile.name}):
+${profile.description}
+
+PROTOCOL:
+${stepsText}
+
+IRON RULES:
+${rulesText}
+`;
+};
+
+export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile): Promise<string> => {
   if (!API_KEY) {
     return "API Key is missing. Please check your environment variables.";
   }
 
   try {
     const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const strategyContext = formatStrategyForAI(strategyProfile);
     
     // Construct a prompt specifically for Nifty/Index traders
     const prompt = `
-      You are a strict Quantitative Trading Mentor specializing in Nifty 50 Intraday trading.
-      The user follows a specific strategy: ${USER_STRATEGY}
+      You are a strict Quantitative Trading Mentor.
+      The user follows a specific system.
+      ${strategyContext}
       
       TASK:
       1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} between ${trade.entryTime || 'market open'} and ${trade.exitTime || 'market close'}.
       2. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
-      3. Verify if their view (LONG/SHORT) aligned with the trend in that specific 15-30 min window.
+      3. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
       
       User's Logged Trade:
       - Date: ${trade.date}
@@ -50,7 +57,7 @@ export const analyzeTradeWithAI = async (trade: Trade): Promise<string> => {
       
       Output Format (Markdown):
       1. **Reality Check**: "At ${trade.entryTime}, Nifty was actually [Price/Trend]. Your entry was [Perfect/Early/Late] because..."
-      2. **Strategy Audit**: Did they follow the Wait rule? Did they hold efficiently (15-30m) or panic exit?
+      2. **Strategy Audit**: Did they follow their own Rules? (Check time limits, wait times, etc from the Strategy provided above)
       3. **Coach's Command**: One specific improvement for next time.
       
       Tone: Professional, direct, encouraging but firm on discipline.
@@ -88,12 +95,13 @@ export const analyzeTradeWithAI = async (trade: Trade): Promise<string> => {
   }
 };
 
-export const analyzeBatch = async (trades: Trade[], periodDescription: string): Promise<string> => {
+export const analyzeBatch = async (trades: Trade[], periodDescription: string, strategyProfile?: StrategyProfile): Promise<string> => {
   if (!API_KEY) return "No API Key available.";
   if (trades.length === 0) return "No trades to analyze for this period.";
 
   try {
     const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const strategyContext = formatStrategyForAI(strategyProfile);
 
     // Prepare a summary of trades for the prompt to save tokens/complexity
     const tradeSummaries = trades.map((t, i) => `
@@ -103,24 +111,24 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string): 
     `).join('\n');
 
     const prompt = `
-      Analyze this batch of trades from a ${periodDescription} for a Nifty 50 Scalper.
-      User's Strategy: ${USER_STRATEGY}
+      Analyze this batch of trades from a ${periodDescription}.
+      ${strategyContext}
 
       Trade Log:
       ${tradeSummaries}
 
       Output a structured "Daily Coach's Report" in Markdown. 
-      Do NOT use generic text. Be specific to the data provided.
+      Do NOT use generic text. Be specific to the data provided and the USER STRATEGY above.
       
       Structure:
       ### 📊 Market Sync
-      (Did they trade with the trend or fight it? Did they wait for setups?)
+      (Did they trade with the trend? Did they wait for setups as per their protocol?)
 
       ### 🛡️ Execution Grade
-      (Are they hitting the 15-30m window correctly? Are they capturing 30 pts? Grade A-F)
+      (Are they following the specific time/point rules defined in the strategy? Grade A-F)
 
       ### 💡 Pro Tip
-      (One advanced concept to apply tomorrow based on these specific mistakes)
+      (One advanced concept to apply tomorrow)
     `;
 
     const response = await ai.models.generateContent({
@@ -147,7 +155,7 @@ export const getDailyCoachTip = async (): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: API_KEY });
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
-      contents: "Give me one powerful, short trading aphorism for a Nifty Intraday scalper who targets 30 points. Focus on patience or risk management.",
+      contents: "Give me one powerful, short trading aphorism for a Nifty Intraday scalper. Focus on patience or risk management.",
     });
     return response.text || "Wait for the setup. Cash is also a position.";
   } catch (e) {

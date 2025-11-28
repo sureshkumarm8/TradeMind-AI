@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection } from '../types';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile } from '../types';
 import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
   trades: Trade[];
+  strategyProfile: StrategyProfile;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ trades }) => {
+const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile }) => {
   const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -96,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades }) => {
       return;
     }
 
-    const report = await analyzeBatch(recentTrades, `Past ${reportPeriod === 'week' ? '7 Days' : '30 Days'}`);
+    const report = await analyzeBatch(recentTrades, `Past ${reportPeriod === 'week' ? '7 Days' : '30 Days'}`, strategyProfile);
     setAiReport(report);
     setIsGeneratingReport(false);
   };

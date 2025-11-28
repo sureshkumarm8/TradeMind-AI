@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trade } from './types';
+import { Trade, StrategyProfile } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
@@ -7,21 +7,61 @@ import MySystem from './components/MySystem';
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target } from 'lucide-react';
 
+const DEFAULT_STRATEGY: StrategyProfile = {
+  name: "Intraday Trend System (Template)",
+  description: "A disciplined approach to following market trends. Define your edge, wait for the setup, and execute with precision. Import your personal strategy file to customize.",
+  tags: ["Trend Following", "Risk: 1:2", "Discipline"],
+  steps: [
+    {
+      title: "Phase 1: Analysis",
+      items: ["Analyze higher timeframe trends (Daily/Hourly)", "Identify key support & resistance levels", "Check economic calendar for events"]
+    },
+    {
+      title: "Phase 2: Execution",
+      items: ["Wait for price action confirmation at key levels", "Verify risk-to-reward ratio is at least 1:2", "Enter trade with defined Stop Loss"]
+    },
+    {
+      title: "Phase 3: Management",
+      items: ["Trail Stop Loss to breakeven when possible", "Book partial profits at targets", "Log trade details immediately after exit"]
+    }
+  ],
+  links: [
+    { label: "TradingView", url: "https://www.tradingview.com", description: "Charting Platform" },
+    { label: "Economic Calendar", url: "https://www.investing.com/economic-calendar/", description: "Key Market Events" }
+  ],
+  rules: [
+    { title: "PROTECT CAPITAL", description: "Never risk more than 1-2% of total capital on a single trade." },
+    { title: "NO EMOTIONS", description: "Trade the chart, not your feelings. If you feel tilted, stop trading." },
+    { title: "FOLLOW THE PLAN", description: "Execution is the only thing you control. Outcome is probability." }
+  ]
+};
+
 const App: React.FC = () => {
   const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [dailyTip, setDailyTip] = useState<string>("");
 
-  // Load trades from local storage with error handling
+  // Load trades and strategy from local storage
   useEffect(() => {
     const savedTrades = localStorage.getItem('tradeMind_trades');
+    const savedStrategy = localStorage.getItem('tradeMind_strategy');
+    
     if (savedTrades) {
       try {
         setTrades(JSON.parse(savedTrades));
       } catch (e) {
-        console.error("Failed to parse trades from local storage:", e);
+        console.error("Failed to parse trades:", e);
+      }
+    }
+    
+    if (savedStrategy) {
+      try {
+        setStrategyProfile(JSON.parse(savedStrategy));
+      } catch (e) {
+        console.error("Failed to parse strategy:", e);
       }
     }
     
@@ -29,7 +69,7 @@ const App: React.FC = () => {
     getDailyCoachTip().then(setDailyTip);
   }, []);
 
-  // Save trades to local storage whenever they change
+  // Save trades to local storage
   useEffect(() => {
     try {
       localStorage.setItem('tradeMind_trades', JSON.stringify(trades));
@@ -37,6 +77,15 @@ const App: React.FC = () => {
       console.error("Failed to save trades:", e);
     }
   }, [trades]);
+
+  // Save strategy to local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile));
+    } catch (e) {
+      console.error("Failed to save strategy:", e);
+    }
+  }, [strategyProfile]);
 
   const handleSaveTrade = (trade: Trade) => {
     if (editingTrade) {
@@ -61,7 +110,7 @@ const App: React.FC = () => {
 
   const handleAnalyzeTrade = async (trade: Trade) => {
     setIsAnalyzing(true);
-    const feedback = await analyzeTradeWithAI(trade);
+    const feedback = await analyzeTradeWithAI(trade, strategyProfile);
     
     const updatedTrade = { ...trade, aiFeedback: feedback };
     setTrades(prev => prev.map(t => t.id === trade.id ? updatedTrade : t));
@@ -69,12 +118,15 @@ const App: React.FC = () => {
   };
   
   const handleImportTrades = (importedTrades: Trade[]) => {
-      // Merge unique trades by ID
       setTrades(prev => {
           const existingIds = new Set(prev.map(t => t.id));
           const newTrades = importedTrades.filter(t => !existingIds.has(t.id));
           return [...newTrades, ...prev];
       });
+  };
+
+  const handleImportStrategy = (importedProfile: StrategyProfile) => {
+    setStrategyProfile(importedProfile);
   };
 
   return (
@@ -144,7 +196,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="max-w-7xl mx-auto">
-          {view === 'dashboard' && <Dashboard trades={trades} />}
+          {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} />}
           
           {view === 'new' && (
             <TradeForm 
@@ -157,6 +209,7 @@ const App: React.FC = () => {
           {view === 'journal' && (
             <TradeList 
               trades={trades} 
+              strategyProfile={strategyProfile}
               onEdit={handleEditTrade} 
               onDelete={handleDeleteTrade} 
               onAnalyze={handleAnalyzeTrade}
@@ -166,7 +219,7 @@ const App: React.FC = () => {
           )}
 
           {view === 'system' && (
-            <MySystem />
+            <MySystem strategyProfile={strategyProfile} onImport={handleImportStrategy} />
           )}
         </div>
       </main>

@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { Trade, TradeOutcome, TradeDirection, OptionType } from '../types';
+import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile } from '../types';
 import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Download, Upload, FileSpreadsheet, FileJson, TrendingUp } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON } from '../services/dataService';
 
 interface TradeListProps {
   trades: Trade[];
+  strategyProfile: StrategyProfile;
   onEdit: (trade: Trade) => void;
   onDelete: (id: string) => void;
   onAnalyze: (trade: Trade) => void;
@@ -13,7 +14,7 @@ interface TradeListProps {
   isAnalyzing: boolean;
 }
 
-const TradeList: React.FC<TradeListProps> = ({ trades, onEdit, onDelete, onAnalyze, onImport, isAnalyzing }) => {
+const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, onEdit, onDelete, onAnalyze, onImport, isAnalyzing }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dailyAnalysis, setDailyAnalysis] = useState<Record<string, string>>({});
   const [analyzingDay, setAnalyzingDay] = useState<string | null>(null);
@@ -38,13 +39,13 @@ const TradeList: React.FC<TradeListProps> = ({ trades, onEdit, onDelete, onAnaly
 
   const handleAnalyzeDay = async (dateStr: string, dayTrades: Trade[]) => {
     setAnalyzingDay(dateStr);
-    const result = await analyzeBatch(dayTrades, `Single Trading Day (${dateStr})`);
+    const result = await analyzeBatch(dayTrades, `Single Trading Day (${dateStr})`, strategyProfile);
     setDailyAnalysis(prev => ({ ...prev, [dateStr]: result }));
     setAnalyzingDay(null);
   };
   
   const handleExportCSV = () => exportToCSV(trades);
-  const handleExportJSON = () => exportToJSON(trades);
+  const handleExportJSON = () => exportToJSON(trades, strategyProfile);
   
   const handleImportClick = () => fileInputRef.current?.click();
   
@@ -54,9 +55,13 @@ const TradeList: React.FC<TradeListProps> = ({ trades, onEdit, onDelete, onAnaly
     
     try {
       const { importData } = await import('../services/dataService');
-      const importedTrades = await importData(file);
-      if (confirm(`Found ${importedTrades.length} trades in file. This will merge with your existing data. Continue?`)) {
-          onImport(importedTrades);
+      const { trades: importedTrades } = await importData(file);
+      if (importedTrades && importedTrades.length > 0) {
+        if (confirm(`Found ${importedTrades.length} trades in file. This will merge with your existing data. Continue?`)) {
+            onImport(importedTrades);
+        }
+      } else {
+        alert("No trades found in this file.");
       }
     } catch (error) {
       alert("Failed to import file: " + error);

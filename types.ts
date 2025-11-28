@@ -106,3 +106,31 @@ export interface DashboardStats {
   longWinRate: number;
   shortWinRate: number;
 }
+
+// --- Strategy Profile Interfaces ---
+
+export interface StrategyLink {
+  label: string;
+  url: string;
+  description: string;
+  icon?: string; // Icon name reference
+}
+
+export interface StrategyStep {
+  title: string;
+  items: string[];
+}
+
+export interface StrategyRule {
+  title: string;
+  description: string;
+}
+
+export interface StrategyProfile {
+  name: string;
+  description: string;
+  tags: string[]; // e.g. ["Target: 30 Pts", "Risk: 1:1"]
+  steps: StrategyStep[]; // The Timeline Phases
+  links: StrategyLink[]; // Tools
+  rules: StrategyRule[]; // Iron Rules
+}

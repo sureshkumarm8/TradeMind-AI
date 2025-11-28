@@ -1,9 +1,24 @@
-import { Trade, TradeDirection, TradeOutcome, OptionType } from '../types';
+import { Trade, TradeDirection, TradeOutcome, OptionType, StrategyProfile } from '../types';
 
-export const exportToJSON = (trades: Trade[]) => {
-  const dataStr = JSON.stringify(trades, null, 2);
+export const exportToJSON = (trades: Trade[], strategy?: StrategyProfile) => {
+  const data = {
+    trades,
+    strategy // Include strategy in backup if provided
+  };
+  const dataStr = JSON.stringify(data, null, 2);
   const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
   const exportFileDefaultName = `trademind_backup_${new Date().toISOString().split('T')[0]}.json`;
+  
+  const linkElement = document.createElement('a');
+  linkElement.setAttribute('href', dataUri);
+  linkElement.setAttribute('download', exportFileDefaultName);
+  linkElement.click();
+}
+
+export const exportSystemProfile = (profile: StrategyProfile) => {
+  const dataStr = JSON.stringify(profile, null, 2);
+  const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+  const exportFileDefaultName = `my_system_template_${new Date().toISOString().split('T')[0]}.json`;
   
   const linkElement = document.createElement('a');
   linkElement.setAttribute('href', dataUri);
@@ -75,19 +90,28 @@ export const exportToCSV = (trades: Trade[]) => {
   document.body.removeChild(link);
 }
 
-export const importData = (file: File): Promise<Trade[]> => {
+export const importData = (file: File): Promise<{ trades: Trade[], strategy?: StrategyProfile }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const content = e.target?.result as string;
       try {
         if (file.name.endsWith('.json')) {
-           const trades = JSON.parse(content);
-           if (Array.isArray(trades)) resolve(trades);
-           else reject(new Error("Invalid JSON format. Expected an array of trades."));
+           const parsed = JSON.parse(content);
+           // Check if it's the new format with { trades, strategy } or old array
+           if (Array.isArray(parsed)) {
+             resolve({ trades: parsed });
+           } else if (parsed.trades && Array.isArray(parsed.trades)) {
+             resolve({ trades: parsed.trades, strategy: parsed.strategy });
+           } else if (parsed.name && parsed.steps && parsed.rules) {
+             // This looks like just a Strategy Profile import
+             resolve({ trades: [], strategy: parsed });
+           } else {
+             reject(new Error("Invalid JSON format. Expected an array of trades or backup object."));
+           }
         } else if (file.name.endsWith('.csv')) {
            const trades = parseCSV(content);
-           resolve(trades);
+           resolve({ trades });
         } else {
            reject(new Error("Unsupported file type. Please upload .json or .csv"));
         }
