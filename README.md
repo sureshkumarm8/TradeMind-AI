@@ -1,41 +1,57 @@
 # TradeMind.AI 🧠📈
 
-**TradeMind.AI** is a professional-grade trading journal and psychology coach designed for disciplined traders. While optimized for **Nifty 50 Intraday Scalping**, it features a fully customizable **Strategy Engine** that allows you to define your own protocols, rules, and tools.
+**TradeMind.AI** is a professional-grade trading journal and **AI performance coach** designed to transform emotional traders into disciplined, data-driven professionals.
 
-It uses **Google Gemini AI** (Flash & Pro models) to act as a strict mentor—generating structured "Prop Desk" report cards by verifying your entries against actual historical market data and analyzing your behavior patterns.
+It replaces the need for a human mentor by using **Google Gemini AI** to act as a strict "Prop Desk Manager." It audits your execution against your own rules, providing a reality check on every trade to ensure you are following your system, maximizing winners, and eliminating emotional errors.
+
+---
+
+## 🎯 Mission & Goals
+
+### 1. Enforce Discipline via AI Accountability
+Unlike standard journals that just store data, TradeMind.AI performs a **"Reality Check"** on every log. It uses Google Search Grounding to compare your entry reason against actual historical market price action.
+- **The Goal**: Eliminate "hallucinated" setups. If the market didn't do what you said it did, the AI will catch it and grade you (A-F) accordingly.
+
+### 2. Bridge the Gap Between Plan & Execution
+Most traders have a plan but fail to follow it. The **Dynamic Strategy Engine** allows you to digitize your specific "System" (e.g., *Nifty 30-Point Scalp*, *Wait 15 mins*, *Check OI*).
+- **The Goal**: The AI audits every single trade against these specific rules. It confirms if you actually waited for your setup or if you acted on impulse.
+
+### 3. Deep Technical & Psychological Analysis
+We go beyond simple P&L tracking. The app tracks **Confluences** (why you entered, e.g., VWAP, OI Data) vs. **Mistakes** (psychological errors, e.g., FOMO, Revenge Trading).
+- **The Goal**: To identify your true statistical edge and plug your psychological leaks using batch analysis of your journal.
+
+### 4. Optimized for Intraday Speed
+Tailored specifically for **Nifty 50 Scalpers** and Index traders.
+- **The Goal**: Rapid logging of Spot Prices, Strike Prices, Option Types (CE/PE), and Opening Types (Gap Up/Down) via a mobile-first PWA interface that feels like a native app.
 
 ---
 
 ## 🚀 Key Features
 
-### 1. 🎛️ Dynamic Strategy Engine
+### 🎛️ Dynamic Strategy Engine
 - **Customizable System**: Define your own "Iron Rules", "Protocol Steps", and "Mission Tools" directly in the app.
 - **Import/Export**: Share strategy templates with others or backup your specific setup.
-- **Default Template**: Comes with a solid "Intraday Trend System" which you can adapt to your needs (e.g., Nifty 30-Point Scalp).
+- **Default Template**: Comes with a solid "Intraday Trend System" which you can adapt to your needs.
 
-### 2. 🇮🇳 Nifty & Index Optimized
+### 🤖 AI Prop Desk Report Card
+- **Structured Grading**: The AI returns a strict JSON report card grading your **Execution (A-F)** on every trade.
+- **Reality Check**: Verifies your logged trade times against **actual historical market action**.
+- **Strategy Audit**: Checks if you followed your specific defined rules (e.g., "Did you wait 15 mins?").
+
+### 📊 Interactive Command Center
+- **Drill-Down Dashboard**: Click on "Net P&L" or "Win Rate" cards to see the specific trades contributing to those stats.
+- **Deep Analytics**: Long vs Short win rates, Profit Factor, and Day-of-Week performance.
+
+### 📅 Professional Journal
+- **Calendar View**: Heatmap style visualization of your monthly performance.
+- **Weekly View**: Detailed breakdown of trades Mon-Fri.
+- **Rich Metrics**: Track Confluences and Mistakes.
+
+### 🇮🇳 Nifty & Index Optimized
 - **Derivative Logging**: Log Strike Price, CE/PE/FUT, and Spot Prices.
 - **Spot Tracking**: Auto-calculates "Spot Points Captured" vs Option Premium captured.
 - **Currency**: Native support for Indian Rupee (₹).
 - **Direct Links**: One-click access to Sensibull OI and Kite Charts.
-
-### 3. 🤖 AI Prop Desk Report Card
-- **Structured Grading**: The AI doesn't just chat; it returns a strict JSON report card grading your **Execution (A-F)**.
-- **Reality Check**: Verifies your logged trade times against **actual historical market action** (using Google Search grounding) to see if you were hallucinating the setup.
-- **Strategy Audit**: Checks if you followed your specific defined rules (e.g., "Did you wait 15 mins?").
-
-### 4. 📅 Professional Journal
-- **Calendar View**: Heatmap style visualization of your monthly performance.
-- **Weekly View**: Detailed breakdown of trades Mon-Fri.
-- **Rich Metrics**: Track Confluences (VWAP, OI, etc.) and Mistakes (FOMO, Revenge).
-
-### 5. 📊 Interactive Command Center
-- **Drill-Down Dashboard**: Click on "Net P&L" or "Win Rate" cards to see the specific trades contributing to those stats.
-- **Deep Analytics**: Long vs Short win rates, Profit Factor, and Day-of-Week performance.
-
-### 6. 📱 Cross-Platform PWA
-- **Install Everywhere**: Works as a native app on **iOS**, **Android**, **Mac**, and **Windows**.
-- **Offline First**: All data is stored securely in your browser's `LocalStorage`.
 
 ---
 
@@ -79,20 +95,9 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 📉 The Default "Nifty Scalp" Strategy
-
-The app is optimized for the following workflow (which you can edit):
-
-1. **Wait 15 Mins**: No trade zone at open.
-2. **Sensibull OI**: Confirm Support/Resistance.
-3. **Target**: 30 Points on Spot.
-4. **Time Limit**: 15-30 Minute hold time max.
-
----
-
 ## 🔒 Privacy & Data
 
-- **Local Storage**: Your trade logs and API keys **never leave your device** except to be sent to Google's AI API for analysis.
+- **Local Storage**: Your trade logs, strategy settings, and API keys **never leave your device** except to be sent to Google's AI API for analysis.
 - **Export**: You own your data. Export to JSON or Excel (CSV) at any time.
 
 ---
