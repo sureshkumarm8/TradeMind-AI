@@ -134,3 +134,7 @@ export interface StrategyProfile {
   links: StrategyLink[]; // Tools
   rules: StrategyRule[]; // Iron Rules
 }
+
+export interface UserSettings {
+  apiKey: string;
+}

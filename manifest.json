@@ -1,6 +1,6 @@
 {
-  "name": "TradeMind AI",
-  "short_name": "TradeMind AI",
+  "name": "TradeMind.AI",
+  "short_name": "TradeMind.AI",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

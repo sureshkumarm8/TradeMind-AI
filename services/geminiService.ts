@@ -1,8 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { Trade, StrategyProfile } from "../types";
 
-const API_KEY = process.env.API_KEY || '';
-
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
 // Reasoning model for deep batch analysis (Weekly/Monthly reviews)
@@ -26,13 +24,14 @@ ${rulesText}
 `;
 };
 
-export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile): Promise<string> => {
-  if (!API_KEY) {
-    return "API Key is missing. Please check your environment variables.";
+export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
+  const key = apiKey || process.env.API_KEY;
+  if (!key) {
+    return "API Key is missing. Please add your Gemini API Key in Settings.";
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
     
     // Construct a prompt specifically for Nifty/Index traders
@@ -91,16 +90,17 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
     return feedback;
   } catch (error) {
     console.error("Error analyzing trade:", error);
-    return "Failed to generate AI analysis. Please try again later.";
+    return "Failed to generate AI analysis. Please check your API Key and try again.";
   }
 };
 
-export const analyzeBatch = async (trades: Trade[], periodDescription: string, strategyProfile?: StrategyProfile): Promise<string> => {
-  if (!API_KEY) return "No API Key available.";
+export const analyzeBatch = async (trades: Trade[], periodDescription: string, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
+  const key = apiKey || process.env.API_KEY;
+  if (!key) return "API Key is missing. Please add your Gemini API Key in Settings.";
   if (trades.length === 0) return "No trades to analyze for this period.";
 
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
 
     // Prepare a summary of trades for the prompt to save tokens/complexity
@@ -144,15 +144,16 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
 
   } catch (error) {
     console.error("Error batch analyzing:", error);
-    return "Deep analysis failed. Please try again.";
+    return "Deep analysis failed. Please check your API Key and try again.";
   }
 };
 
-export const getDailyCoachTip = async (): Promise<string> => {
-  if (!API_KEY) return "No API Key available.";
+export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
+  const key = apiKey || process.env.API_KEY;
+  if (!key) return "Add your Gemini API Key to get daily tips.";
   
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const ai = new GoogleGenAI({ apiKey: key });
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
       contents: "Give me one powerful, short trading aphorism for a Nifty Intraday scalper. Focus on patience or risk management.",
