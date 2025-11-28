@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { Trade, StrategyProfile } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
@@ -27,7 +27,14 @@ ${rulesText}
 export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
   const key = apiKey || process.env.API_KEY;
   if (!key) {
-    return "API Key is missing. Please add your Gemini API Key in Settings.";
+    return JSON.stringify({
+      grade: "N/A",
+      gradeColor: "gray",
+      marketTrend: "Unknown",
+      realityCheck: "API Key is missing. Please add your Gemini API Key in Settings.",
+      strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
+      coachCommand: "Add API Key to unlock analysis."
+    });
   }
 
   try {
@@ -54,43 +61,83 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       - Result: ${trade.outcome} (PnL: ₹${trade.pnl})
       - Logic: "${trade.entryReason}"
       
-      Output Format (Markdown):
-      1. **Reality Check**: "At ${trade.entryTime}, Nifty was actually [Price/Trend]. Your entry was [Perfect/Early/Late] because..."
-      2. **Strategy Audit**: Did they follow their own Rules? (Check time limits, wait times, etc from the Strategy provided above)
-      3. **Coach's Command**: One specific improvement for next time.
-      
-      Tone: Professional, direct, encouraging but firm on discipline.
+      Output strict JSON. Do not output markdown code blocks.
     `;
+    
+    // Define strict schema for UI consistency
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        grade: { type: Type.STRING, description: "Letter grade A, B, C, D, F based on timing and trend alignment" },
+        gradeColor: { type: Type.STRING, description: "Color suggestion: green, yellow, red" },
+        marketTrend: { type: Type.STRING, description: "Short phrase describing Nifty action during trade window (e.g. 'Strong Bullish Trend', 'Choppy Range')" },
+        realityCheck: { type: Type.STRING, description: "Direct comparison of User Entry vs Actual Market Price Action" },
+        strategyAudit: {
+           type: Type.OBJECT,
+           properties: {
+              timing: { type: Type.STRING, description: "Early, Late, or Perfect" },
+              direction: { type: Type.STRING, description: "With Trend or Counter Trend" },
+              rulesFollowed: { type: Type.BOOLEAN, description: "Did they follow their system rules?" }
+           }
+        },
+        coachCommand: { type: Type.STRING, description: "One specific, actionable command for the next trade." }
+      }
+    };
 
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
-        systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search.",
-        temperature: 0.5,
+        systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search. Return strictly valid JSON.",
+        temperature: 0.3,
+        responseMimeType: "application/json",
+        responseSchema: responseSchema
       }
     });
 
-    let feedback = response.text || "No analysis generated.";
+    let jsonResult = response.text;
     
-    // Append sources if available (standard practice for Grounding)
+    // Append sources if available (standard practice for Grounding) - we'll handle this in the parsing/UI layer or append to the object if we parse it here.
+    // Since we return string, let's parse, add sources, and re-stringify.
+    let resultObj: any = {};
+    try {
+        resultObj = JSON.parse(jsonResult || "{}");
+    } catch(e) {
+        // Fallback if model fails to output strict JSON despite config
+        return JSON.stringify({
+            grade: "?", 
+            gradeColor: "gray",
+            marketTrend: "Analysis Error", 
+            realityCheck: response.text || "Could not parse analysis.", 
+            strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
+            coachCommand: "Try again."
+        });
+    }
+
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (groundingChunks) {
       const sources = groundingChunks
-        .map((chunk: any) => chunk.web?.uri ? `[${chunk.web.title || 'Source'}](${chunk.web.uri})` : null)
-        .filter(Boolean)
-        .join(', ');
+        .map((chunk: any) => chunk.web?.uri ? chunk.web.title || 'Source' : null)
+        .filter(Boolean);
       
-      if (sources) {
-        feedback += `\n\n**Sources verified:** ${sources}`;
+      if (sources.length > 0) {
+        resultObj.sources = sources;
       }
     }
 
-    return feedback;
+    return JSON.stringify(resultObj);
+
   } catch (error) {
     console.error("Error analyzing trade:", error);
-    return "Failed to generate AI analysis. Please check your API Key and try again.";
+    return JSON.stringify({
+      grade: "Err",
+      gradeColor: "red",
+      marketTrend: "API Error",
+      realityCheck: "Failed to connect to AI service.",
+      strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
+      coachCommand: "Check internet and API Key."
+    });
   }
 };
 

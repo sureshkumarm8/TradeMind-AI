@@ -38,6 +38,20 @@ export interface SystemChecks {
   exitTimeLimit: boolean; // Exit within 15 mins OR Re-assessed
 }
 
+export interface AiAnalysisResponse {
+  grade: string; // A, B, C, D, F
+  gradeColor: string; // hex or tailwind class hint
+  marketTrend: string; // "Strong Bullish", "Choppy", "Bearish Reversal"
+  realityCheck: string; // The comparison text
+  strategyAudit: {
+    timing: string; // "Perfect", "Early", "Late"
+    direction: string; // "With Trend", "Counter Trend"
+    rulesFollowed: boolean;
+  };
+  coachCommand: string; // The actionable advice
+  sources?: string[]; // Grounding links
+}
+
 export interface Trade {
   id: string;
   date: string; // ISO String YYYY-MM-DD
@@ -91,7 +105,7 @@ export interface Trade {
   outcome: TradeOutcome;
   
   // AI
-  aiFeedback?: string;
+  aiFeedback?: string; // Stored as JSON string
 }
 
 export interface DashboardStats {

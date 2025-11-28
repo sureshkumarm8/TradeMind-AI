@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink } from 'lucide-react';
+import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2 } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON } from '../services/dataService';
 
@@ -95,87 +95,120 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
       setCurrentDate(d);
   }
 
-  // --- Render AI Feedback UI ---
-  const renderAiFeedback = (feedback: string) => {
-    if (!feedback) return null;
+  // --- Render AI Feedback UI (Prop Desk Style) ---
+  const renderAiFeedback = (feedbackString: string) => {
+    if (!feedbackString) return null;
 
-    // Simple parser to separate the sections by newlines
-    const parts = feedback.split('\n');
-    let renderedParts = [];
-    let currentBlock = { title: "", content: "", style: "", icon: null as React.ReactNode };
+    let data: AiAnalysisResponse;
+    try {
+      data = JSON.parse(feedbackString);
+    } catch (e) {
+      // Fallback for old legacy text format
+      return (
+        <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-sm text-slate-300 leading-relaxed">
+           {feedbackString}
+        </div>
+      );
+    }
+
+    // Determine Grade Color
+    const getGradeColor = (g: string) => {
+       if (['A', 'A+', 'A-'].includes(g)) return 'text-emerald-400 border-emerald-500 bg-emerald-500/10';
+       if (['B', 'B+', 'B-'].includes(g)) return 'text-blue-400 border-blue-500 bg-blue-500/10';
+       if (['C', 'C+'].includes(g)) return 'text-yellow-400 border-yellow-500 bg-yellow-500/10';
+       return 'text-red-500 border-red-500 bg-red-500/10';
+    };
     
-    // Helper to flush current block
-    const flushBlock = () => {
-       if (currentBlock.content.trim()) {
-           renderedParts.push(
-               <div key={renderedParts.length} className={`p-4 rounded-xl border mb-3 flex gap-3 ${currentBlock.style}`}>
-                   <div className="mt-0.5 shrink-0">{currentBlock.icon}</div>
-                   <div>
-                       <h5 className="font-bold text-xs uppercase tracking-wider opacity-90 mb-1">{currentBlock.title}</h5>
-                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{currentBlock.content.trim()}</p>
+    const gradeStyle = getGradeColor(data.grade);
+
+    return (
+        <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden shadow-inner">
+           {/* Header Bar */}
+           <div className="bg-slate-950/50 p-4 border-b border-slate-800 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                 <Bot size={18} className="text-indigo-400"/>
+                 <h4 className="text-indigo-200 font-bold uppercase text-xs tracking-wider">Prop Desk Report Card</h4>
+              </div>
+              {data.marketTrend && (
+                 <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+                    <Activity size={12} className="text-slate-400"/>
+                    <span className="text-[10px] font-bold text-slate-300 uppercase">{data.marketTrend}</span>
+                 </div>
+              )}
+           </div>
+
+           <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+               
+               {/* Left: Grade */}
+               <div className="lg:col-span-3 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800 pb-6 lg:pb-0 lg:pr-6">
+                   <span className="text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Execution Grade</span>
+                   <div className={`w-24 h-24 rounded-full flex items-center justify-center border-4 text-5xl font-black ${gradeStyle} shadow-lg mb-2`}>
+                      {data.grade}
+                   </div>
+                   <div className="flex gap-2 text-[10px] font-bold uppercase mt-2">
+                       <span className={`px-2 py-0.5 rounded ${data.strategyAudit.rulesFollowed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {data.strategyAudit.rulesFollowed ? 'Rules OK' : 'Rules Broken'}
+                       </span>
                    </div>
                </div>
-           );
-       }
-    };
 
-    // Iterate lines to detect headers
-    for (const line of parts) {
-        if (line.includes("Reality Check")) {
-            flushBlock();
-            currentBlock = { 
-                title: "Reality Check", 
-                content: line.replace(/\*\*Reality Check\*\*|1\.|:/g, ''), 
-                style: "bg-blue-900/20 border-blue-500/30 text-blue-100", 
-                icon: <Activity size={18} className="text-blue-400"/> 
-            };
-        } else if (line.includes("Strategy Audit")) {
-            flushBlock();
-             currentBlock = { 
-                title: "Strategy Audit", 
-                content: line.replace(/\*\*Strategy Audit\*\*|2\.|:/g, ''), 
-                style: "bg-amber-900/20 border-amber-500/30 text-amber-100", 
-                icon: <ShieldAlert size={18} className="text-amber-400"/> 
-            };
-        } else if (line.includes("Coach's Command") || line.includes("Command")) {
-            flushBlock();
-             currentBlock = { 
-                title: "Coach's Command", 
-                content: line.replace(/\*\*Coach's Command\*\*|3\.|:/g, ''), 
-                style: "bg-emerald-900/20 border-emerald-500/30 text-emerald-100", 
-                icon: <Zap size={18} className="text-emerald-400"/> 
-            };
-        } else if (line.includes("Sources verified")) {
-             flushBlock();
-             currentBlock = {
-                 title: "Grounding Sources",
-                 content: line.replace(/\*\*Sources verified\*\*:|Sources verified:/g, ''),
-                 style: "bg-slate-900/40 border-slate-700 border-dashed text-slate-400 italic",
-                 icon: <ExternalLink size={16} className="text-slate-500"/>
-             }
-        } else {
-            // Continuation of previous block or just generic text
-            if (currentBlock.title) {
-                currentBlock.content += "\n" + line;
-            } else if (line.trim()) {
-                // If text appears before any header, put it in a generic block
-                 currentBlock = {
-                    title: "Analysis",
-                    content: line,
-                    style: "bg-slate-800/50 border-slate-700 text-slate-300",
-                    icon: <Bot size={18} className="text-slate-400"/>
-                 }
-            }
-        }
-    }
-    flushBlock();
+               {/* Right: Analysis */}
+               <div className="lg:col-span-9 space-y-5">
+                   
+                   {/* Reality Check Block */}
+                   <div>
+                       <h5 className="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase mb-2">
+                           <TrendingUp size={14}/> Reality Check
+                       </h5>
+                       <p className="text-sm text-slate-300 bg-blue-900/10 border-l-2 border-blue-500 p-3 rounded-r-lg italic leading-relaxed">
+                           "{data.realityCheck}"
+                       </p>
+                   </div>
 
-    if (renderedParts.length === 0) {
-        // Fallback for non-standard format
-        return <div className="text-sm text-slate-300 leading-7 whitespace-pre-wrap">{feedback}</div>;
-    }
+                   {/* Strategy Audit Grid */}
+                   <div className="grid grid-cols-2 gap-4">
+                       <div className="bg-slate-800/50 p-3 rounded border border-slate-700/50">
+                           <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Timing</span>
+                           <div className="flex items-center gap-2">
+                               <Clock size={14} className={data.strategyAudit.timing === 'Perfect' ? 'text-emerald-400' : 'text-amber-400'}/>
+                               <span className="text-sm font-medium text-white">{data.strategyAudit.timing}</span>
+                           </div>
+                       </div>
+                       <div className="bg-slate-800/50 p-3 rounded border border-slate-700/50">
+                           <span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Direction</span>
+                           <div className="flex items-center gap-2">
+                               <Target size={14} className={data.strategyAudit.direction === 'With Trend' ? 'text-emerald-400' : 'text-amber-400'}/>
+                               <span className="text-sm font-medium text-white">{data.strategyAudit.direction}</span>
+                           </div>
+                       </div>
+                   </div>
 
-    return <div>{renderedParts}</div>;
+                   {/* Coach Command */}
+                   <div>
+                       <h5 className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase mb-2">
+                           <Zap size={14}/> Coach's Command
+                       </h5>
+                       <div className="text-sm text-emerald-100 bg-emerald-900/20 border border-emerald-500/20 p-3 rounded-lg flex items-start gap-3">
+                           <ShieldAlert size={18} className="shrink-0 mt-0.5 text-emerald-500"/>
+                           <span className="font-medium">{data.coachCommand}</span>
+                       </div>
+                   </div>
+                   
+                   {/* Sources */}
+                   {data.sources && data.sources.length > 0 && (
+                       <div className="flex gap-2 flex-wrap mt-2">
+                           {data.sources.map((src, i) => (
+                               <span key={i} className="text-[10px] flex items-center bg-slate-800 text-slate-500 px-2 py-1 rounded border border-slate-700">
+                                   <ExternalLink size={10} className="mr-1"/> {src}
+                               </span>
+                           ))}
+                       </div>
+                   )}
+
+               </div>
+           </div>
+        </div>
+    );
   };
 
   // --- Week View Logic ---
@@ -651,19 +684,19 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                           </div>
 
                           {/* Single Trade AI Section */}
-                          <div className="mt-8 bg-slate-950 rounded-xl p-6 border border-slate-800 relative overflow-hidden group">
-                             <div className="flex items-center justify-between mb-4 relative z-10">
+                          <div className="mt-8 bg-slate-950 rounded-xl p-1 border border-slate-800 relative group">
+                             <div className="flex items-center justify-between px-4 py-3 relative z-10">
                                 <div className="flex items-center text-indigo-300">
-                                   <div className="bg-indigo-900/30 p-2 rounded-lg mr-3">
-                                       <Bot size={20} />
+                                   <div className="bg-indigo-900/30 p-1.5 rounded-lg mr-2">
+                                       <Bot size={16} />
                                    </div>
-                                   <span className="font-bold text-sm uppercase tracking-wide">Coach's Reality Check</span>
+                                   <span className="font-bold text-xs uppercase tracking-wide">Coach's Reality Check</span>
                                 </div>
                                 {!trade.aiFeedback && !readOnly && (
                                   <button 
                                     onClick={() => onAnalyze(trade)}
                                     disabled={isAnalyzing}
-                                    className="text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 shadow-lg shadow-indigo-900/20"
+                                    className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50 shadow-lg shadow-indigo-900/20"
                                   >
                                     {isAnalyzing ? 'Checking History...' : 'Run Reality Check'}
                                   </button>
@@ -671,13 +704,15 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                              </div>
                              
                              {trade.aiFeedback ? (
-                               <div className="mt-4 space-y-3 relative z-10">
+                               <div className="p-2 relative z-10">
                                   {renderAiFeedback(trade.aiFeedback)}
                                </div>
                              ) : (
-                               <p className="text-xs text-slate-500 italic relative z-10 ml-12">
-                                 AI will verify the actual Nifty chart action during {trade.entryTime}-{trade.exitTime} to validate your entry logic.
-                               </p>
+                               <div className="p-6 text-center">
+                                  <p className="text-xs text-slate-500 italic">
+                                    AI will verify the actual Nifty chart action during {trade.entryTime}-{trade.exitTime} to validate your entry logic.
+                                  </p>
+                               </div>
                              )}
                           </div>
 
