@@ -32,8 +32,8 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
   const [formData, setFormData] = useState<Partial<Trade>>(() => {
     const defaults = {
         date: new Date().toISOString().split('T')[0],
-        entryTime: '',
-        exitTime: '',
+        entryTime: '09:15', // Default to Market Open (AM)
+        exitTime: '09:30',  // Default to 15m later (AM)
         instrument: 'NIFTY 50',
         optionType: OptionType.CE,
         timeframe: Timeframe.M5,
@@ -118,7 +118,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
     }
   }, [formData.date, formData.entryTime, formData.exitTime]);
 
-  // Auto-calculate Spot Points Captured
+  // Auto-calculate Spot Points Captured based on Nifty Entry/Exit and Direction
   useEffect(() => {
     if (formData.niftyEntryPrice && formData.niftyExitPrice) {
       let points = 0;
@@ -127,7 +127,13 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
       } else {
         points = formData.niftyEntryPrice - formData.niftyExitPrice;
       }
-      setFormData(prev => ({ ...prev, spotPointsCaptured: parseFloat(points.toFixed(2)) }));
+      const calculatedPoints = parseFloat(points.toFixed(2));
+      
+      // Only update if value changed to prevent loops
+      setFormData(prev => {
+        if (prev.spotPointsCaptured === calculatedPoints) return prev;
+        return { ...prev, spotPointsCaptured: calculatedPoints };
+      });
     }
   }, [formData.niftyEntryPrice, formData.niftyExitPrice, formData.direction]);
 
