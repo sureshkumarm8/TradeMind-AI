@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2 } from 'lucide-react';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
 
 interface TradeFormProps {
@@ -33,9 +33,11 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
   // Real-time PnL calc for UI feedback
   const [livePnL, setLivePnL] = useState<number | null>(null);
 
-  // Voice State
-  const [isListening, setIsListening] = useState(false);
+  // Voice State (MediaRecorder)
+  const [isRecording, setIsRecording] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Safe initialization logic
   const [formData, setFormData] = useState<Partial<Trade>>(() => {
@@ -195,61 +197,62 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     });
   };
 
-  const startListening = () => {
-      if (!apiKey && !process.env.API_KEY) {
-          alert("Voice Intelligence requires a Gemini API Key. Please add it in Settings.");
-          return;
-      }
+  // --- Voice Log Logic (MediaRecorder) ---
+  const startRecording = async () => {
+    if (!apiKey && !process.env.API_KEY) {
+       alert("Please add your Gemini API Key in Settings to use Voice Log.");
+       return;
+    }
 
-      // Support for both standard and WebKit Speech Recognition
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    try {
+       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+       const mediaRecorder = new MediaRecorder(stream);
+       mediaRecorderRef.current = mediaRecorder;
+       audioChunksRef.current = [];
 
-      if (!SpeechRecognition) {
-          alert("Voice input not supported in this browser. Please try Chrome, Edge, or Safari.");
-          return;
-      }
-      
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-IN'; // Indian English for Nifty terms
+       mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+             audioChunksRef.current.push(event.data);
+          }
+       };
 
-      recognition.onstart = () => setIsListening(true);
-      
-      recognition.onresult = async (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setIsListening(false);
+       mediaRecorder.onstop = async () => {
           setIsProcessingVoice(true);
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           
-          try {
-              // Call AI to parse
-              const parsed = await parseVoiceCommand(transcript, apiKey);
-              setFormData(prev => ({
-                  ...prev,
-                  ...parsed
-              }));
-          } catch (e) {
-              console.error(e);
-              alert("Could not process voice command. Check console/network.");
-          } finally {
-              setIsProcessingVoice(false);
-          }
-      };
+          // Convert to Base64
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+             const base64String = (reader.result as string).split(',')[1];
+             try {
+                const parsed = await parseVoiceCommand(base64String, apiKey);
+                setFormData(prev => ({ ...prev, ...parsed }));
+             } catch(e) {
+                console.error(e);
+                alert("Failed to analyze voice note.");
+             } finally {
+                setIsProcessingVoice(false);
+             }
+          };
+          
+          // Stop tracks
+          stream.getTracks().forEach(track => track.stop());
+       };
 
-      recognition.onerror = (event: any) => {
-          console.error("Speech Recognition Error", event);
-          setIsListening(false);
-          if (event.error === 'not-allowed') {
-             alert("Microphone access denied. Please allow microphone permissions.");
-          }
-      };
+       mediaRecorder.start();
+       setIsRecording(true);
 
-      recognition.onend = () => setIsListening(false);
-      
-      try {
-        recognition.start();
-      } catch(e) {
-        console.error(e);
+    } catch (e) {
+       console.error("Mic Error:", e);
+       alert("Microphone access denied or not supported.");
+    }
+  };
+
+  const stopRecording = () => {
+      if (mediaRecorderRef.current && isRecording) {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
       }
   };
 
@@ -304,12 +307,12 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                   {/* VOICE COMMAND BUTTON */}
                   <button 
                      type="button" 
-                     onClick={startListening}
+                     onClick={isRecording ? stopRecording : startRecording}
                      disabled={isProcessingVoice}
-                     className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40'}`}
+                     className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40'}`}
                   >
-                     {isProcessingVoice ? <Loader2 size={12} className="animate-spin"/> : <Mic size={12} />}
-                     {isListening ? 'Listening...' : isProcessingVoice ? 'AI Autofilling...' : 'Voice Log'}
+                     {isProcessingVoice ? <Loader2 size={12} className="animate-spin"/> : isRecording ? <StopCircle size={12}/> : <Mic size={12} />}
+                     {isRecording ? 'Recording...' : isProcessingVoice ? 'Processing...' : 'Voice Log'}
                   </button>
                </h3>
 

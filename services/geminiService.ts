@@ -208,21 +208,15 @@ export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
   }
 };
 
-// New Feature: Voice to Log parsing
-export const parseVoiceCommand = async (transcript: string, apiKey?: string): Promise<ParsedVoiceCommand> => {
+// MULTIMODAL VOICE LOGGING
+// Accepts Audio Base64 -> Returns JSON
+export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): Promise<ParsedVoiceCommand> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required");
 
     try {
         const ai = new GoogleGenAI({ apiKey: key });
-        const prompt = `
-            Extract trading data from this voice transcript: "${transcript}".
-            User is an Indian Nifty 50 trader.
-            Fields needed: instrument (NIFTY 50 default), optionType (CE/PE), strikePrice (number), direction (LONG/SHORT), entryPrice (number), quantity (number), entryReason (text), setupName (text).
-            
-            Return JSON only.
-        `;
-
+        
         const responseSchema = {
             type: Type.OBJECT,
             properties: {
@@ -239,7 +233,25 @@ export const parseVoiceCommand = async (transcript: string, apiKey?: string): Pr
 
         const response = await ai.models.generateContent({
             model: FAST_MODEL,
-            contents: prompt,
+            contents: {
+              parts: [
+                {
+                   inlineData: {
+                      mimeType: "audio/webm",
+                      data: audioBase64
+                   }
+                },
+                {
+                   text: `
+                    Listen to this trader's voice note. Extract trading data for the Indian Nifty 50 market.
+                    Default to "NIFTY 50" instrument if not specified.
+                    Extract Option Type (CE/PE), Strike, Entry Price, Qty.
+                    Capture the "Logic" or "Reason" for the trade into 'entryReason'.
+                    Capture any technical setup name into 'setupName'.
+                   `
+                }
+              ]
+            },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: responseSchema
@@ -249,6 +261,6 @@ export const parseVoiceCommand = async (transcript: string, apiKey?: string): Pr
         return JSON.parse(response.text || "{}");
     } catch (e) {
         console.error("Voice parse error", e);
-        return { entryReason: transcript }; // Fallback
+        return { entryReason: "Error processing voice note." }; 
     }
 }
