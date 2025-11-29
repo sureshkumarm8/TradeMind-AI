@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, OptionType } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Hash } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Hash, Flame, ShieldCheck, Zap, HeartPulse, MessageSquareQuote, Info, Calculator, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -14,6 +14,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
   const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
+  const [showScoreDetails, setShowScoreDetails] = useState(false);
+  const [showFormulas, setShowFormulas] = useState(false);
   
   // Interactive Filters
   const [selectedFilter, setSelectedFilter] = useState<{ type: string, value: string | number } | null>(null);
@@ -29,6 +31,57 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
     }
   }, [selectedFilter]);
 
+  // --- Discipline & Psychology Metrics Calculation ---
+  const psychoStats = useMemo(() => {
+    const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
+    if (closedTrades.length === 0) return {
+        disciplineIndex: 0,
+        systemAdherence: 0,
+        streak: 0,
+        emotionalStability: 0,
+        statusLabel: "Rookie",
+        recentOffenses: []
+    };
+
+    // 1. Discipline Index (0-100)
+    // Formula: Average of (DisciplineRating * 20)
+    const totalDisciplinePoints = closedTrades.reduce((acc, t) => acc + (t.disciplineRating || 0), 0);
+    const avgDiscipline = totalDisciplinePoints / closedTrades.length; // 1-5
+    const disciplineIndex = Math.round(avgDiscipline * 20); // Scale to 100
+
+    // 2. System Adherence %
+    const followedCount = closedTrades.filter(t => t.followedSystem).length;
+    const systemAdherence = Math.round((followedCount / closedTrades.length) * 100);
+
+    // 3. Emotional Stability % (Trades marked 'Neutral' or 'Focused')
+    const stableCount = closedTrades.filter(t => ['Neutral', 'Focused', 'Calm'].includes(t.emotionalState || '')).length;
+    const emotionalStability = Math.round((stableCount / closedTrades.length) * 100);
+
+    // 4. Iron Streak (Consecutive trades following system, working backwards)
+    let streak = 0;
+    const sortedTrades = [...closedTrades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    for (const t of sortedTrades) {
+        if (t.followedSystem) streak++;
+        else break;
+    }
+
+    // 5. Recent Offenses (Last 5 bad trades)
+    const recentOffenses = sortedTrades
+        .filter(t => (t.disciplineRating && t.disciplineRating <= 3) || !t.followedSystem)
+        .slice(0, 5);
+
+    // Status Label
+    let statusLabel = "Rookie";
+    if (disciplineIndex >= 95) statusLabel = "Zen Master";
+    else if (disciplineIndex >= 85) statusLabel = "Sniper";
+    else if (disciplineIndex >= 70) statusLabel = "Disciplined";
+    else if (disciplineIndex >= 50) statusLabel = "Drifting";
+    else if (disciplineIndex > 0) statusLabel = "Tilted";
+    else statusLabel = "Rookie";
+
+    return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel, recentOffenses };
+  }, [trades]);
+
   const stats: DashboardStats = useMemo(() => {
     const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
     const totalTrades = closedTrades.length;
@@ -40,10 +93,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
     const grossLoss = Math.abs(closedTrades.reduce((acc, t) => (t.pnl && t.pnl < 0 ? acc + t.pnl : acc), 0));
     const profitFactor = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
 
-    // Find actual trade objects for best/worst to get IDs if needed, but for stats we just need values
     const sortedByPnL = [...closedTrades].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
     
-    // Directional Stats
     const longTrades = closedTrades.filter(t => t.direction === TradeDirection.LONG);
     const shortTrades = closedTrades.filter(t => t.direction === TradeDirection.SHORT);
     const longWins = longTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
@@ -91,7 +142,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
        }
     });
 
-    // Return Mon-Fri primarily for markets
     return [1, 2, 3, 4, 5].map(i => ({
       day: days[i],
       index: i,
@@ -127,6 +177,38 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
   ];
   
   // --- Interactions ---
+  const getMotivationalMessage = () => {
+     const messages: Record<string, string[]> = {
+        "Zen Master": [
+            "The market is a mirror. You have mastered reflection.",
+            "Flow state achieved. The charts are speaking to you."
+        ],
+        "Sniper": [
+            "One shot, one kill. Precision is your currency.",
+            "Patience pays the highest dividends."
+        ],
+        "Disciplined": [
+            "Consistency builds empires. Keep building.",
+            "You are trading the plan. The results will follow."
+        ],
+        "Drifting": [
+            "Focus. The market rewards patience, not activity.",
+            "Re-read your rules. Are you following them?"
+        ],
+        "Tilted": [
+            "Step back. Breathe. Capital preservation is priority #1.",
+            "The market isn't personal. Don't fight it."
+        ],
+        "Rookie": [
+            "Every master was once a beginner. Trust the process.",
+            "Learn to lose small. That is the first step."
+        ]
+     };
+
+     const pool = messages[psychoStats.statusLabel] || messages["Rookie"];
+     return pool[Math.floor(Math.random() * pool.length)];
+  };
+
   const filteredTrades = useMemo(() => {
      if (!selectedFilter) return [];
      
@@ -164,7 +246,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
         default:
            result = [];
      }
-     // Always sort result by date descending
      return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [selectedFilter, trades]);
 
@@ -180,9 +261,238 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
      }
   }
 
+  // --- Render Helpers for the HUD ---
+  const getDisciplineColor = (score: number) => {
+    if (score === 0) return 'text-slate-400 border-slate-500 shadow-none';
+    if (score >= 90) return 'text-cyan-400 border-cyan-500 shadow-cyan-500/50';
+    if (score >= 75) return 'text-emerald-400 border-emerald-500 shadow-emerald-500/50';
+    if (score >= 50) return 'text-amber-400 border-amber-500 shadow-amber-500/50';
+    return 'text-rose-500 border-rose-500 shadow-rose-500/50';
+  };
+
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       
+      {/* 🧠 PSYCHO-CYBERNETICS HUD (Interactive) */}
+      <div 
+        onClick={() => setShowScoreDetails(true)}
+        className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 border border-indigo-500/30 shadow-2xl relative overflow-hidden group cursor-pointer transition-transform active:scale-[0.99] select-none"
+      >
+         {/* Background Effects */}
+         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500"></div>
+         <div className="absolute -right-20 -top-20 opacity-10 animate-pulse group-hover:opacity-20 transition-opacity">
+            <BrainCircuit size={300} className="text-indigo-400" />
+         </div>
+
+         <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            
+            {/* 1. The Core Score (Discipline Index) */}
+            <div className="md:col-span-4 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-indigo-500/20 pb-6 md:pb-0 md:pr-6">
+                <div className="flex items-center gap-2 mb-2">
+                   <ShieldCheck size={18} className="text-cyan-400"/>
+                   <span className="text-xs font-bold uppercase tracking-widest text-cyan-200">Discipline Index</span>
+                </div>
+                
+                {/* Glowing Score Circle */}
+                <div className={`relative w-32 h-32 rounded-full border-4 flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-950 transition-shadow duration-500 group-hover:shadow-[0_0_50px_rgba(99,102,241,0.3)] ${getDisciplineColor(psychoStats.disciplineIndex)}`}>
+                   <div className="text-center">
+                      <span className={`text-4xl font-black block leading-none ${getDisciplineColor(psychoStats.disciplineIndex).split(' ')[0]}`}>
+                        {psychoStats.disciplineIndex}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">out of 100</span>
+                   </div>
+                </div>
+
+                <div className="mt-3 text-center">
+                   <span className={`text-sm font-bold uppercase tracking-wider px-3 py-1 rounded-full border bg-slate-900 ${getDisciplineColor(psychoStats.disciplineIndex).replace('text-', 'text-').replace('border-', 'border-').replace('shadow-', '')}`}>
+                      {psychoStats.statusLabel}
+                   </span>
+                </div>
+            </div>
+
+            {/* 2. Secondary Metrics (System & Mind) */}
+            <div className="md:col-span-5 space-y-6">
+               {/* System Adherence */}
+               <div>
+                  <div className="flex justify-between items-center mb-1">
+                     <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
+                        <Target size={14} className="mr-2 text-indigo-400"/> System Adherence
+                     </span>
+                     <span className="text-sm font-mono font-bold text-white">{psychoStats.systemAdherence}%</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                     <div 
+                       className="bg-indigo-500 h-full rounded-full shadow-[0_0_10px_#6366f1]" 
+                       style={{ width: `${psychoStats.systemAdherence}%` }}
+                     ></div>
+                  </div>
+               </div>
+
+               {/* Emotional Stability */}
+               <div>
+                  <div className="flex justify-between items-center mb-1">
+                     <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
+                        <HeartPulse size={14} className="mr-2 text-emerald-400"/> Mental Stability
+                     </span>
+                     <span className="text-sm font-mono font-bold text-white">{psychoStats.emotionalStability}%</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                     <div 
+                       className={`h-full rounded-full shadow-[0_0_10px_currentColor] ${psychoStats.emotionalStability === 0 ? 'bg-slate-600 text-slate-600' : psychoStats.emotionalStability > 80 ? 'bg-emerald-500 text-emerald-500' : 'bg-amber-500 text-amber-500'}`} 
+                       style={{ width: `${psychoStats.emotionalStability}%` }}
+                     ></div>
+                  </div>
+               </div>
+            </div>
+
+            {/* 3. The Streak (Gamification) */}
+            <div className="md:col-span-3 flex flex-col items-center justify-center bg-indigo-900/10 rounded-xl p-4 border border-indigo-500/20 backdrop-blur-sm group-hover:bg-indigo-900/20 transition-colors">
+               <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-2">Iron Streak</span>
+               <div className="flex items-center gap-1">
+                  <Flame size={32} className={`${psychoStats.streak > 0 ? 'text-orange-500 animate-pulse filter drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]' : 'text-slate-700'}`} />
+                  <span className="text-4xl font-black text-white">{psychoStats.streak}</span>
+               </div>
+               <span className="text-[10px] text-slate-500 font-medium uppercase mt-1 text-center">
+                  Consecutive Trades<br/>Following Rules
+               </span>
+            </div>
+
+         </div>
+
+         <div className="absolute bottom-2 left-0 w-full text-center">
+            <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+               <Info size={10} className="mr-1"/> Click for detailed breakdown & formulas
+            </span>
+         </div>
+      </div>
+      
+      {/* 📊 SCORE DETAILS MODAL */}
+      {showScoreDetails && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
+           <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-indigo-500/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Header */}
+              <div className="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                      <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400"><Calculator size={24}/></div>
+                      <div>
+                          <h3 className="text-xl font-bold text-white">Discipline Breakdown</h3>
+                          <p className="text-xs text-slate-500">Your psychological performance audit</p>
+                      </div>
+                  </div>
+                  <button onClick={() => setShowScoreDetails(false)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition">
+                      <X size={20}/>
+                  </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
+                  
+                  {/* Coach's Motivation (Top Focus) */}
+                  <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex items-start gap-4">
+                      <div className="bg-indigo-500/20 p-2 rounded-full text-indigo-400 shrink-0">
+                          <Sparkles size={20}/>
+                      </div>
+                      <div>
+                          <h5 className="text-indigo-300 font-bold text-xs uppercase mb-1">Coach's Comment</h5>
+                          <p className="text-sm text-slate-200 italic">"{getMotivationalMessage()}"</p>
+                      </div>
+                  </div>
+
+                  {/* Recent Offenses Table (Main Focus) */}
+                  <div>
+                      <h4 className="flex items-center gap-2 text-red-400 font-bold text-sm uppercase tracking-wider mb-4">
+                          <AlertTriangle size={16}/> Recent Discipline Leaks
+                      </h4>
+                      {psychoStats.recentOffenses.length === 0 ? (
+                          <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-xl p-6 text-center">
+                              <ShieldCheck size={48} className="mx-auto text-emerald-500 mb-2 opacity-50"/>
+                              <p className="text-emerald-400 font-medium">Clean Record!</p>
+                              <p className="text-xs text-slate-500">No discipline issues found in your recent trades.</p>
+                          </div>
+                      ) : (
+                          <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-md">
+                              <table className="w-full text-left text-xs">
+                                  <thead className="bg-slate-900 text-slate-500 uppercase font-bold">
+                                      <tr>
+                                          <th className="p-3">Date</th>
+                                          <th className="p-3">Issue</th>
+                                          <th className="p-3 text-right">Rating</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-700/50">
+                                      {psychoStats.recentOffenses.map(t => (
+                                          <tr key={t.id} className="hover:bg-slate-700/30">
+                                              <td className="p-3 text-slate-300">{t.date} <span className="text-slate-500 block">{t.entryTime}</span></td>
+                                              <td className="p-3">
+                                                  <div className="flex flex-wrap gap-1">
+                                                      {!t.followedSystem && <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">Broke Rules</span>}
+                                                      {t.mistakes?.slice(0, 2).map(m => (
+                                                          <span key={m} className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">{m}</span>
+                                                      ))}
+                                                  </div>
+                                              </td>
+                                              <td className="p-3 text-right">
+                                                  <span className="font-bold text-red-400">{t.disciplineRating}/5</span>
+                                              </td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* Collapsible Formulas (Bottom Focus) */}
+                  <div className="border border-slate-800 rounded-xl overflow-hidden">
+                      <button 
+                        onClick={() => setShowFormulas(!showFormulas)}
+                        className="w-full flex items-center justify-between p-4 bg-slate-900 hover:bg-slate-800 transition text-left"
+                      >
+                         <div className="flex items-center gap-2">
+                            <Calculator size={16} className="text-slate-400"/>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Calculation Methodology</span>
+                         </div>
+                         {showFormulas ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
+                      </button>
+                      
+                      {showFormulas && (
+                          <div className="p-4 bg-slate-900/50 border-t border-slate-800 animate-fade-in">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                    <h4 className="text-indigo-400 font-bold text-xs uppercase tracking-wider mb-2">Formula</h4>
+                                    <div className="font-mono text-xs text-slate-300 bg-black/30 p-2 rounded-lg border border-slate-700/50 mb-2">
+                                        (Avg Discipline Rating × 20)
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                                        Score derived from "Discipline Rating" (1-5 stars).
+                                        <br/>
+                                        <span className="text-emerald-400">5 Stars = 100 pts</span> | <span className="text-red-400">1 Star = 20 pts</span>
+                                    </p>
+                                </div>
+                                
+                                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                    <h4 className="text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2">Metrics</h4>
+                                    <ul className="space-y-2 text-[10px] text-slate-300">
+                                        <li className="flex items-start">
+                                            <Target size={12} className="mr-2 text-indigo-400 shrink-0 mt-0.5"/>
+                                            <span><strong>System Adherence:</strong> % of trades where "Followed System" = Yes.</span>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <HeartPulse size={12} className="mr-2 text-emerald-400 shrink-0 mt-0.5"/>
+                                            <span><strong>Mental Stability:</strong> % of trades where state was "Neutral", "Focused" or "Calm".</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                          </div>
+                      )}
+                  </div>
+                  
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* KPI Cards - Interactive Command Center */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         
