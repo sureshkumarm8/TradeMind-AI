@@ -9,6 +9,7 @@
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "portrait-primary",
+  "categories": ["finance", "productivity", "business"],
   "description": "Professional Nifty 50 Trading Journal & AI Coach",
   "icons": [
     {

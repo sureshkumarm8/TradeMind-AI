@@ -40,22 +40,22 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Event: Handle requests
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
   // SPA Navigation Handler
   // If the request is a navigation (e.g. reloading the page, or going to start_url),
-  // serve the index.html from cache. This ensures the app works offline even on deep links.
+  // serve the index.html from cache.
   if (event.request.mode === 'navigate') {
     event.respondWith(
       caches.match('/index.html').then((response) => {
-        return response || fetch(event.request).catch(() => {
-           // If network fails and not in cache (rare for index.html), strictly return index.html
-           return caches.match('/index.html');
-        });
+        // Return index.html from cache, or fetch it if missing (then cache it), or fallback to cache again
+        return response || fetch('/index.html').catch(() => caches.match('/index.html'));
       })
     );
     return;
   }
 
-  // Standard Stale-While-Revalidate or Cache-First for assets
+  // Standard Cache-First for assets
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

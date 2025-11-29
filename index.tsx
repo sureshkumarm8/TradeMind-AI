@@ -15,15 +15,13 @@ root.render(
   </React.StrictMode>
 );
 
-// Register Service Worker for PWA
+// Register Service Worker for PWA (Immediately for faster install prompt detection)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then((registration) => {
-        console.log('SW registered: ', registration);
-      })
-      .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
-      });
-  });
+  navigator.serviceWorker.register('/service-worker.js')
+    .then((registration) => {
+      console.log('SW registered: ', registration);
+    })
+    .catch((registrationError) => {
+      console.log('SW registration failed: ', registrationError);
+    });
 }
