@@ -43,7 +43,10 @@ const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [showSettings, setShowSettings] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Track specific trade being analyzed instead of global boolean
+  const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
+  
   const [dailyTip, setDailyTip] = useState<string>("");
 
   // Load data from local storage
@@ -118,12 +121,12 @@ const App: React.FC = () => {
   };
 
   const handleAnalyzeTrade = async (trade: Trade) => {
-    setIsAnalyzing(true);
+    setAnalyzingTradeId(trade.id);
     const feedback = await analyzeTradeWithAI(trade, strategyProfile, apiKey);
     
     const updatedTrade = { ...trade, aiFeedback: feedback };
     setTrades(prev => prev.map(t => t.id === trade.id ? updatedTrade : t));
-    setIsAnalyzing(false);
+    setAnalyzingTradeId(null);
   };
   
   const handleImportTrades = (importedTrades: Trade[]) => {
@@ -320,7 +323,7 @@ const App: React.FC = () => {
               onDelete={handleDeleteTrade} 
               onAnalyze={handleAnalyzeTrade}
               onImport={handleImportTrades}
-              isAnalyzing={isAnalyzing}
+              analyzingTradeId={analyzingTradeId}
             />
           )}
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON } from '../services/dataService';
 
@@ -12,11 +12,11 @@ interface TradeListProps {
   onDelete: (id: string) => void;
   onAnalyze: (trade: Trade) => void;
   onImport: (trades: Trade[]) => void;
-  isAnalyzing: boolean;
+  analyzingTradeId: string | null;
   readOnly?: boolean;
 }
 
-const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onImport, isAnalyzing, readOnly = false }) => {
+const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onImport, analyzingTradeId, readOnly = false }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dailyAnalysis, setDailyAnalysis] = useState<Record<string, string>>({});
   const [analyzingDay, setAnalyzingDay] = useState<string | null>(null);
@@ -71,6 +71,21 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
       alert("Failed to import file: " + error);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // --- Helper to parse Grade for Badges ---
+  const getAiGrade = (feedbackString?: string): { grade: string, color: string } | null => {
+      if (!feedbackString) return null;
+      try {
+          const data = JSON.parse(feedbackString) as AiAnalysisResponse;
+          if (data.grade) {
+               if (['A', 'A+', 'A-'].includes(data.grade)) return { grade: data.grade, color: 'text-emerald-400 border-emerald-500 bg-emerald-500/20' };
+               if (['B', 'B+', 'B-'].includes(data.grade)) return { grade: data.grade, color: 'text-blue-400 border-blue-500 bg-blue-500/20' };
+               if (['C', 'C+'].includes(data.grade)) return { grade: data.grade, color: 'text-amber-400 border-amber-500 bg-amber-500/20' };
+               return { grade: data.grade, color: 'text-red-500 border-red-500 bg-red-500/20' };
+          }
+      } catch (e) { return null; }
+      return null;
   };
 
   // --- Calendar/Week Navigation ---
@@ -489,8 +504,19 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
 
                  {/* Trades for this day */}
                  <div className="space-y-3 pl-2 md:pl-4 border-l-2 border-slate-800">
-                   {dayTrades.map(trade => (
-                    <div key={trade.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg group">
+                   {dayTrades.map(trade => {
+                    const aiBadge = getAiGrade(trade.aiFeedback);
+                    
+                    return (
+                    <div key={trade.id} className={`bg-slate-800 rounded-xl border border-slate-700 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg group relative ${trade.outcome === TradeOutcome.WIN ? 'border-l-4 border-l-emerald-500' : trade.outcome === TradeOutcome.LOSS ? 'border-l-4 border-l-red-500' : ''}`}>
+                      
+                      {/* AI Grade Badge (Scorecard) */}
+                      {aiBadge && (
+                          <div className={`absolute top-0 right-12 z-10 px-2 py-0.5 rounded-b-lg border-x border-b text-[10px] font-black uppercase tracking-widest ${aiBadge.color}`}>
+                              Grade: {aiBadge.grade}
+                          </div>
+                      )}
+
                       {/* Trade Summary */}
                       <div 
                         className="p-4 flex flex-col sm:flex-row sm:items-center justify-between cursor-pointer gap-4 sm:gap-0"
@@ -519,7 +545,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end sm:space-x-8 w-full sm:w-auto">
+                        <div className="flex items-center justify-between sm:justify-end sm:space-x-8 w-full sm:w-auto mt-2 sm:mt-0">
                           <div className="text-left sm:text-right">
                             {trade.outcome !== TradeOutcome.OPEN ? (
                               <>
@@ -532,7 +558,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                               <span className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-xs font-medium border border-slate-600">OPEN</span>
                             )}
                           </div>
-                          <div className="text-slate-600 group-hover:text-slate-400 transition">
+                          <div className="text-slate-600 group-hover:text-slate-400 transition ml-4">
                             {expandedId === trade.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                           </div>
                         </div>
@@ -685,6 +711,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
 
                           {/* Single Trade AI Section */}
                           <div className="mt-8 bg-slate-950 rounded-xl p-1 border border-slate-800 relative group">
+                             {/* AI Section Header */}
                              <div className="flex items-center justify-between px-4 py-3 relative z-10">
                                 <div className="flex items-center text-indigo-300">
                                    <div className="bg-indigo-900/30 p-1.5 rounded-lg mr-2">
@@ -692,28 +719,41 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                    </div>
                                    <span className="font-bold text-xs uppercase tracking-wide">Coach's Reality Check</span>
                                 </div>
-                                {!trade.aiFeedback && !readOnly && (
+                                
+                                {!trade.aiFeedback && !readOnly && analyzingTradeId !== trade.id && (
                                   <button 
                                     onClick={() => onAnalyze(trade)}
-                                    disabled={isAnalyzing}
-                                    className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50 shadow-lg shadow-indigo-900/20"
+                                    disabled={!!analyzingTradeId}
+                                    className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-900/20"
                                   >
-                                    {isAnalyzing ? 'Checking History...' : 'Run Reality Check'}
+                                    Run Reality Check
                                   </button>
                                 )}
                              </div>
                              
-                             {trade.aiFeedback ? (
-                               <div className="p-2 relative z-10">
-                                  {renderAiFeedback(trade.aiFeedback)}
-                               </div>
-                             ) : (
-                               <div className="p-6 text-center">
-                                  <p className="text-xs text-slate-500 italic">
-                                    AI will verify the actual Nifty chart action during {trade.entryTime}-{trade.exitTime} to validate your entry logic.
-                                  </p>
-                               </div>
-                             )}
+                             {/* Analysis Content or Thinking State */}
+                             <div className="relative z-10">
+                                 {analyzingTradeId === trade.id ? (
+                                    <div className="p-8 flex flex-col items-center justify-center text-center animate-fade-in bg-indigo-900/10 rounded-b-xl border-t border-indigo-500/20">
+                                       <div className="relative mb-3">
+                                          <div className="absolute inset-0 bg-indigo-500/30 blur-xl rounded-full animate-pulse"></div>
+                                          <BrainCircuit size={40} className="text-indigo-400 animate-pulse relative z-10" />
+                                       </div>
+                                       <h4 className="text-indigo-300 font-bold text-sm tracking-wide mb-1">Syncing with Market Data...</h4>
+                                       <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Verifying Nifty Spot vs Entry</p>
+                                    </div>
+                                 ) : trade.aiFeedback ? (
+                                    <div className="p-2">
+                                       {renderAiFeedback(trade.aiFeedback)}
+                                    </div>
+                                 ) : (
+                                    <div className="p-6 text-center">
+                                       <p className="text-xs text-slate-500 italic">
+                                         AI will verify the actual Nifty chart action during {trade.entryTime}-{trade.exitTime} to validate your entry logic.
+                                       </p>
+                                    </div>
+                                 )}
+                             </div>
                           </div>
 
                           {/* Actions */}
@@ -731,7 +771,8 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                         </div>
                       )}
                     </div>
-                   ))}
+                   );
+                  })}
                  </div>
               </div>
             );

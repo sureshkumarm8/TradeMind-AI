@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
 import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, OptionType } from '../types';
 import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Hash, Flame, ShieldCheck, Zap, HeartPulse, MessageSquareQuote, Info, Calculator, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
@@ -10,6 +10,23 @@ interface DashboardProps {
   apiKey?: string;
 }
 
+// Custom Tooltip for Recharts to match Glassmorphism theme
+const CustomChartTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/90 border border-slate-700 p-3 rounded-lg shadow-xl backdrop-blur-md">
+        <p className="text-slate-400 text-xs font-bold mb-1">{label}</p>
+        {payload.map((p: any, index: number) => (
+           <p key={index} className="text-sm font-mono font-bold" style={{ color: p.color }}>
+              {p.name}: {typeof p.value === 'number' && (p.name === 'PnL' || p.name === 'Equity') ? `₹${p.value.toFixed(2)}` : p.value}
+           </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }) => {
   const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -19,17 +36,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
   
   // Interactive Filters
   const [selectedFilter, setSelectedFilter] = useState<{ type: string, value: string | number } | null>(null);
-  const detailsRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to details when filter changes
-  useEffect(() => {
-    if (selectedFilter && detailsRef.current) {
-        // Small timeout to allow render
-        setTimeout(() => {
-            detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-    }
-  }, [selectedFilter]);
 
   // --- Discipline & Psychology Metrics Calculation ---
   const psychoStats = useMemo(() => {
@@ -270,6 +276,33 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
     return 'text-rose-500 border-rose-500 shadow-rose-500/50';
   };
 
+  // --- Particles Logic ---
+  const renderParticles = () => {
+    if (psychoStats.disciplineIndex < 80) return null;
+    
+    // Create random floating particles
+    const particles = Array.from({ length: 6 }).map((_, i) => ({
+      id: i,
+      style: {
+        left: `${20 + Math.random() * 60}%`,
+        top: `${30 + Math.random() * 40}%`,
+        animationDelay: `${Math.random() * 2}s`
+      }
+    }));
+
+    return (
+      <>
+        {particles.map(p => (
+          <div 
+             key={p.id}
+             className="absolute w-1.5 h-1.5 bg-emerald-400 rounded-full blur-[1px] animate-float-slow pointer-events-none"
+             style={p.style}
+          />
+        ))}
+      </>
+    );
+  };
+
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       
@@ -280,9 +313,14 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
       >
          {/* Background Effects */}
          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500"></div>
-         <div className="absolute -right-20 -top-20 opacity-10 animate-pulse group-hover:opacity-20 transition-opacity">
-            <BrainCircuit size={300} className="text-indigo-400" />
+         
+         {/* Background Brain - Steady Breath Animation */}
+         <div className="absolute -right-20 -top-20 opacity-10 group-hover:opacity-20 transition-opacity">
+            <BrainCircuit size={300} className="text-indigo-400 animate-steady-breath" />
          </div>
+
+         {/* Floating Sparkles for High Discipline */}
+         {renderParticles()}
 
          <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             
@@ -369,7 +407,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
       {/* 📊 SCORE DETAILS MODAL */}
       {showScoreDetails && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
-           <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-indigo-500/50 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+           <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
               {/* Header */}
               <div className="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-center">
                   <div className="flex items-center gap-3">
@@ -680,11 +718,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                  <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickMargin={10} />
                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `₹${val}`} />
-                 <Tooltip 
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
-                    itemStyle={{ color: '#f1f5f9' }}
-                    formatter={(value: number) => [`₹${value.toFixed(2)}`, 'Equity']}
-                 />
+                 <Tooltip content={<CustomChartTooltip />} />
+                 <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
                  <Area type="monotone" dataKey="equity" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorEquity)" activeDot={{ r: 6 }} />
                </AreaChart>
              </ResponsiveContainer>
@@ -711,7 +746,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                       <Cell key={`cell-${index}`} fill={entry.fill} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px' }} />
+                  <Tooltip content={<CustomChartTooltip />} />
                   <Legend verticalAlign="bottom" height={36}/>
                 </PieChart>
               </ResponsiveContainer>
@@ -741,11 +776,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                   <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
                   <YAxis stroke="#64748b" fontSize={12} tickFormatter={(val) => `₹${val}`}/>
-                  <Tooltip 
-                    cursor={{fill: '#334155', opacity: 0.2}}
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
-                    formatter={(value: number) => [`₹${value.toFixed(2)}`, 'PnL']}
-                  />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
                   <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
                     {dayOfWeekData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
@@ -765,10 +796,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                   <XAxis dataKey="date" hide />
                   <YAxis stroke="#64748b" fontSize={12} />
-                  <Tooltip 
-                    cursor={{fill: '#334155', opacity: 0.2}}
-                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f1f5f9' }}
-                  />
+                  <Tooltip content={<CustomChartTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
                   <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
                     {equityCurveData.slice(-10).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
@@ -780,12 +808,12 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
         </div>
       </div>
 
-      {/* --- Drill Down Section (Replaces Overlay) --- */}
-      <div ref={detailsRef} className="scroll-mt-24">
-        {selectedFilter && (
-            <div className="mt-8 bg-slate-900 rounded-xl border border-slate-700 overflow-hidden animate-fade-in-up shadow-2xl">
-                <div className="p-4 border-b border-slate-800 bg-slate-800/50 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
+      {/* 📊 DRILL DOWN MODAL (Replaces Scroll Section) */}
+      {selectedFilter && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
+            <div className="bg-slate-900 w-full max-w-5xl rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center sticky top-0 z-20">
+                     <div className="flex items-center gap-3">
                         <div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400">
                             <ListFilter size={20}/>
                         </div>
@@ -796,15 +824,25 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                             <p className="text-xs text-slate-500">{filteredTrades.length} mission logs found</p>
                         </div>
                     </div>
-                    <button onClick={() => setSelectedFilter(null)} className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"><X size={20}/></button>
+                    <button 
+                        onClick={() => setSelectedFilter(null)} 
+                        className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"
+                    >
+                        <X size={20}/>
+                    </button>
                 </div>
                 
-                {filteredTrades.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 italic">No records found for this filter criteria.</div>
-                ) : (
-                    <div className="overflow-x-auto">
+                <div className="overflow-y-auto custom-scrollbar p-0">
+                    {filteredTrades.length === 0 ? (
+                        <div className="p-12 text-center text-slate-500 italic">
+                            <div className="bg-slate-800/50 p-4 rounded-full inline-block mb-3">
+                                <ListFilter size={32} />
+                            </div>
+                            <p>No records found for this filter criteria.</p>
+                        </div>
+                    ) : (
                         <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800 sticky top-0">
                                 <tr>
                                     <th className="px-6 py-4 font-bold tracking-wider">Date & Time</th>
                                     <th className="px-6 py-4 font-bold tracking-wider">Instrument</th>
@@ -870,11 +908,11 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                                 ))}
                             </tbody>
                         </table>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
-        )}
-      </div>
+        </div>
+      )}
 
     </div>
   );
