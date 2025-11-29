@@ -1,8 +1,9 @@
+
 {
   "name": "TradeMind.AI",
   "short_name": "TradeMind",
-  "start_url": "/?source=pwa",
-  "id": "/?source=pwa",
+  "start_url": "/",
+  "id": "trademind-ai-v1",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
