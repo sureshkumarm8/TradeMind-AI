@@ -1,13 +1,15 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, OptionType } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Hash, Flame, ShieldCheck, Zap, HeartPulse, MessageSquareQuote, Info, Calculator, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, OptionType, UserSettings, PlaybookStat } from '../types';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Flame, ShieldCheck, Zap, HeartPulse, Info, Calculator, AlertTriangle, ChevronDown, ChevronUp, Share2, Book, Sword, Dice6 } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
   trades: Trade[];
   strategyProfile: StrategyProfile;
   apiKey?: string;
+  preMarketNotes?: { date: string, notes: string };
+  onUpdatePreMarket: (notes: string) => void;
 }
 
 // Custom Tooltip for Recharts to match Glassmorphism theme
@@ -27,7 +29,9 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }) => {
+const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, preMarketNotes, onUpdatePreMarket }) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'playbook' | 'simulator'>('overview');
+  
   const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
@@ -36,6 +40,52 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
   
   // Interactive Filters
   const [selectedFilter, setSelectedFilter] = useState<{ type: string, value: string | number } | null>(null);
+
+  // Pre Market Edit
+  const [isEditingPreMarket, setIsEditingPreMarket] = useState(false);
+  const [tempPreMarket, setTempPreMarket] = useState('');
+
+  // --- 1. Playbook Analytics (Setup Stats) ---
+  const playbookStats = useMemo(() => {
+      const statsMap: Record<string, PlaybookStat> = {};
+      const closed = trades.filter(t => t.outcome !== TradeOutcome.OPEN && t.setupName);
+
+      closed.forEach(t => {
+          const name = t.setupName.trim() || 'Unlabeled';
+          if (!statsMap[name]) {
+              statsMap[name] = { setupName: name, count: 0, winRate: 0, avgPnL: 0, totalPnL: 0 };
+          }
+          const s = statsMap[name];
+          s.count++;
+          s.totalPnL += (t.pnl || 0);
+      });
+
+      // Calc win rates
+      return Object.values(statsMap).map(s => {
+          const wins = closed.filter(t => (t.setupName?.trim() || 'Unlabeled') === s.setupName && t.outcome === TradeOutcome.WIN).length;
+          s.winRate = Math.round((wins / s.count) * 100);
+          s.avgPnL = Math.round(s.totalPnL / s.count);
+          return s;
+      }).sort((a,b) => b.totalPnL - a.totalPnL);
+  }, [trades]);
+
+  // --- 2. Risk Simulator (Monte Carlo Simple) ---
+  const riskSimData = useMemo(() => {
+      if (trades.length < 10) return null;
+      const wins = trades.filter(t => t.outcome === TradeOutcome.WIN);
+      const losses = trades.filter(t => t.outcome === TradeOutcome.LOSS);
+      if (wins.length === 0 || losses.length === 0) return null;
+
+      const avgWin = wins.reduce((a,b) => a + (b.pnl || 0), 0) / wins.length;
+      const avgLoss = Math.abs(losses.reduce((a,b) => a + (b.pnl || 0), 0) / losses.length);
+      const winRate = wins.length / (wins.length + losses.length);
+      
+      // Simple Ruin Probability approximation (Kelly-esque)
+      // Risk of 50% drawdown
+      const probRuin = Math.exp(-2 * ( (winRate * avgWin - (1-winRate) * avgLoss) / Math.sqrt( (winRate * avgWin**2 + (1-winRate) * avgLoss**2) ) ) );
+      
+      return { avgWin, avgLoss, winRate, probRuin: Math.min(1, Math.max(0, probRuin)) };
+  }, [trades]);
 
   // --- Discipline & Psychology Metrics Calculation ---
   const psychoStats = useMemo(() => {
@@ -185,53 +235,27 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
   // --- Interactions ---
   const getMotivationalMessage = () => {
      const messages: Record<string, string[]> = {
-        "Zen Master": [
-            "The market is a mirror. You have mastered reflection.",
-            "Flow state achieved. The charts are speaking to you."
-        ],
-        "Sniper": [
-            "One shot, one kill. Precision is your currency.",
-            "Patience pays the highest dividends."
-        ],
-        "Disciplined": [
-            "Consistency builds empires. Keep building.",
-            "You are trading the plan. The results will follow."
-        ],
-        "Drifting": [
-            "Focus. The market rewards patience, not activity.",
-            "Re-read your rules. Are you following them?"
-        ],
-        "Tilted": [
-            "Step back. Breathe. Capital preservation is priority #1.",
-            "The market isn't personal. Don't fight it."
-        ],
-        "Rookie": [
-            "Every master was once a beginner. Trust the process.",
-            "Learn to lose small. That is the first step."
-        ]
+        "Zen Master": ["The market is a mirror. You have mastered reflection.", "Flow state achieved."],
+        "Sniper": ["One shot, one kill. Precision is your currency.", "Patience pays dividends."],
+        "Disciplined": ["Consistency builds empires.", "Trade the plan, trust the process."],
+        "Drifting": ["Focus. The market rewards patience, not activity.", "Re-read your rules."],
+        "Tilted": ["Step back. Breathe. Capital preservation is priority #1.", "Don't fight it."],
+        "Rookie": ["Every master was once a beginner.", "Learn to lose small."]
      };
-
      const pool = messages[psychoStats.statusLabel] || messages["Rookie"];
      return pool[Math.floor(Math.random() * pool.length)];
   };
 
   const filteredTrades = useMemo(() => {
      if (!selectedFilter) return [];
-     
      const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
      const sortedTrades = [...closedTrades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
      let result = [];
      switch (selectedFilter.type) {
-        case 'all_closed':
-           result = closedTrades;
-           break;
-        case 'wins':
-           result = closedTrades.filter(t => t.outcome === TradeOutcome.WIN);
-           break;
-        case 'losses':
-           result = closedTrades.filter(t => t.outcome === TradeOutcome.LOSS);
-           break;
+        case 'all_closed': result = closedTrades; break;
+        case 'wins': result = closedTrades.filter(t => t.outcome === TradeOutcome.WIN); break;
+        case 'losses': result = closedTrades.filter(t => t.outcome === TradeOutcome.LOSS); break;
         case 'best':
            const sortedByPnL = [...closedTrades].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
            result = sortedByPnL.length > 0 ? [sortedByPnL[0]] : [];
@@ -240,17 +264,10 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
            const sortedByPnLW = [...closedTrades].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
            result = sortedByPnLW.length > 0 ? [sortedByPnLW[sortedByPnLW.length - 1]] : [];
            break;
-        case 'day':
-           result = trades.filter(t => new Date(t.date).getDay() === selectedFilter.value);
-           break;
-        case 'direction':
-           result = trades.filter(t => t.direction === (selectedFilter.value === 'Long' ? TradeDirection.LONG : TradeDirection.SHORT));
-           break;
-        case 'date':
-           result = trades.filter(t => t.date === selectedFilter.value);
-           break;
-        default:
-           result = [];
+        case 'day': result = trades.filter(t => new Date(t.date).getDay() === selectedFilter.value); break;
+        case 'direction': result = trades.filter(t => t.direction === (selectedFilter.value === 'Long' ? TradeDirection.LONG : TradeDirection.SHORT)); break;
+        case 'date': result = trades.filter(t => t.date === selectedFilter.value); break;
+        default: result = [];
      }
      return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [selectedFilter, trades]);
@@ -267,7 +284,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
      }
   }
 
-  // --- Render Helpers for the HUD ---
+  // --- Render Helpers ---
   const getDisciplineColor = (score: number) => {
     if (score === 0) return 'text-slate-400 border-slate-500 shadow-none';
     if (score >= 90) return 'text-cyan-400 border-cyan-500 shadow-cyan-500/50';
@@ -276,62 +293,49 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
     return 'text-rose-500 border-rose-500 shadow-rose-500/50';
   };
 
-  // --- Particles Logic ---
   const renderParticles = () => {
     if (psychoStats.disciplineIndex < 80) return null;
-    
-    // Create random floating particles
-    const particles = Array.from({ length: 6 }).map((_, i) => ({
-      id: i,
-      style: {
-        left: `${20 + Math.random() * 60}%`,
-        top: `${30 + Math.random() * 40}%`,
-        animationDelay: `${Math.random() * 2}s`
-      }
-    }));
-
     return (
       <>
-        {particles.map(p => (
-          <div 
-             key={p.id}
-             className="absolute w-1.5 h-1.5 bg-emerald-400 rounded-full blur-[1px] animate-float-slow pointer-events-none"
-             style={p.style}
-          />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="absolute w-1.5 h-1.5 bg-emerald-400 rounded-full blur-[1px] animate-float-slow pointer-events-none" style={{ left: `${20 + Math.random() * 60}%`, top: `${30 + Math.random() * 40}%`, animationDelay: `${Math.random() * 2}s` }} />
         ))}
       </>
     );
   };
 
+  // --- Pre Market Logic ---
+  const today = new Date().toISOString().split('T')[0];
+  const hasPreMarketToday = preMarketNotes?.date === today;
+  const isMorning = new Date().getHours() < 10;
+  
+  const savePreMarket = () => {
+      onUpdatePreMarket(tempPreMarket);
+      setIsEditingPreMarket(false);
+  }
+
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       
-      {/* 🧠 PSYCHO-CYBERNETICS HUD (Interactive) */}
+      {/* 🧠 PSYCHO-CYBERNETICS HUD */}
       <div 
         onClick={() => setShowScoreDetails(true)}
         className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 border border-indigo-500/30 shadow-2xl relative overflow-hidden group cursor-pointer transition-transform active:scale-[0.99] select-none"
       >
          {/* Background Effects */}
          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500"></div>
-         
-         {/* Background Brain - Steady Breath Animation */}
          <div className="absolute -right-20 -top-20 opacity-10 group-hover:opacity-20 transition-opacity">
             <BrainCircuit size={300} className="text-indigo-400 animate-steady-breath" />
          </div>
-
-         {/* Floating Sparkles for High Discipline */}
          {renderParticles()}
 
          <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            
-            {/* 1. The Core Score (Discipline Index) */}
+            {/* 1. Discipline Score */}
             <div className="md:col-span-4 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-indigo-500/20 pb-6 md:pb-0 md:pr-6">
                 <div className="flex items-center gap-2 mb-2">
                    <ShieldCheck size={18} className="text-cyan-400"/>
                    <span className="text-xs font-bold uppercase tracking-widest text-cyan-200">Discipline Index</span>
                 </div>
-                
-                {/* Glowing Score Circle */}
                 <div className={`relative w-32 h-32 rounded-full border-4 flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-950 transition-shadow duration-500 group-hover:shadow-[0_0_50px_rgba(99,102,241,0.3)] ${getDisciplineColor(psychoStats.disciplineIndex)}`}>
                    <div className="text-center">
                       <span className={`text-4xl font-black block leading-none ${getDisciplineColor(psychoStats.disciplineIndex).split(' ')[0]}`}>
@@ -340,7 +344,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                       <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">out of 100</span>
                    </div>
                 </div>
-
                 <div className="mt-3 text-center">
                    <span className={`text-sm font-bold uppercase tracking-wider px-3 py-1 rounded-full border bg-slate-900 ${getDisciplineColor(psychoStats.disciplineIndex).replace('text-', 'text-').replace('border-', 'border-').replace('shadow-', '')}`}>
                       {psychoStats.statusLabel}
@@ -348,9 +351,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                 </div>
             </div>
 
-            {/* 2. Secondary Metrics (System & Mind) */}
+            {/* 2. Metrics */}
             <div className="md:col-span-5 space-y-6">
-               {/* System Adherence */}
                <div>
                   <div className="flex justify-between items-center mb-1">
                      <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
@@ -359,14 +361,9 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                      <span className="text-sm font-mono font-bold text-white">{psychoStats.systemAdherence}%</span>
                   </div>
                   <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
-                     <div 
-                       className="bg-indigo-500 h-full rounded-full shadow-[0_0_10px_#6366f1]" 
-                       style={{ width: `${psychoStats.systemAdherence}%` }}
-                     ></div>
+                     <div className="bg-indigo-500 h-full rounded-full shadow-[0_0_10px_#6366f1]" style={{ width: `${psychoStats.systemAdherence}%` }}></div>
                   </div>
                </div>
-
-               {/* Emotional Stability */}
                <div>
                   <div className="flex justify-between items-center mb-1">
                      <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
@@ -375,15 +372,12 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                      <span className="text-sm font-mono font-bold text-white">{psychoStats.emotionalStability}%</span>
                   </div>
                   <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
-                     <div 
-                       className={`h-full rounded-full shadow-[0_0_10px_currentColor] ${psychoStats.emotionalStability === 0 ? 'bg-slate-600 text-slate-600' : psychoStats.emotionalStability > 80 ? 'bg-emerald-500 text-emerald-500' : 'bg-amber-500 text-amber-500'}`} 
-                       style={{ width: `${psychoStats.emotionalStability}%` }}
-                     ></div>
+                     <div className={`h-full rounded-full shadow-[0_0_10px_currentColor] ${psychoStats.emotionalStability === 0 ? 'bg-slate-600 text-slate-600' : psychoStats.emotionalStability > 80 ? 'bg-emerald-500 text-emerald-500' : 'bg-amber-500 text-amber-500'}`} style={{ width: `${psychoStats.emotionalStability}%` }}></div>
                   </div>
                </div>
             </div>
 
-            {/* 3. The Streak (Gamification) */}
+            {/* 3. Streak */}
             <div className="md:col-span-3 flex flex-col items-center justify-center bg-indigo-900/10 rounded-xl p-4 border border-indigo-500/20 backdrop-blur-sm group-hover:bg-indigo-900/20 transition-colors">
                <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-2">Iron Streak</span>
                <div className="flex items-center gap-1">
@@ -394,21 +388,333 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                   Consecutive Trades<br/>Following Rules
                </span>
             </div>
-
          </div>
-
          <div className="absolute bottom-2 left-0 w-full text-center">
             <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                <Info size={10} className="mr-1"/> Click for detailed breakdown & formulas
             </span>
          </div>
       </div>
-      
-      {/* 📊 SCORE DETAILS MODAL */}
+
+      {/* 🛡️ PRE-MARKET BATTLE PLAN (Shows in morning or if set) */}
+      {(isMorning || hasPreMarketToday) && (
+          <div className="bg-slate-800/80 rounded-xl border border-slate-700 overflow-hidden shadow-lg animate-fade-in-up">
+              <div className="bg-slate-900/50 p-3 px-4 border-b border-slate-700 flex justify-between items-center">
+                  <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest flex items-center">
+                      <Sword size={14} className="mr-2"/> Pre-Market Battle Plan <span className="text-slate-500 ml-2 normal-case opacity-70">({today})</span>
+                  </h3>
+                  <button onClick={() => { setIsEditingPreMarket(!isEditingPreMarket); setTempPreMarket(preMarketNotes?.notes || ''); }} className="text-[10px] bg-slate-800 text-slate-400 hover:text-white px-2 py-1 rounded border border-slate-700 transition">
+                      {isEditingPreMarket ? 'Cancel' : 'Edit Plan'}
+                  </button>
+              </div>
+              
+              {isEditingPreMarket ? (
+                  <div className="p-4">
+                      <textarea 
+                          value={tempPreMarket}
+                          onChange={(e) => setTempPreMarket(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-sm text-white mb-2"
+                          rows={3}
+                          placeholder="e.g. If Nifty opens Gap Up above 21800, wait for 15m pullback. Support at 21750."
+                      />
+                      <button onClick={savePreMarket} className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded">Save Battle Plan</button>
+                  </div>
+              ) : (
+                  <div className="p-4 text-sm text-slate-300 italic font-medium">
+                      {preMarketNotes?.date === today ? (
+                          `"${preMarketNotes.notes}"`
+                      ) : (
+                          <span className="text-slate-500">No plan set for today. Prepare your mind before the market opens.</span>
+                      )}
+                  </div>
+              )}
+          </div>
+      )}
+
+      {/* 🧭 NAVIGATION TABS */}
+      <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800 w-full md:w-auto self-start">
+         <button onClick={() => setActiveTab('overview')} className={`flex-1 md:flex-none px-6 py-2 rounded-md transition text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'overview' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+            <Activity size={16} /> Overview
+         </button>
+         <button onClick={() => setActiveTab('playbook')} className={`flex-1 md:flex-none px-6 py-2 rounded-md transition text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'playbook' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+            <Book size={16} /> Playbook
+         </button>
+         <button onClick={() => setActiveTab('simulator')} className={`flex-1 md:flex-none px-6 py-2 rounded-md transition text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'simulator' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+            <Dice6 size={16} /> Risk Sim
+         </button>
+      </div>
+
+      {/* ======================= TAB: OVERVIEW ======================= */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6 animate-fade-in">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 1. Net P&L */}
+                <button 
+                onClick={() => setSelectedFilter({ type: 'all_closed', value: 'All Closed' })}
+                className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'all_closed' ? 'border-emerald-500 ring-1 ring-emerald-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-emerald-900/20 hover:border-emerald-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
+                >
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><TrendingUp size={64} /></div>
+                <div className="flex justify-between items-center mb-3 relative z-10">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Net P&L</h3>
+                    <span className={`p-1.5 rounded-lg ${stats.totalPnL >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                    {stats.totalPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                    </span>
+                </div>
+                <p className={`text-2xl lg:text-3xl font-black font-mono relative z-10 ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{stats.totalPnL.toFixed(2)}</p>
+                <div className="flex justify-between items-center mt-3 text-[10px] font-medium text-slate-500 uppercase relative z-10">
+                    <span>{stats.totalTrades} Trades</span>
+                    <span className="group-hover:text-emerald-400 transition-colors flex items-center">View Ledger <ArrowRight size={10} className="ml-1"/></span>
+                </div>
+                </button>
+
+                {/* 2. Win Rate */}
+                <button 
+                onClick={() => setSelectedFilter({ type: 'wins', value: 'Wins' })}
+                className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'wins' ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-blue-900/20 hover:border-blue-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
+                >
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Target size={64} /></div>
+                <div className="flex justify-between items-center mb-3 relative z-10">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Win Rate</h3>
+                    <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><Activity size={16} /></span>
+                </div>
+                <p className="text-2xl lg:text-3xl font-black text-white relative z-10">{stats.winRate.toFixed(1)}<span className="text-lg text-slate-500">%</span></p>
+                <div className="flex gap-2 text-[10px] mt-3 font-medium uppercase relative z-10">
+                    <span className="text-blue-400">L: {stats.longWinRate.toFixed(0)}%</span>
+                    <span className="text-slate-600">|</span>
+                    <span className="text-amber-400">S: {stats.shortWinRate.toFixed(0)}%</span>
+                </div>
+                </button>
+
+                {/* 3. Profit Factor */}
+                <button 
+                onClick={() => setSelectedFilter({ type: 'losses', value: 'Losses' })}
+                className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'losses' ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-rose-900/20 hover:border-rose-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
+                >
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><ShieldAlert size={64} /></div>
+                <div className="flex justify-between items-center mb-3 relative z-10">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Profit Factor</h3>
+                    <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500"><Sparkles size={16} /></span>
+                </div>
+                <p className="text-2xl lg:text-3xl font-black text-white relative z-10">{stats.profitFactor.toFixed(2)}<span className="text-sm text-slate-600 ml-1 font-normal">x</span></p>
+                <div className="mt-3 flex justify-between items-center text-[10px] text-slate-500 font-medium uppercase relative z-10">
+                    <span>Target: {'>'} 1.5</span>
+                    <span className="group-hover:text-rose-400 transition-colors flex items-center">Check Leaks <ArrowRight size={10} className="ml-1"/></span>
+                </div>
+                </button>
+
+                {/* 4. Extremes */}
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border border-slate-700/50 shadow-lg flex flex-col justify-between group relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Trophy size={64} /></div>
+                <div className="flex justify-between items-center mb-2 relative z-10">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Performance Range</h3>
+                    <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500"><AlertCircle size={16} /></span>
+                </div>
+                <div className="flex items-end justify-between gap-2 relative z-10 mt-2">
+                    <button onClick={() => setSelectedFilter({ type: 'best', value: 'Best Trade' })} className="flex-1 bg-emerald-500/5 hover:bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/20 transition text-left group/btn">
+                        <div className="text-[10px] text-emerald-500/70 font-bold uppercase mb-1">Max Win</div>
+                        <div className="text-sm font-bold text-emerald-400">₹{stats.bestTrade.toFixed(0)}</div>
+                    </button>
+                    <button onClick={() => setSelectedFilter({ type: 'worst', value: 'Worst Trade' })} className="flex-1 bg-red-500/5 hover:bg-red-500/20 p-2 rounded-lg border border-red-500/20 transition text-right group/btn">
+                        <div className="text-[10px] text-red-500/70 font-bold uppercase mb-1">Max Loss</div>
+                        <div className="text-sm font-bold text-red-400">-₹{Math.abs(stats.worstTrade).toFixed(0)}</div>
+                    </button>
+                </div>
+                </div>
+            </div>
+
+            {/* AI Report Card */}
+            <div className="bg-gradient-to-br from-indigo-900/30 to-slate-800 p-6 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><BrainCircuit size={120} className="text-indigo-400" /></div>
+                <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-indigo-400 font-bold text-lg flex items-center"><Sparkles size={20} className="mr-2" /> AI Performance Review</h3>
+                    <div className="flex bg-slate-900/50 rounded-lg p-1 border border-slate-700">
+                        <button onClick={() => setReportPeriod('week')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Last 7 Days</button>
+                        <button onClick={() => setReportPeriod('month')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'month' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Last 30 Days</button>
+                    </div>
+                    </div>
+                    {!aiReport && !isGeneratingReport && (
+                    <div className="text-center py-6">
+                        <p className="text-slate-400 text-sm mb-4">Get a deep-dive analysis of your recent trading performance.</p>
+                        <button onClick={handleGenerateReport} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-semibold transition shadow-lg shadow-indigo-900/50 flex items-center mx-auto"><BrainCircuit size={18} className="mr-2" /> Generate Coach's Report</button>
+                    </div>
+                    )}
+                    {isGeneratingReport && (
+                    <div className="text-center py-8 animate-pulse">
+                        <BrainCircuit size={48} className="mx-auto text-indigo-500 mb-4 opacity-50" />
+                        <p className="text-indigo-300 font-medium">Analyzing your trade journal...</p>
+                        <p className="text-xs text-slate-500 mt-2">Thinking deep to find your edge (10-20s)</p>
+                    </div>
+                    )}
+                    {aiReport && (
+                    <div className="bg-slate-900/60 rounded-lg p-5 border border-indigo-500/20 text-slate-200 text-sm leading-7 whitespace-pre-wrap">
+                        {aiReport}
+                        <div className="mt-4 pt-4 border-t border-slate-700/50 text-center">
+                            <button onClick={handleGenerateReport} className="text-indigo-400 text-xs hover:text-indigo-300 underline">Refresh Analysis</button>
+                        </div>
+                    </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                    <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wide">Account Growth</h3>
+                    <div className="h-64 w-full cursor-pointer">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={equityCurveData} onClick={(data: any) => { if (data && data.activePayload && data.activePayload[0]) { setSelectedFilter({ type: 'date', value: data.activePayload[0].payload.fullDate }); }}}>
+                                <defs>
+                                    <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/></linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickMargin={10} />
+                                <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `₹${val}`} />
+                                <Tooltip content={<CustomChartTooltip />} />
+                                <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
+                                <Area type="monotone" dataKey="equity" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorEquity)" activeDot={{ r: 6 }} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center">
+                    <h3 className="text-white font-semibold mb-2 text-sm uppercase tracking-wide w-full text-left">Long vs Short</h3>
+                    <div className="h-56 w-full relative cursor-pointer">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie data={directionalData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" onClick={(data) => setSelectedFilter({ type: 'direction', value: data.type === 'Long' ? 'Long' : 'Short' })}>
+                                {directionalData.map((entry, index) => ( <Cell key={`cell-${index}`} fill={entry.fill} /> ))}
+                                </Pie>
+                                <Tooltip content={<CustomChartTooltip />} />
+                                <Legend verticalAlign="bottom" height={36}/>
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center -mt-4 pointer-events-none">
+                            <span className="text-xs text-slate-500 block">Total Win%</span>
+                            <span className="text-xl font-bold text-white">{stats.winRate.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* ======================= TAB: PLAYBOOK (Analytics) ======================= */}
+      {activeTab === 'playbook' && (
+          <div className="space-y-6 animate-fade-in">
+              <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-xl border border-indigo-500/20 shadow-lg">
+                  <div className="flex items-center gap-4 mb-2">
+                      <Book size={32} className="text-indigo-400"/>
+                      <div>
+                          <h3 className="text-xl font-bold text-white">The Playbook</h3>
+                          <p className="text-sm text-slate-400">Discover which setups are making you money and which are draining you.</p>
+                      </div>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {playbookStats.map((stat, idx) => (
+                      <div key={idx} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-slate-500 transition shadow-lg">
+                          <div className={`h-2 w-full ${stat.totalPnL > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                          <div className="p-5">
+                              <h4 className="font-bold text-white text-lg mb-4 flex justify-between items-start">
+                                  {stat.setupName}
+                                  <span className="text-xs font-medium text-slate-500 bg-slate-900 px-2 py-1 rounded">{stat.count} trades</span>
+                              </h4>
+                              
+                              <div className="space-y-3">
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-xs text-slate-400 uppercase font-bold">Win Rate</span>
+                                      <span className={`text-sm font-bold ${stat.winRate >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>{stat.winRate}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-900 rounded-full h-1.5">
+                                      <div className={`h-1.5 rounded-full ${stat.winRate >= 50 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{width: `${stat.winRate}%`}}></div>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-4 pt-2 mt-2 border-t border-slate-700/50">
+                                      <div>
+                                          <span className="text-[10px] text-slate-500 uppercase font-bold block">Avg PnL</span>
+                                          <span className={`font-mono font-bold ${stat.avgPnL > 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{stat.avgPnL.toFixed(0)}</span>
+                                      </div>
+                                      <div className="text-right">
+                                          <span className="text-[10px] text-slate-500 uppercase font-bold block">Total</span>
+                                          <span className={`font-mono font-bold ${stat.totalPnL > 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{stat.totalPnL.toFixed(0)}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  ))}
+                  
+                  {playbookStats.length === 0 && (
+                      <div className="col-span-full text-center py-12 text-slate-500">
+                          <Book size={48} className="mx-auto mb-4 opacity-20"/>
+                          <p>No classified trades yet. Add a "Setup Name" when logging trades to populate your Playbook.</p>
+                      </div>
+                  )}
+              </div>
+          </div>
+      )}
+
+      {/* ======================= TAB: SIMULATOR (Risk) ======================= */}
+      {activeTab === 'simulator' && (
+          <div className="space-y-6 animate-fade-in">
+              <div className="bg-gradient-to-r from-slate-900 to-rose-950 p-6 rounded-xl border border-rose-500/20 shadow-lg">
+                  <div className="flex items-center gap-4 mb-2">
+                      <ShieldAlert size={32} className="text-rose-400"/>
+                      <div>
+                          <h3 className="text-xl font-bold text-white">Risk Simulator</h3>
+                          <p className="text-sm text-slate-400">Monte Carlo projection based on your current performance stats.</p>
+                      </div>
+                  </div>
+              </div>
+
+              {riskSimData ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                          <h4 className="text-slate-400 font-bold text-xs uppercase mb-4 tracking-widest">Current Metrics</h4>
+                          <div className="space-y-4">
+                              <div className="flex justify-between border-b border-slate-700 pb-2">
+                                  <span>Win Rate</span>
+                                  <span className="font-mono text-white">{(riskSimData.winRate * 100).toFixed(1)}%</span>
+                              </div>
+                              <div className="flex justify-between border-b border-slate-700 pb-2">
+                                  <span>Avg Win</span>
+                                  <span className="font-mono text-emerald-400">₹{riskSimData.avgWin.toFixed(0)}</span>
+                              </div>
+                              <div className="flex justify-between border-b border-slate-700 pb-2">
+                                  <span>Avg Loss</span>
+                                  <span className="font-mono text-red-400">₹{riskSimData.avgLoss.toFixed(0)}</span>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center text-center">
+                          <h4 className="text-rose-400 font-bold text-xs uppercase mb-4 tracking-widest">Risk of Ruin (50% Drawdown)</h4>
+                          <div className="text-5xl font-black text-white mb-2">
+                              {(riskSimData.probRuin * 100).toFixed(1)}%
+                          </div>
+                          <p className="text-xs text-slate-400 px-8">
+                              Probability of losing 50% of your account if you continue trading exactly like this.
+                          </p>
+                          <div className={`mt-4 px-3 py-1 rounded text-xs font-bold uppercase ${riskSimData.probRuin < 0.05 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                              {riskSimData.probRuin < 0.05 ? 'Safe Zone' : 'Danger Zone'}
+                          </div>
+                      </div>
+                  </div>
+              ) : (
+                  <div className="text-center py-12 text-slate-500">
+                      <p>Need at least 10 trades (with wins and losses) to run simulation.</p>
+                  </div>
+              )}
+          </div>
+      )}
+
+      {/* 📊 DRILL DOWN MODAL */}
       {showScoreDetails && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
            <div className="bg-slate-900 w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-              {/* Header */}
               <div className="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-center">
                   <div className="flex items-center gap-3">
                       <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400"><Calculator size={24}/></div>
@@ -417,498 +723,66 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey }
                           <p className="text-xs text-slate-500">Your psychological performance audit</p>
                       </div>
                   </div>
-                  <button onClick={() => setShowScoreDetails(false)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition">
-                      <X size={20}/>
-                  </button>
+                  <button onClick={() => setShowScoreDetails(false)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition"><X size={20}/></button>
               </div>
-
-              {/* Scrollable Content */}
               <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                  
-                  {/* Coach's Motivation (Top Focus) */}
                   <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex items-start gap-4">
-                      <div className="bg-indigo-500/20 p-2 rounded-full text-indigo-400 shrink-0">
-                          <Sparkles size={20}/>
-                      </div>
+                      <div className="bg-indigo-500/20 p-2 rounded-full text-indigo-400 shrink-0"><Sparkles size={20}/></div>
                       <div>
                           <h5 className="text-indigo-300 font-bold text-xs uppercase mb-1">Coach's Comment</h5>
                           <p className="text-sm text-slate-200 italic">"{getMotivationalMessage()}"</p>
                       </div>
                   </div>
-
-                  {/* Recent Offenses Table (Main Focus) */}
                   <div>
-                      <h4 className="flex items-center gap-2 text-red-400 font-bold text-sm uppercase tracking-wider mb-4">
-                          <AlertTriangle size={16}/> Recent Discipline Leaks
-                      </h4>
+                      <h4 className="flex items-center gap-2 text-red-400 font-bold text-sm uppercase tracking-wider mb-4"><AlertTriangle size={16}/> Recent Discipline Leaks</h4>
                       {psychoStats.recentOffenses.length === 0 ? (
                           <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-xl p-6 text-center">
                               <ShieldCheck size={48} className="mx-auto text-emerald-500 mb-2 opacity-50"/>
                               <p className="text-emerald-400 font-medium">Clean Record!</p>
-                              <p className="text-xs text-slate-500">No discipline issues found in your recent trades.</p>
                           </div>
                       ) : (
                           <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 shadow-md">
                               <table className="w-full text-left text-xs">
-                                  <thead className="bg-slate-900 text-slate-500 uppercase font-bold">
-                                      <tr>
-                                          <th className="p-3">Date</th>
-                                          <th className="p-3">Issue</th>
-                                          <th className="p-3 text-right">Rating</th>
-                                      </tr>
-                                  </thead>
+                                  <thead className="bg-slate-900 text-slate-500 uppercase font-bold"><tr><th className="p-3">Date</th><th className="p-3">Issue</th><th className="p-3 text-right">Rating</th></tr></thead>
                                   <tbody className="divide-y divide-slate-700/50">
                                       {psychoStats.recentOffenses.map(t => (
-                                          <tr key={t.id} className="hover:bg-slate-700/30">
-                                              <td className="p-3 text-slate-300">{t.date} <span className="text-slate-500 block">{t.entryTime}</span></td>
-                                              <td className="p-3">
-                                                  <div className="flex flex-wrap gap-1">
-                                                      {!t.followedSystem && <span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">Broke Rules</span>}
-                                                      {t.mistakes?.slice(0, 2).map(m => (
-                                                          <span key={m} className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">{m}</span>
-                                                      ))}
-                                                  </div>
-                                              </td>
-                                              <td className="p-3 text-right">
-                                                  <span className="font-bold text-red-400">{t.disciplineRating}/5</span>
-                                              </td>
-                                          </tr>
+                                          <tr key={t.id} className="hover:bg-slate-700/30"><td className="p-3 text-slate-300">{t.date}</td><td className="p-3"><span className="bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">Issue</span></td><td className="p-3 text-right text-red-400">{t.disciplineRating}/5</td></tr>
                                       ))}
                                   </tbody>
                               </table>
                           </div>
                       )}
                   </div>
-
-                  {/* Collapsible Formulas (Bottom Focus) */}
                   <div className="border border-slate-800 rounded-xl overflow-hidden">
-                      <button 
-                        onClick={() => setShowFormulas(!showFormulas)}
-                        className="w-full flex items-center justify-between p-4 bg-slate-900 hover:bg-slate-800 transition text-left"
-                      >
-                         <div className="flex items-center gap-2">
-                            <Calculator size={16} className="text-slate-400"/>
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Calculation Methodology</span>
-                         </div>
+                      <button onClick={() => setShowFormulas(!showFormulas)} className="w-full flex items-center justify-between p-4 bg-slate-900 hover:bg-slate-800 transition text-left">
+                         <div className="flex items-center gap-2"><Calculator size={16} className="text-slate-400"/><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Calculation Methodology</span></div>
                          {showFormulas ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
                       </button>
-                      
                       {showFormulas && (
-                          <div className="p-4 bg-slate-900/50 border-t border-slate-800 animate-fade-in">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                    <h4 className="text-indigo-400 font-bold text-xs uppercase tracking-wider mb-2">Formula</h4>
-                                    <div className="font-mono text-xs text-slate-300 bg-black/30 p-2 rounded-lg border border-slate-700/50 mb-2">
-                                        (Avg Discipline Rating × 20)
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 leading-relaxed">
-                                        Score derived from "Discipline Rating" (1-5 stars).
-                                        <br/>
-                                        <span className="text-emerald-400">5 Stars = 100 pts</span> | <span className="text-red-400">1 Star = 20 pts</span>
-                                    </p>
-                                </div>
-                                
-                                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                    <h4 className="text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2">Metrics</h4>
-                                    <ul className="space-y-2 text-[10px] text-slate-300">
-                                        <li className="flex items-start">
-                                            <Target size={12} className="mr-2 text-indigo-400 shrink-0 mt-0.5"/>
-                                            <span><strong>System Adherence:</strong> % of trades where "Followed System" = Yes.</span>
-                                        </li>
-                                        <li className="flex items-start">
-                                            <HeartPulse size={12} className="mr-2 text-emerald-400 shrink-0 mt-0.5"/>
-                                            <span><strong>Mental Stability:</strong> % of trades where state was "Neutral", "Focused" or "Calm".</span>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                          </div>
+                          <div className="p-4 bg-slate-900/50 border-t border-slate-800 text-xs text-slate-400">Formula: (Avg Discipline Rating × 20)</div>
                       )}
                   </div>
-                  
               </div>
            </div>
         </div>
       )}
 
-      {/* KPI Cards - Interactive Command Center */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Card 1: Net P&L (Show Ledger) */}
-        <button 
-           onClick={() => setSelectedFilter({ type: 'all_closed', value: 'All Closed' })}
-           className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'all_closed' ? 'border-emerald-500 ring-1 ring-emerald-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-emerald-900/20 hover:border-emerald-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-             <TrendingUp size={64} />
-          </div>
-          <div className="flex justify-between items-center mb-3 relative z-10">
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Net P&L</h3>
-            <span className={`p-1.5 rounded-lg ${stats.totalPnL >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-              {stats.totalPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-            </span>
-          </div>
-          <p className={`text-2xl lg:text-3xl font-black font-mono relative z-10 ${stats.totalPnL >= 0 ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]' : 'text-red-400'}`}>
-            ₹{stats.totalPnL.toFixed(2)}
-          </p>
-          <div className="flex justify-between items-center mt-3 text-[10px] font-medium text-slate-500 uppercase relative z-10">
-             <span>{stats.totalTrades} Trades</span>
-             <span className="group-hover:text-emerald-400 transition-colors flex items-center">View Ledger <ArrowRight size={10} className="ml-1"/></span>
-          </div>
-        </button>
-
-        {/* Card 2: Win Rate (Show Wins) */}
-        <button 
-           onClick={() => setSelectedFilter({ type: 'wins', value: 'Wins' })}
-           className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'wins' ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-blue-900/20 hover:border-blue-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
-        >
-           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-             <Target size={64} />
-          </div>
-          <div className="flex justify-between items-center mb-3 relative z-10">
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Win Rate</h3>
-            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500">
-              <Activity size={16} />
-            </span>
-          </div>
-          <p className="text-2xl lg:text-3xl font-black text-white relative z-10">
-            {stats.winRate.toFixed(1)}<span className="text-lg text-slate-500">%</span>
-          </p>
-          <div className="flex gap-2 text-[10px] mt-3 font-medium uppercase relative z-10">
-             <span className="text-blue-400">L: {stats.longWinRate.toFixed(0)}%</span>
-             <span className="text-slate-600">|</span>
-             <span className="text-amber-400">S: {stats.shortWinRate.toFixed(0)}%</span>
-             <span className="ml-auto text-slate-500 group-hover:text-blue-400 transition-colors flex items-center">Analyze Wins <ArrowRight size={10} className="ml-1"/></span>
-          </div>
-        </button>
-
-        {/* Card 3: Profit Factor (Show Losses/Leaks) */}
-        <button 
-           onClick={() => setSelectedFilter({ type: 'losses', value: 'Losses' })}
-           className={`bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border ${selectedFilter?.type === 'losses' ? 'border-rose-500 ring-1 ring-rose-500/50' : 'border-slate-700/50'} shadow-lg hover:shadow-rose-900/20 hover:border-rose-500/30 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden text-left`}
-        >
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-             <ShieldAlert size={64} />
-          </div>
-          <div className="flex justify-between items-center mb-3 relative z-10">
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Profit Factor</h3>
-            <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500">
-              <Sparkles size={16} />
-            </span>
-          </div>
-          <p className="text-2xl lg:text-3xl font-black text-white relative z-10">
-            {stats.profitFactor.toFixed(2)}<span className="text-sm text-slate-600 ml-1 font-normal">x</span>
-          </p>
-          <div className="mt-3 flex justify-between items-center text-[10px] text-slate-500 font-medium uppercase relative z-10">
-            <span>Target: {'>'} 1.5</span>
-            <span className="group-hover:text-rose-400 transition-colors flex items-center">Check Leaks <ArrowRight size={10} className="ml-1"/></span>
-          </div>
-        </button>
-
-        {/* Card 4: Extremes (Interactive Best/Worst) */}
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl border border-slate-700/50 shadow-lg flex flex-col justify-between group relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-             <Trophy size={64} />
-          </div>
-          <div className="flex justify-between items-center mb-2 relative z-10">
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Performance Range</h3>
-            <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-              <AlertCircle size={16} />
-            </span>
-          </div>
-          <div className="flex items-end justify-between gap-2 relative z-10 mt-2">
-             <button 
-               onClick={() => setSelectedFilter({ type: 'best', value: 'Best Trade' })}
-               className="flex-1 bg-emerald-500/5 hover:bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/20 transition text-left group/btn"
-             >
-                <div className="text-[10px] text-emerald-500/70 font-bold uppercase mb-1">Max Win</div>
-                <div className="text-sm font-bold text-emerald-400">₹{stats.bestTrade.toFixed(0)}</div>
-             </button>
-             <button 
-               onClick={() => setSelectedFilter({ type: 'worst', value: 'Worst Trade' })}
-               className="flex-1 bg-red-500/5 hover:bg-red-500/20 p-2 rounded-lg border border-red-500/20 transition text-right group/btn"
-             >
-                <div className="text-[10px] text-red-500/70 font-bold uppercase mb-1">Max Loss</div>
-                <div className="text-sm font-bold text-red-400">-₹{Math.abs(stats.worstTrade).toFixed(0)}</div>
-             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Coach Section */}
-      <div className="bg-gradient-to-br from-indigo-900/30 to-slate-800 p-6 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden">
-         <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-            <BrainCircuit size={120} className="text-indigo-400" />
-         </div>
-         
-         <div className="relative z-10">
-            <div className="flex items-center justify-between mb-4">
-               <h3 className="text-indigo-400 font-bold text-lg flex items-center">
-                 <Sparkles size={20} className="mr-2" /> AI Performance Review
-               </h3>
-               <div className="flex bg-slate-900/50 rounded-lg p-1 border border-slate-700">
-                  <button 
-                    onClick={() => setReportPeriod('week')}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    Last 7 Days
-                  </button>
-                  <button 
-                    onClick={() => setReportPeriod('month')}
-                    className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'month' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    Last 30 Days
-                  </button>
-               </div>
-            </div>
-
-            {!aiReport && !isGeneratingReport && (
-              <div className="text-center py-6">
-                <p className="text-slate-400 text-sm mb-4">
-                  Get a deep-dive analysis of your recent trading performance. The AI will look for patterns in your wins, losses, and psychology.
-                </p>
-                <button 
-                  onClick={handleGenerateReport}
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-semibold transition shadow-lg shadow-indigo-900/50 flex items-center mx-auto"
-                >
-                  <BrainCircuit size={18} className="mr-2" /> Generate Coach's Report
-                </button>
-              </div>
-            )}
-
-            {isGeneratingReport && (
-              <div className="text-center py-8 animate-pulse">
-                <BrainCircuit size={48} className="mx-auto text-indigo-500 mb-4 opacity-50" />
-                <p className="text-indigo-300 font-medium">Analyzing your trade journal...</p>
-                <p className="text-xs text-slate-500 mt-2">Thinking deep to find your edge (this may take 10-20s)</p>
-              </div>
-            )}
-
-            {aiReport && (
-              <div className="bg-slate-900/60 rounded-lg p-5 border border-indigo-500/20 text-slate-200 text-sm leading-7 whitespace-pre-wrap">
-                 {aiReport}
-                 <div className="mt-4 pt-4 border-t border-slate-700/50 text-center">
-                    <button onClick={handleGenerateReport} className="text-indigo-400 text-xs hover:text-indigo-300 underline">
-                      Refresh Analysis
-                    </button>
-                 </div>
-              </div>
-            )}
-         </div>
-      </div>
-
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Equity Curve */}
-        <div className="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-           <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wide">Account Growth</h3>
-           <div className="h-64 w-full cursor-pointer">
-             <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={equityCurveData} onClick={(data: any) => {
-                  if (data && data.activePayload && data.activePayload[0]) {
-                      setSelectedFilter({ type: 'date', value: data.activePayload[0].payload.fullDate });
-                  }
-               }}>
-                 <defs>
-                   <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                     <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                   </linearGradient>
-                 </defs>
-                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                 <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickMargin={10} />
-                 <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `₹${val}`} />
-                 <Tooltip content={<CustomChartTooltip />} />
-                 <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
-                 <Area type="monotone" dataKey="equity" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorEquity)" activeDot={{ r: 6 }} />
-               </AreaChart>
-             </ResponsiveContainer>
-           </div>
-        </div>
-
-        {/* Directional Win Rate */}
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center">
-            <h3 className="text-white font-semibold mb-2 text-sm uppercase tracking-wide w-full text-left">Long vs Short</h3>
-            <div className="h-56 w-full relative cursor-pointer">
-               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={directionalData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                    onClick={(data) => setSelectedFilter({ type: 'direction', value: data.type === 'Long' ? 'Long' : 'Short' })}
-                  >
-                    {directionalData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<CustomChartTooltip />} />
-                  <Legend verticalAlign="bottom" height={36}/>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center -mt-4 pointer-events-none">
-                 <span className="text-xs text-slate-500 block">Total Win%</span>
-                 <span className="text-xl font-bold text-white">{stats.winRate.toFixed(0)}%</span>
-              </div>
-            </div>
-        </div>
-      </div>
-
-      {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {/* PnL by Day of Week */}
-         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-               <h3 className="text-white font-semibold text-sm uppercase tracking-wide">PnL by Day of Week</h3>
-               <Calendar size={16} className="text-slate-500"/>
-            </div>
-            <div className="h-56 w-full cursor-pointer">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dayOfWeekData} onClick={(data: any) => {
-                     if (data && data.activePayload && data.activePayload[0]) {
-                         setSelectedFilter({ type: 'day', value: data.activePayload[0].payload.index });
-                     }
-                }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                  <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} tickFormatter={(val) => `₹${val}`}/>
-                  <Tooltip content={<CustomChartTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
-                  <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                    {dayOfWeekData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-        </div>
-
-        {/* Recent Trades Bar Chart */}
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-            <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wide">Recent Trade Performance</h3>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={equityCurveData.slice(-10)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                  <XAxis dataKey="date" hide />
-                  <YAxis stroke="#64748b" fontSize={12} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
-                  <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                    {equityCurveData.slice(-10).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-        </div>
-      </div>
-
-      {/* 📊 DRILL DOWN MODAL (Replaces Scroll Section) */}
       {selectedFilter && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
             <div className="bg-slate-900 w-full max-w-5xl rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
                 <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center sticky top-0 z-20">
-                     <div className="flex items-center gap-3">
-                        <div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400">
-                            <ListFilter size={20}/>
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-white text-base">
-                                {getFilterTitle(selectedFilter)}
-                            </h3>
-                            <p className="text-xs text-slate-500">{filteredTrades.length} mission logs found</p>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={() => setSelectedFilter(null)} 
-                        className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"
-                    >
-                        <X size={20}/>
-                    </button>
+                     <div className="flex items-center gap-3"><div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400"><ListFilter size={20}/></div><div><h3 className="font-bold text-white text-base">{getFilterTitle(selectedFilter)}</h3><p className="text-xs text-slate-500">{filteredTrades.length} mission logs found</p></div></div>
+                    <button onClick={() => setSelectedFilter(null)} className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"><X size={20}/></button>
                 </div>
-                
                 <div className="overflow-y-auto custom-scrollbar p-0">
-                    {filteredTrades.length === 0 ? (
-                        <div className="p-12 text-center text-slate-500 italic">
-                            <div className="bg-slate-800/50 p-4 rounded-full inline-block mb-3">
-                                <ListFilter size={32} />
-                            </div>
-                            <p>No records found for this filter criteria.</p>
-                        </div>
-                    ) : (
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800 sticky top-0">
-                                <tr>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Date & Time</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Instrument</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Side</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider text-right">Result (PnL)</th>
-                                    <th className="px-6 py-4 font-bold tracking-wider">Setup & Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800/50">
-                                {filteredTrades.map(t => (
-                                    <tr key={t.id} className="hover:bg-slate-800/30 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-white font-medium text-xs">{t.date}</span>
-                                                <span className="text-slate-500 text-[10px] flex items-center gap-1 mt-0.5"><Clock size={10}/> {t.entryTime}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="text-indigo-300 font-bold text-xs">{t.instrument}</span>
-                                                <div className="flex gap-1 mt-1">
-                                                    {t.optionType && t.optionType !== OptionType.SPOT && (
-                                                        <span className={`text-[9px] px-1 rounded uppercase ${t.optionType === OptionType.CE ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>{t.optionType}</span>
-                                                    )}
-                                                    {t.strikePrice && <span className="text-[9px] bg-slate-800 text-slate-300 px-1 rounded">{t.strikePrice}</span>}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${t.direction === TradeDirection.LONG ? 'bg-blue-900/20 text-blue-400 border-blue-800/50' : 'bg-amber-900/20 text-amber-400 border-amber-800/50'}`}>
-                                                {t.direction}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {t.outcome !== TradeOutcome.OPEN ? (
-                                                <div className="flex flex-col items-end">
-                                                    <span className={`font-mono font-bold text-sm ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                        {t.pnl && t.pnl > 0 ? '+' : ''}₹{t.pnl?.toFixed(0)}
-                                                    </span>
-                                                    <span className={`text-[9px] uppercase font-bold mt-0.5 ${t.outcome === TradeOutcome.WIN ? 'text-emerald-600' : t.outcome === TradeOutcome.LOSS ? 'text-red-600' : 'text-slate-500'}`}>
-                                                        {t.outcome}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-slate-500 italic text-xs">Open Position</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 max-w-xs">
-                                            <div className="truncate text-slate-300 text-xs" title={t.entryReason || t.setupName}>
-                                                {t.setupName ? <span className="text-white font-bold mr-1">[{t.setupName}]</span> : null}
-                                                {t.entryReason || '-'}
-                                            </div>
-                                            {t.mistakes && t.mistakes.length > 0 && (
-                                                <div className="flex gap-1 mt-1">
-                                                    {t.mistakes.slice(0, 2).map(m => (
-                                                        <span key={m} className="text-[9px] bg-red-500/10 text-red-400 px-1 rounded border border-red-500/20">{m}</span>
-                                                    ))}
-                                                    {t.mistakes.length > 2 && <span className="text-[9px] text-slate-500">+{t.mistakes.length - 2} more</span>}
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800 sticky top-0"><tr><th className="px-6 py-4 font-bold tracking-wider">Date</th><th className="px-6 py-4 font-bold tracking-wider">Instrument</th><th className="px-6 py-4 font-bold tracking-wider text-right">PnL</th></tr></thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                            {filteredTrades.map(t => (
+                                <tr key={t.id} className="hover:bg-slate-800/30 transition-colors"><td className="px-6 py-4 text-white font-mono">{t.date}</td><td className="px-6 py-4 text-indigo-300 font-bold">{t.instrument}</td><td className={`px-6 py-4 text-right font-mono font-bold ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{t.pnl?.toFixed(0)}</td></tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Trade, StrategyProfile } from './types';
+import { Trade, StrategyProfile, TradeOutcome } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert } from 'lucide-react';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
   name: "Intraday Trend System (Template)",
@@ -41,19 +41,25 @@ const App: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [apiKey, setApiKey] = useState<string>('');
+  const [preMarketNotes, setPreMarketNotes] = useState<{date: string, notes: string} | undefined>(undefined);
+  
   const [showSettings, setShowSettings] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   
   // Track specific trade being analyzed instead of global boolean
   const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
-  
   const [dailyTip, setDailyTip] = useState<string>("");
+
+  // Tilt Breaker State
+  const [isTiltLocked, setIsTiltLocked] = useState(false);
+  const [tiltTimer, setTiltTimer] = useState(0);
 
   // Load data from local storage
   useEffect(() => {
     const savedTrades = localStorage.getItem('tradeMind_trades');
     const savedStrategy = localStorage.getItem('tradeMind_strategy');
     const savedApiKey = localStorage.getItem('tradeMind_apiKey');
+    const savedPreMarket = localStorage.getItem('tradeMind_preMarket');
     
     if (savedTrades) {
       try {
@@ -71,11 +77,49 @@ const App: React.FC = () => {
       }
     }
 
-    if (savedApiKey) {
-        setApiKey(savedApiKey);
-    }
+    if (savedApiKey) setApiKey(savedApiKey);
+    if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
     
   }, []);
+
+  // Check for Tilt Logic whenever trades update
+  useEffect(() => {
+     // Logic: If last 2 closed trades were losses within 30 mins, trigger tilt lock
+     const closedTrades = trades
+        .filter(t => t.outcome !== TradeOutcome.OPEN)
+        .sort((a,b) => new Date(b.date + 'T' + b.entryTime).getTime() - new Date(a.date + 'T' + a.entryTime).getTime());
+     
+     if (closedTrades.length >= 2) {
+         const t1 = closedTrades[0];
+         const t2 = closedTrades[1];
+         
+         if (t1.outcome === TradeOutcome.LOSS && t2.outcome === TradeOutcome.LOSS) {
+             const time1 = new Date(`${t1.date}T${t1.exitTime}`).getTime();
+             const time2 = new Date(`${t2.date}T${t2.exitTime}`).getTime();
+             const diffMins = Math.abs(time1 - time2) / 60000;
+             
+             // If 2 losses in 30 mins and not yet locked today
+             const lockKey = `tilt_lock_${new Date().toDateString()}`;
+             if (diffMins < 30 && !sessionStorage.getItem(lockKey)) {
+                 setIsTiltLocked(true);
+                 setTiltTimer(60); // 60 seconds breathe time
+                 sessionStorage.setItem(lockKey, 'true');
+             }
+         }
+     }
+  }, [trades]);
+
+  // Tilt Timer
+  useEffect(() => {
+      let interval: any;
+      if (isTiltLocked && tiltTimer > 0) {
+          interval = setInterval(() => setTiltTimer(prev => prev - 1), 1000);
+      } else if (tiltTimer === 0) {
+          setIsTiltLocked(false);
+      }
+      return () => clearInterval(interval);
+  }, [isTiltLocked, tiltTimer]);
+
 
   // Get daily tip after loading key
   useEffect(() => {
@@ -83,21 +127,20 @@ const App: React.FC = () => {
   }, [apiKey]);
 
   // Persistence Effects
-  useEffect(() => {
-    localStorage.setItem('tradeMind_trades', JSON.stringify(trades));
-  }, [trades]);
-
-  useEffect(() => {
-    localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile));
-  }, [strategyProfile]);
+  useEffect(() => { localStorage.setItem('tradeMind_trades', JSON.stringify(trades)); }, [trades]);
+  useEffect(() => { localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile)); }, [strategyProfile]);
+  useEffect(() => { if (preMarketNotes) localStorage.setItem('tradeMind_preMarket', JSON.stringify(preMarketNotes)); }, [preMarketNotes]);
 
   const handleSaveApiKey = (e: React.FormEvent) => {
       e.preventDefault();
       localStorage.setItem('tradeMind_apiKey', apiKey);
       setShowSettings(false);
-      // Reload tip with new key
       getDailyCoachTip(apiKey).then(setDailyTip);
   };
+
+  const handleUpdatePreMarket = (notes: string) => {
+      setPreMarketNotes({ date: new Date().toISOString().split('T')[0], notes });
+  }
 
   const handleSaveTrade = (trade: Trade) => {
     if (editingTrade) {
@@ -141,7 +184,6 @@ const App: React.FC = () => {
     setStrategyProfile(importedProfile);
   };
 
-  // Helper to determine Title
   const getPageTitle = () => {
      switch(view) {
         case 'dashboard': return 'Dashboard';
@@ -153,8 +195,28 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 relative">
       
+      {/* 🚨 TILT BREAKER OVERLAY */}
+      {isTiltLocked && (
+          <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
+              <div className="mb-8 relative">
+                  <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full animate-pulse"></div>
+                  <ShieldAlert size={120} className="text-red-500 relative z-10 animate-bounce"/>
+              </div>
+              <h1 className="text-4xl font-black text-white mb-4 tracking-tight uppercase">Tilt Protocol Activated</h1>
+              <p className="text-xl text-slate-400 max-w-lg mb-8">
+                  You have taken 2 consecutive losses in a short time. Your brain is in fight-or-flight mode. You are <strong>banned</strong> from trading until you calm down.
+              </p>
+              <div className="text-6xl font-black font-mono text-indigo-400 mb-8 animate-pulse">
+                  {tiltTimer}s
+              </div>
+              <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">
+                  Breathe In... Breathe Out...
+              </p>
+          </div>
+      )}
+
       {/* Settings Modal */}
       {showSettings && (
           <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -279,8 +341,6 @@ const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="md:ml-64 p-4 md:p-8 pb-24 md:pb-8 min-h-screen">
-        
-        {/* Fixed Header - Redesigned to be smaller and attractive */}
         <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-indigo-500/10 mb-6 flex justify-between items-center shadow-lg transition-all">
            <h2 className="text-lg md:text-xl font-bold text-white tracking-tight flex items-center">
              {view === 'new' && <PlusCircle size={18} className="mr-2 text-indigo-400"/>}
@@ -304,13 +364,14 @@ const App: React.FC = () => {
         </header>
 
         <div className="max-w-7xl mx-auto animate-fade-in-up">
-          {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} />}
+          {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
           
           {view === 'new' && (
             <TradeForm 
               onSave={handleSaveTrade} 
               onCancel={() => { setEditingTrade(null); setView('dashboard'); }} 
-              initialData={editingTrade || undefined} 
+              initialData={editingTrade || undefined}
+              apiKey={apiKey}
             />
           )}
 

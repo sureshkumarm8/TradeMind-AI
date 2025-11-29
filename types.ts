@@ -121,6 +121,14 @@ export interface DashboardStats {
   shortWinRate: number;
 }
 
+export interface PlaybookStat {
+    setupName: string;
+    count: number;
+    winRate: number;
+    avgPnL: number;
+    totalPnL: number;
+}
+
 // --- Strategy Profile Interfaces ---
 
 export interface StrategyLink {
@@ -151,4 +159,20 @@ export interface StrategyProfile {
 
 export interface UserSettings {
   apiKey: string;
+  preMarketNotes?: {
+      date: string;
+      notes: string;
+  }
+}
+
+// Helper for Voice to Log
+export interface ParsedVoiceCommand {
+    instrument?: string;
+    optionType?: OptionType;
+    strikePrice?: number;
+    direction?: TradeDirection;
+    entryPrice?: number;
+    quantity?: number;
+    entryReason?: string;
+    setupName?: string;
 }

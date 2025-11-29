@@ -1,32 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2 } from 'lucide-react';
+import { parseVoiceCommand } from '../services/geminiService';
 
 interface TradeFormProps {
   onSave: (trade: Trade) => void;
   onCancel: () => void;
   initialData?: Trade;
+  apiKey?: string;
 }
 
 const COMMON_CONFLUENCES = [
   "VWAP Support/Res", "CPR Breakout", "20 EMA Trend", "Day High/Low Break", 
   "OI Data Support", "Gap Fill", "Trendline Break", "Fibonacci Retracement",
-  "Pivot Point Reversal", "Volume Spike", "Candlestick Pattern (Hammer/Engulfing)", 
-  "Sector Strength", "Price Action Rejection", "Chart Pattern (Flag/Triangle)",
+  "Pivot Point Reversal", "Volume Spike", "Candlestick Pattern", 
+  "Sector Strength", "Price Action Rejection", "Chart Pattern",
   "Support/Resistance Flip", "RSI Divergence", "Higher Timeframe Alignment"
 ];
 
 const COMMON_MISTAKES = [
   "FOMO Entry", "Revenge Trading", "Moved Stop Loss", "Early Exit", 
   "Overtrading", "Counter-Trend", "Position Size Too Big", "Did Not Wait 15m",
-  "Chasing Price", "Averaging Losers", "Hesitation / Late Entry", "Ignored Higher Timeframe",
+  "Chasing Price", "Averaging Losers", "Hesitation", "Ignored Higher Timeframe",
   "Distracted / Bored", "Trading P&L Not Chart", "Poor Risk/Reward", "News Impulse"
 ];
 
-const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) => {
+const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
   const [showMistakes, setShowMistakes] = useState(false);
+  
+  // Real-time PnL calc for UI feedback
+  const [livePnL, setLivePnL] = useState<number | null>(null);
+
+  // Voice State
+  const [isListening, setIsListening] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
 
   // Safe initialization logic
   const [formData, setFormData] = useState<Partial<Trade>>(() => {
@@ -64,7 +73,6 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
     };
 
     if (initialData) {
-        // Merge initialData with defaults to ensure nested objects (like systemChecks) exist
         return {
             ...defaults,
             ...initialData,
@@ -80,20 +88,15 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
   
   // Auto-expand sections if editing and they have data
   useEffect(() => {
-    if (initialData?.confluences && initialData.confluences.length > 0) {
-        setShowConfluences(true);
-    }
-    if (initialData?.mistakes && initialData.mistakes.length > 0) {
-        setShowMistakes(true);
-    }
+    if (initialData?.confluences && initialData.confluences.length > 0) setShowConfluences(true);
+    if (initialData?.mistakes && initialData.mistakes.length > 0) setShowMistakes(true);
   }, []);
 
-  // Auto-calculate duration when times change
+  // Auto-calculate duration
   useEffect(() => {
     if (formData.date && formData.entryTime && formData.exitTime) {
       const start = new Date(`${formData.date}T${formData.entryTime}`);
       const end = new Date(`${formData.date}T${formData.exitTime}`);
-      // Handle overnight or invalid times gracefully
       if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
           const diffMs = end.getTime() - start.getTime();
           const diffMins = Math.round(diffMs / 60000);
@@ -102,7 +105,6 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
             setFormData(prev => ({
                 ...prev,
                 tradeDurationMins: diffMins,
-                // Auto-check system rule if applicable (Flexible 15-30m rule)
                 systemChecks: {
                     ...(prev.systemChecks || {
                         analyzedPreMarket: false,
@@ -110,7 +112,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
                         checkedSensibullOI: false,
                         exitTimeLimit: false
                     }),
-                    exitTimeLimit: diffMins <= 30 // Updated to reflect flexible rule
+                    exitTimeLimit: diffMins <= 30
                 }
             }));
           }
@@ -118,7 +120,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
     }
   }, [formData.date, formData.entryTime, formData.exitTime]);
 
-  // Auto-calculate Spot Points Captured based on Nifty Entry/Exit and Direction
+  // Auto-calculate Spot Points
   useEffect(() => {
     if (formData.niftyEntryPrice && formData.niftyExitPrice) {
       let points = 0;
@@ -128,14 +130,37 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
         points = formData.niftyEntryPrice - formData.niftyExitPrice;
       }
       const calculatedPoints = parseFloat(points.toFixed(2));
-      
-      // Only update if value changed to prevent loops
       setFormData(prev => {
         if (prev.spotPointsCaptured === calculatedPoints) return prev;
         return { ...prev, spotPointsCaptured: calculatedPoints };
       });
     }
   }, [formData.niftyEntryPrice, formData.niftyExitPrice, formData.direction]);
+
+  // Live PnL Feedback
+  useEffect(() => {
+    if (formData.entryPrice && formData.exitPrice && formData.quantity) {
+        const diff = formData.exitPrice - formData.entryPrice;
+        const pnl = formData.direction === TradeDirection.LONG 
+            ? diff * formData.quantity 
+            : (formData.entryPrice - formData.exitPrice) * formData.quantity;
+        setLivePnL(pnl);
+        
+        // Auto-set outcome if not manually overridden to OPEN
+        if (formData.outcome !== TradeOutcome.OPEN) {
+             let suggestedOutcome = TradeOutcome.BREAK_EVEN;
+             if (pnl > 0) suggestedOutcome = TradeOutcome.WIN;
+             if (pnl < 0) suggestedOutcome = TradeOutcome.LOSS;
+             
+             setFormData(prev => {
+                 if (prev.outcome === suggestedOutcome) return prev;
+                 return { ...prev, outcome: suggestedOutcome };
+             });
+        }
+    } else {
+        setLivePnL(null);
+    }
+  }, [formData.entryPrice, formData.exitPrice, formData.quantity, formData.direction]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -145,25 +170,16 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
     }));
   };
 
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.checked
-    }));
-  };
-  
-  const handleSystemCheckChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
+  const setField = (field: keyof Trade, value: any) => {
+      setFormData(prev => ({ ...prev, [field]: value }));
+  }
+
+  const handleSystemCheckChange = (name: string) => {
     setFormData(prev => ({
       ...prev,
       systemChecks: {
-        ...(prev.systemChecks || {
-             analyzedPreMarket: false,
-             waitedForOpen: false,
-             checkedSensibullOI: false,
-             exitTimeLimit: false
-        }),
-        [name]: checked
+        ...(prev.systemChecks as any),
+        [name]: !(prev.systemChecks as any)[name]
       }
     }));
   };
@@ -179,390 +195,398 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData }) 
     });
   };
 
+  const startListening = () => {
+      if (!apiKey && !process.env.API_KEY) {
+          alert("Voice Intelligence requires a Gemini API Key. Please add it in Settings.");
+          return;
+      }
+
+      // Support for both standard and WebKit Speech Recognition
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+          alert("Voice input not supported in this browser. Please try Chrome, Edge, or Safari.");
+          return;
+      }
+      
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-IN'; // Indian English for Nifty terms
+
+      recognition.onstart = () => setIsListening(true);
+      
+      recognition.onresult = async (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setIsListening(false);
+          setIsProcessingVoice(true);
+          
+          try {
+              // Call AI to parse
+              const parsed = await parseVoiceCommand(transcript, apiKey);
+              setFormData(prev => ({
+                  ...prev,
+                  ...parsed
+              }));
+          } catch (e) {
+              console.error(e);
+              alert("Could not process voice command. Check console/network.");
+          } finally {
+              setIsProcessingVoice(false);
+          }
+      };
+
+      recognition.onerror = (event: any) => {
+          console.error("Speech Recognition Error", event);
+          setIsListening(false);
+          if (event.error === 'not-allowed') {
+             alert("Microphone access denied. Please allow microphone permissions.");
+          }
+      };
+
+      recognition.onend = () => setIsListening(false);
+      
+      try {
+        recognition.start();
+      } catch(e) {
+        console.error(e);
+      }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Auto-calculate PnL
-    let finalPnl = formData.pnl;
-    let finalOutcome = formData.outcome;
-
-    if (formData.entryPrice && formData.exitPrice && formData.quantity && formData.outcome !== TradeOutcome.OPEN) {
-      const diff = formData.exitPrice - formData.entryPrice;
-      finalPnl = formData.direction === TradeDirection.LONG 
-        ? diff * formData.quantity 
-        : (formData.entryPrice - formData.exitPrice) * formData.quantity;
-      
-      if (finalPnl > 0) finalOutcome = TradeOutcome.WIN;
-      else if (finalPnl < 0) finalOutcome = TradeOutcome.LOSS;
-      else finalOutcome = TradeOutcome.BREAK_EVEN;
-    }
-
     const trade: Trade = {
+      ...formData as Trade,
       id: initialData?.id || crypto.randomUUID(),
-      date: formData.date || new Date().toISOString(),
-      entryTime: formData.entryTime,
-      exitTime: formData.exitTime,
-      instrument: formData.instrument || 'NIFTY 50',
-      optionType: formData.optionType,
-      strikePrice: formData.strikePrice,
-      niftyEntryPrice: formData.niftyEntryPrice,
-      niftyExitPrice: formData.niftyExitPrice,
-      timeframe: formData.timeframe as Timeframe || Timeframe.M5,
-      direction: formData.direction as TradeDirection,
-      entryPrice: formData.entryPrice || 0,
-      exitPrice: formData.exitPrice,
-      quantity: formData.quantity || 75,
-      stopLoss: formData.stopLoss,
-      takeProfit: formData.takeProfit,
-      setupName: formData.setupName || '',
-      marketContext: formData.marketContext || '',
-      entryReason: formData.entryReason || '',
-      exitReason: formData.exitReason,
-      confluences: formData.confluences || [],
-      mistakes: formData.mistakes || [],
-      followedSystem: formData.followedSystem || false,
-      disciplineRating: formData.disciplineRating || 3,
-      emotionalState: formData.emotionalState || 'Neutral',
-      outcome: finalOutcome as TradeOutcome,
-      pnl: finalPnl,
-      aiFeedback: initialData?.aiFeedback,
-      openingType: formData.openingType,
-      spotPointsCaptured: formData.spotPointsCaptured,
-      tradeDurationMins: formData.tradeDurationMins,
-      systemChecks: formData.systemChecks,
+      pnl: livePnL || 0,
     };
     onSave(trade);
   };
 
   return (
-    <div className="bg-slate-800 p-4 md:p-6 rounded-xl border border-slate-700 shadow-xl max-w-5xl mx-auto animate-fade-in">
-      <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
-        <h2 className="text-xl font-bold text-white flex items-center">
-          {initialData ? 'Edit Trade Log' : 'Log Nifty Scalp Trade'}
-        </h2>
-        <div className="flex space-x-2">
-            <a href="https://web.sensibull.com/open-interest/oi-vs-strike?tradingsymbol=NIFTY" target="_blank" rel="noopener noreferrer" className="flex items-center text-xs bg-orange-600/20 text-orange-400 border border-orange-500/30 px-3 py-1.5 rounded-lg hover:bg-orange-600/40 transition font-medium">
-               <ExternalLink size={12} className="mr-1"/> Sensibull OI
+    <div className="max-w-6xl mx-auto pb-12 animate-fade-in-up">
+      {/* 🚀 Header Actions */}
+      <div className="flex justify-between items-center mb-6">
+         <div>
+            <h2 className="text-2xl font-black text-white tracking-tight flex items-center">
+               {initialData ? <Activity className="mr-3 text-indigo-400"/> : <Zap className="mr-3 text-indigo-400"/>}
+               {initialData ? 'Mission Update' : 'New Mission Log'}
+            </h2>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Nifty 50 Intraday Protocol</p>
+         </div>
+         <div className="flex space-x-2">
+            <a href="https://web.sensibull.com/open-interest/oi-vs-strike?tradingsymbol=NIFTY" target="_blank" rel="noopener noreferrer" className="flex items-center text-xs bg-slate-800 text-orange-400 border border-slate-700 px-3 py-2 rounded-lg hover:border-orange-500 hover:bg-slate-700 transition font-bold uppercase tracking-wide">
+               <ExternalLink size={12} className="mr-2"/> OI Data
             </a>
-            <a href="https://kite.zerodha.com/markets/ext/chart/web/tvc/INDICES/NIFTY%2050/256265" target="_blank" rel="noopener noreferrer" className="flex items-center text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg hover:bg-blue-600/40 transition font-medium">
-               <ExternalLink size={12} className="mr-1"/> Kite Chart
+            <a href="https://kite.zerodha.com/markets/ext/chart/web/tvc/INDICES/NIFTY%2050/256265" target="_blank" rel="noopener noreferrer" className="flex items-center text-xs bg-slate-800 text-blue-400 border border-slate-700 px-3 py-2 rounded-lg hover:border-blue-500 hover:bg-slate-700 transition font-bold uppercase tracking-wide">
+               <ExternalLink size={12} className="mr-2"/> Chart
             </a>
-        </div>
+            <button onClick={onCancel} className="p-2 bg-slate-800 text-slate-400 rounded-lg hover:text-white hover:bg-slate-700 border border-slate-700">
+               <X size={18}/>
+            </button>
+         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Section 1: Pre-Market & Instrument */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-           <div className="col-span-2 md:col-span-1">
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Opening</label>
-            <select name="openingType" value={formData.openingType} onChange={handleChange}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-            >
-              <option value={OpeningType.FLAT}>Flat</option>
-              <option value={OpeningType.GAP_UP}>Gap Up</option>
-              <option value={OpeningType.GAP_DOWN}>Gap Down</option>
-            </select>
-          </div>
-          <div className="col-span-2 md:col-span-1">
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Instrument</label>
-            <input 
-              type="text" name="instrument" required 
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500 transition"
-              value={formData.instrument} onChange={handleChange}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
-            <select name="optionType" value={formData.optionType} onChange={handleChange}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-            >
-              <option value={OptionType.CE}>CE</option>
-              <option value={OptionType.PE}>PE</option>
-              <option value={OptionType.FUT}>FUT</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Strike</label>
-            <input 
-              type="number" name="strikePrice" placeholder="21500"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-              value={formData.strikePrice || ''} onChange={handleChange}
-            />
-          </div>
-           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Timeframe</label>
-            <select name="timeframe" value={formData.timeframe} onChange={handleChange}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-            >
-              <option value={Timeframe.M5}>5 min</option>
-              <option value={Timeframe.M1}>1 min</option>
-              <option value={Timeframe.M3}>3 min</option>
-              <option value={Timeframe.M15}>15 min</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Direction</label>
-            <select name="direction" value={formData.direction} onChange={handleChange}
-              className={`w-full border rounded-lg px-3 py-2 text-white outline-none font-bold ${formData.direction === TradeDirection.LONG ? 'bg-blue-900/40 border-blue-600' : 'bg-amber-900/40 border-amber-600'}`}
-            >
-              <option value={TradeDirection.LONG}>LONG</option>
-              <option value={TradeDirection.SHORT}>SHORT</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Section 2: Strategy Execution (The User's System) */}
-        <div className="bg-indigo-900/20 p-5 rounded-xl border border-indigo-500/30">
-            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-4 flex items-center">
-                <Target size={14} className="mr-2"/> My System Checklist (Nifty 30-Pt Scalp)
-            </h3>
+        {/* ---------------- LEFT COLUMN: SPECS & NUMBERS ---------------- */}
+        <div className="lg:col-span-2 space-y-6">
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                 <div className="relative">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Entry Time</label>
-                    <input 
-                        type="time" name="entryTime"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500 font-mono"
-                        value={formData.entryTime || ''} onChange={handleChange}
-                    />
-                 </div>
-                 <div className="relative">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Exit Time</label>
-                    <input 
-                        type="time" name="exitTime"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500 font-mono"
-                        value={formData.exitTime || ''} onChange={handleChange}
-                    />
-                 </div>
-                 <div className="relative">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Duration (Auto)</label>
-                    <div className="relative">
-                        <input 
-                            type="number" name="tradeDurationMins" readOnly
-                            className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-400 outline-none font-mono"
-                            placeholder="Mins"
-                            value={formData.tradeDurationMins || ''}
-                        />
-                        <Clock size={14} className="absolute right-3 top-2.5 text-slate-600"/>
-                    </div>
-                 </div>
-                 <div className="relative">
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Spot Pts Captured</label>
-                     <div className="relative">
-                      <input 
-                          type="number" name="spotPointsCaptured"
-                          className={`w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500 font-mono ${formData.spotPointsCaptured && formData.spotPointsCaptured >= 30 ? 'text-emerald-400 border-emerald-500/50' : ''}`}
-                          placeholder="Target 30"
-                          value={formData.spotPointsCaptured || ''} onChange={handleChange}
-                      />
-                      <Calculator size={14} className="absolute right-3 top-2.5 text-slate-600"/>
-                    </div>
-                 </div>
-            </div>
+            {/* 1. Mission Specs Card */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden group">
+               <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Target size={120} />
+               </div>
+               
+               <h3 className="text-indigo-400 text-xs font-black uppercase tracking-widest mb-6 flex items-center justify-between">
+                  <span className="flex items-center"><BarChart2 size={14} className="mr-2"/> Mission Specifications</span>
+                  
+                  {/* VOICE COMMAND BUTTON */}
+                  <button 
+                     type="button" 
+                     onClick={startListening}
+                     disabled={isProcessingVoice}
+                     className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/40'}`}
+                  >
+                     {isProcessingVoice ? <Loader2 size={12} className="animate-spin"/> : <Mic size={12} />}
+                     {isListening ? 'Listening...' : isProcessingVoice ? 'AI Autofilling...' : 'Voice Log'}
+                  </button>
+               </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <label className="flex items-center space-x-2 bg-slate-900/60 p-3 rounded-lg border border-slate-700 cursor-pointer hover:border-indigo-500 transition hover:bg-slate-800">
-                    <input type="checkbox" name="analyzedPreMarket" 
-                        checked={formData.systemChecks?.analyzedPreMarket || false} onChange={handleSystemCheckChange}
-                        className="w-4 h-4 text-indigo-500 rounded focus:ring-indigo-500 bg-slate-800"
-                    />
-                    <span className="text-xs font-medium text-slate-300">Analyzed Pre-Market</span>
-                </label>
-                <label className="flex items-center space-x-2 bg-slate-900/60 p-3 rounded-lg border border-slate-700 cursor-pointer hover:border-indigo-500 transition hover:bg-slate-800">
-                    <input type="checkbox" name="waitedForOpen" 
-                        checked={formData.systemChecks?.waitedForOpen || false} onChange={handleSystemCheckChange}
-                        className="w-4 h-4 text-indigo-500 rounded focus:ring-indigo-500 bg-slate-800"
-                    />
-                    <span className="text-xs font-medium text-slate-300">Waited 15m Open</span>
-                </label>
-                 <label className="flex items-center space-x-2 bg-slate-900/60 p-3 rounded-lg border border-slate-700 cursor-pointer hover:border-indigo-500 transition hover:bg-slate-800">
-                    <input type="checkbox" name="checkedSensibullOI" 
-                        checked={formData.systemChecks?.checkedSensibullOI || false} onChange={handleSystemCheckChange}
-                        className="w-4 h-4 text-indigo-500 rounded focus:ring-indigo-500 bg-slate-800"
-                    />
-                    <span className="text-xs font-medium text-slate-300">Checked Sensibull OI</span>
-                </label>
-                 <label className="flex items-center space-x-2 bg-slate-900/60 p-3 rounded-lg border border-slate-700 cursor-pointer hover:border-indigo-500 transition hover:bg-slate-800">
-                    <input type="checkbox" name="exitTimeLimit" 
-                        checked={formData.systemChecks?.exitTimeLimit || false} onChange={handleSystemCheckChange}
-                        className="w-4 h-4 text-indigo-500 rounded focus:ring-indigo-500 bg-slate-800"
-                    />
-                    <span className="text-xs font-medium text-slate-300">15-30m Checkpoint</span>
-                </label>
-            </div>
-        </div>
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                   {/* Direction Toggle (Big Segmented Control) */}
+                   <div className="col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Market View</label>
+                      <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-700">
+                         <button
+                           type="button"
+                           onClick={() => setField('direction', TradeDirection.LONG)}
+                           className={`flex-1 flex items-center justify-center py-2.5 rounded-lg text-sm font-black transition-all ${formData.direction === TradeDirection.LONG ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'text-slate-500 hover:text-white'}`}
+                         >
+                            <TrendingUp size={16} className="mr-2"/> LONG
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => setField('direction', TradeDirection.SHORT)}
+                           className={`flex-1 flex items-center justify-center py-2.5 rounded-lg text-sm font-black transition-all ${formData.direction === TradeDirection.SHORT ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50' : 'text-slate-500 hover:text-white'}`}
+                         >
+                            <TrendingDown size={16} className="mr-2"/> SHORT
+                         </button>
+                      </div>
+                   </div>
 
-        {/* Section 3: Execution */}
-        <div className="bg-slate-900/50 p-5 rounded-xl border border-slate-800">
-           <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Trade Execution</h3>
-           <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
-            
-            {/* Nifty Spot Inputs */}
-            <div className="col-span-1 md:col-span-1 border-r border-slate-800 pr-4">
-              <label className="block text-xs font-bold text-emerald-500 uppercase mb-1">Nifty Spot Entry</label>
-              <input 
-                type="number" name="niftyEntryPrice" step="0.05"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none font-mono text-sm focus:border-emerald-500/50"
-                placeholder="21500.50"
-                value={formData.niftyEntryPrice || ''} onChange={handleChange}
-              />
-            </div>
-            <div className="col-span-1 md:col-span-1 border-r border-slate-800 pr-4">
-              <label className="block text-xs font-bold text-emerald-500 uppercase mb-1">Nifty Spot Exit</label>
-              <input 
-                type="number" name="niftyExitPrice" step="0.05"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none font-mono text-sm focus:border-emerald-500/50"
-                placeholder="21530.50"
-                value={formData.niftyExitPrice || ''} onChange={handleChange}
-              />
-            </div>
-
-            <div className="col-span-2 md:col-span-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Quantity</label>
-              <input 
-                type="number" name="quantity" required
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none font-mono focus:border-indigo-500"
-                value={formData.quantity} onChange={handleChange}
-              />
-            </div>
-            <div className="col-span-1 md:col-span-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Avg Entry (₹)</label>
-              <input 
-                type="number" name="entryPrice" step="0.05" required
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none font-mono focus:border-indigo-500"
-                value={formData.entryPrice} onChange={handleChange}
-              />
-            </div>
-             <div className="col-span-1 md:col-span-1">
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Avg Exit (₹)</label>
-              <input 
-                type="number" name="exitPrice" step="0.05"
-                disabled={formData.outcome === TradeOutcome.OPEN}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none font-mono disabled:opacity-50 focus:border-indigo-500"
-                value={formData.exitPrice || ''} onChange={handleChange}
-              />
-            </div>
-            <div className="col-span-2 md:col-span-1">
-             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Outcome</label>
-             <select name="outcome" value={formData.outcome} onChange={handleChange}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-             >
-                <option value={TradeOutcome.OPEN}>OPEN</option>
-                <option value={TradeOutcome.WIN}>WIN</option>
-                <option value={TradeOutcome.LOSS}>LOSS</option>
-                <option value={TradeOutcome.BREAK_EVEN}>BREAK EVEN</option>
-             </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 4: Context & Psychology */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <div>
-             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Setup / Reason</label>
-             <textarea 
-                  name="entryReason" rows={3}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none text-sm focus:border-indigo-500"
-                  placeholder="Why this entry? (e.g. 5m Candle closed above VWAP, OI Support at 21500)"
-                  value={formData.entryReason} onChange={handleChange}
-              />
-             
-             {/* Collapsible Confluences */}
-             <div className="mt-4 bg-slate-900/50 rounded-lg border border-slate-800 overflow-hidden">
-                <button 
-                  type="button" 
-                  onClick={() => setShowConfluences(!showConfluences)}
-                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800 transition"
-                >
-                   <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
-                      <CheckCircle2 size={14} className="mr-2 text-emerald-500" />
-                      Confluences
-                      {!showConfluences && formData.confluences && formData.confluences.length > 0 && (
-                          <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">
-                              {formData.confluences.length} Selected
-                          </span>
-                      )}
-                   </span>
-                   {showConfluences ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
-                </button>
-                
-                {showConfluences && (
-                   <div className="p-4 pt-0 border-t border-slate-800 animate-fade-in mt-2">
-                       <div className="flex flex-wrap gap-2">
-                         {COMMON_CONFLUENCES.map(item => (
-                           <button
-                             key={item} type="button"
-                             onClick={() => toggleArrayItem('confluences', item)}
-                             className={`text-xs px-2 py-1.5 rounded-md border transition font-medium ${formData.confluences?.includes(item) ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300'}`}
-                           >
-                             {item}
-                           </button>
-                         ))}
+                   {/* Date */}
+                   <div>
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Date</label>
+                       <div className="relative">
+                          <input type="date" name="date" required value={formData.date} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm font-mono focus:border-indigo-500 outline-none" />
+                          <Calendar size={14} className="absolute right-3 top-3 text-slate-600 pointer-events-none"/>
                        </div>
                    </div>
-                )}
-             </div>
-           </div>
 
-           <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Market Context</label>
-              <textarea 
-                name="marketContext" rows={3}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none text-sm mb-4 focus:border-indigo-500"
-                placeholder="Prev day analysis? S/R zones? Gap Up/Down reaction?"
-                value={formData.marketContext} onChange={handleChange}
-              />
+                   {/* Opening Type */}
+                   <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Market Open</label>
+                      <select name="openingType" value={formData.openingType} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-indigo-500 outline-none appearance-none">
+                          <option value={OpeningType.FLAT}>Flat</option>
+                          <option value={OpeningType.GAP_UP}>Gap Up</option>
+                          <option value={OpeningType.GAP_DOWN}>Gap Down</option>
+                      </select>
+                   </div>
+               </div>
 
-              {/* Collapsible Mistakes */}
-              <div className="mt-4 bg-slate-900/50 rounded-lg border border-slate-800 overflow-hidden">
-                <button 
-                  type="button" 
-                  onClick={() => setShowMistakes(!showMistakes)}
-                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-slate-800 transition"
-                >
-                   <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
-                      <AlertTriangle size={14} className="mr-2 text-red-500" />
-                      Mistakes / Errors
-                       {!showMistakes && formData.mistakes && formData.mistakes.length > 0 && (
-                          <span className="ml-2 text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
-                              {formData.mistakes.length} Selected
-                          </span>
-                      )}
-                   </span>
-                   {showMistakes ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
-                </button>
-                
-                {showMistakes && (
-                   <div className="p-4 pt-0 border-t border-slate-800 animate-fade-in mt-2">
-                       <div className="flex flex-wrap gap-2">
-                         {COMMON_MISTAKES.map(item => (
-                           <button
-                             key={item} type="button"
-                             onClick={() => toggleArrayItem('mistakes', item)}
-                             className={`text-xs px-2 py-1.5 rounded-md border transition font-medium ${formData.mistakes?.includes(item) ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-300'}`}
-                           >
-                             {item}
-                           </button>
-                         ))}
+               <div className="grid grid-cols-2 md:grid-cols-12 gap-4 mt-5 pt-5 border-t border-slate-700/50">
+                   {/* Instrument */}
+                   <div className="md:col-span-3">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Instrument</label>
+                       <input type="text" name="instrument" value={formData.instrument} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold focus:border-indigo-500 outline-none uppercase" />
+                   </div>
+                   {/* Type */}
+                   <div className="md:col-span-3">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Type</label>
+                       <div className="flex bg-slate-900 rounded-lg border border-slate-700 p-0.5">
+                          {[OptionType.CE, OptionType.PE, OptionType.FUT].map(t => (
+                              <button key={t} type="button" onClick={() => setField('optionType', t)} className={`flex-1 text-[10px] font-bold py-1.5 rounded transition ${formData.optionType === t ? (t === OptionType.CE ? 'bg-green-600 text-white' : t === OptionType.PE ? 'bg-red-600 text-white' : 'bg-indigo-600 text-white') : 'text-slate-500'}`}>{t}</button>
+                          ))}
                        </div>
                    </div>
-                )}
-             </div>
+                   {/* Strike */}
+                   <div className="md:col-span-3">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Strike</label>
+                       <input type="number" name="strikePrice" placeholder="21500" value={formData.strikePrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-indigo-500 outline-none" />
+                   </div>
+                   {/* Timeframe */}
+                   <div className="md:col-span-3">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Timeframe</label>
+                       <select name="timeframe" value={formData.timeframe} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:border-indigo-500 outline-none">
+                          <option value={Timeframe.M1}>1 min</option>
+                          <option value={Timeframe.M3}>3 min</option>
+                          <option value={Timeframe.M5}>5 min</option>
+                          <option value={Timeframe.M15}>15 min</option>
+                       </select>
+                   </div>
+               </div>
+            </div>
 
-           </div>
+            {/* 2. Telemetry Card (The Numbers) */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden">
+               <h3 className="text-emerald-400 text-xs font-black uppercase tracking-widest mb-6 flex items-center">
+                  <Calculator size={14} className="mr-2"/> Trade Telemetry
+               </h3>
+
+               {/* Time & Duration */}
+               <div className="grid grid-cols-3 gap-4 mb-6">
+                   <div>
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Entry Time</label>
+                       <input type="time" name="entryTime" value={formData.entryTime} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none" />
+                   </div>
+                   <div>
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Exit Time</label>
+                       <input type="time" name="exitTime" value={formData.exitTime} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none" />
+                   </div>
+                   <div>
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Duration</label>
+                       <div className="bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 font-mono text-sm flex items-center">
+                           <Clock size={12} className="mr-2 text-slate-500"/> {formData.tradeDurationMins}m
+                       </div>
+                   </div>
+               </div>
+
+               {/* Prices Grid */}
+               <div className="grid grid-cols-2 md:grid-cols-12 gap-4">
+                  {/* Nifty Spot */}
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Spot Entry</label>
+                      <input type="number" step="0.05" name="niftyEntryPrice" value={formData.niftyEntryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 outline-none" placeholder="21500" />
+                  </div>
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Spot Exit</label>
+                      <input type="number" step="0.05" name="niftyExitPrice" value={formData.niftyExitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 outline-none" placeholder="21530" />
+                  </div>
+
+                  {/* Premium */}
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Prem Entry ₹</label>
+                      <input type="number" step="0.05" name="entryPrice" required value={formData.entryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
+                  </div>
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Prem Exit ₹</label>
+                      <input type="number" step="0.05" name="exitPrice" value={formData.exitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
+                  </div>
+                  
+                  {/* Quantity - Full Width on Mobile */}
+                  <div className="col-span-2 md:col-span-12 mt-2">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
+                       <div className="flex items-center gap-4">
+                           <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-lg font-mono font-bold text-white focus:border-indigo-500 outline-none" />
+                           <div className="flex gap-2">
+                               {[50, 75, 100, 150].map(q => (
+                                   <button key={q} type="button" onClick={() => setField('quantity', q)} className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-xs font-bold text-slate-400 hover:text-white hover:border-slate-400 transition">{q}</button>
+                               ))}
+                           </div>
+                       </div>
+                  </div>
+               </div>
+            </div>
+
+            {/* 3. Narrative & Context */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                 <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
+                    <Activity size={14} className="mr-2"/> Trade Narrative
+                 </h3>
+                 <div className="space-y-4">
+                    <div>
+                        <input type="text" name="setupName" value={formData.setupName} onChange={handleChange} placeholder="Setup Name (e.g. 5m VWAP Rejection)" className="w-full bg-slate-900 border-b border-slate-700 px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none transition" />
+                    </div>
+                    <div>
+                        <textarea name="marketContext" rows={2} value={formData.marketContext} onChange={handleChange} placeholder="Market Context (Gap Up, Trending, Rangebound...)" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs focus:border-indigo-500 outline-none resize-none" />
+                    </div>
+                    <div>
+                        <textarea name="entryReason" rows={2} value={formData.entryReason} onChange={handleChange} placeholder="Entry Logic (Why take this trade?)" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs focus:border-indigo-500 outline-none resize-none" />
+                    </div>
+                 </div>
+
+                 {/* Collapsible Chips */}
+                 <div className="mt-6 space-y-4">
+                     {/* Confluences */}
+                     <div className="border border-slate-700 rounded-xl overflow-hidden">
+                        <button type="button" onClick={() => setShowConfluences(!showConfluences)} className="w-full flex items-center justify-between p-3 bg-slate-900/50 hover:bg-slate-900 transition">
+                            <span className="text-xs font-bold text-emerald-400 uppercase flex items-center"><CheckCircle2 size={14} className="mr-2"/> Confluences {formData.confluences && formData.confluences.length > 0 && `(${formData.confluences.length})`}</span>
+                            {showConfluences ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                        </button>
+                        {showConfluences && (
+                            <div className="p-3 bg-slate-900 border-t border-slate-800 flex flex-wrap gap-2 animate-fade-in">
+                                {COMMON_CONFLUENCES.map(c => (
+                                    <button key={c} type="button" onClick={() => toggleArrayItem('confluences', c)} className={`text-[10px] px-2 py-1 rounded border transition ${formData.confluences?.includes(c) ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}>
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                     </div>
+
+                     {/* Mistakes */}
+                     <div className="border border-slate-700 rounded-xl overflow-hidden">
+                        <button type="button" onClick={() => setShowMistakes(!showMistakes)} className="w-full flex items-center justify-between p-3 bg-slate-900/50 hover:bg-slate-900 transition">
+                            <span className="text-xs font-bold text-red-400 uppercase flex items-center"><AlertTriangle size={14} className="mr-2"/> Mistakes {formData.mistakes && formData.mistakes.length > 0 && `(${formData.mistakes.length})`}</span>
+                            {showMistakes ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                        </button>
+                        {showMistakes && (
+                            <div className="p-3 bg-slate-900 border-t border-slate-800 flex flex-wrap gap-2 animate-fade-in">
+                                {COMMON_MISTAKES.map(c => (
+                                    <button key={c} type="button" onClick={() => toggleArrayItem('mistakes', c)} className={`text-[10px] px-2 py-1 rounded border transition ${formData.mistakes?.includes(c) ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}>
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                     </div>
+                 </div>
+            </div>
         </div>
 
-        <div className="flex justify-end space-x-4 pt-6 border-t border-slate-700">
-          <button type="button" onClick={onCancel} className="px-6 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition font-medium">
-            Cancel
-          </button>
-          <button type="submit" className="flex items-center px-8 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition shadow-lg shadow-indigo-900/50">
-            <Save size={18} className="mr-2" />
-            Save Log
-          </button>
-        </div>
 
+        {/* ---------------- RIGHT COLUMN: HUD & ACTIONS ---------------- */}
+        <div className="lg:col-span-1 space-y-6">
+            
+            {/* 🛑 Live PnL HUD (Sticky) */}
+            <div className={`bg-slate-900 p-6 rounded-2xl border-2 shadow-2xl transition-colors duration-500 ${livePnL && livePnL > 0 ? 'border-emerald-500 shadow-emerald-500/20' : livePnL && livePnL < 0 ? 'border-red-500 shadow-red-500/20' : 'border-slate-700'}`}>
+                <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2 text-center">Estimated Outcome</h4>
+                <div className="text-center">
+                    <span className={`text-4xl font-black font-mono tracking-tight ${livePnL && livePnL > 0 ? 'text-emerald-400' : livePnL && livePnL < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        {livePnL ? (livePnL > 0 ? '+' : '') : ''}₹{livePnL ? livePnL.toFixed(2) : '0.00'}
+                    </span>
+                    <div className="flex justify-center gap-4 mt-4 text-[10px] font-bold uppercase text-slate-500">
+                        <span className="flex items-center"><Target size={12} className="mr-1"/> {formData.spotPointsCaptured || 0} pts</span>
+                        <span>•</span>
+                        <span className="flex items-center"><Clock size={12} className="mr-1"/> {formData.tradeDurationMins || 0}m</span>
+                    </div>
+                </div>
+
+                {/* Outcome Toggle */}
+                <div className="mt-6 p-1 bg-slate-950 rounded-xl border border-slate-800 flex">
+                     {[TradeOutcome.WIN, TradeOutcome.LOSS, TradeOutcome.BREAK_EVEN].map(o => (
+                         <button
+                            key={o} type="button"
+                            onClick={() => setField('outcome', o)}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase transition ${formData.outcome === o ? (o === TradeOutcome.WIN ? 'bg-emerald-600 text-white' : o === TradeOutcome.LOSS ? 'bg-red-600 text-white' : 'bg-slate-600 text-white') : 'text-slate-500 hover:text-white'}`}
+                         >
+                            {o}
+                         </button>
+                     ))}
+                </div>
+            </div>
+
+            {/* 🚦 System Pre-Flight Checks */}
+            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
+                <h3 className="text-amber-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
+                   <Zap size={14} className="mr-2"/> System Protocol
+                </h3>
+                <div className="space-y-3">
+                     {[
+                        { key: 'analyzedPreMarket', label: 'Pre-Market Analysis' },
+                        { key: 'waitedForOpen', label: 'Waited 15m Open' },
+                        { key: 'checkedSensibullOI', label: 'Verified OI Data' },
+                        { key: 'exitTimeLimit', label: 'Exit Rule (15-30m)' },
+                     ].map((check) => (
+                        <div key={check.key} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-800">
+                             <span className="text-xs font-bold text-slate-300">{check.label}</span>
+                             <button
+                                type="button"
+                                onClick={() => handleSystemCheckChange(check.key)}
+                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-300 ease-in-out ${formData.systemChecks?.[check.key as keyof typeof formData.systemChecks] ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                             >
+                                <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${formData.systemChecks?.[check.key as keyof typeof formData.systemChecks] ? 'translate-x-4' : ''}`}></div>
+                             </button>
+                        </div>
+                     ))}
+                </div>
+            </div>
+            
+            {/* Discipline Rating */}
+            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
+                <h3 className="text-blue-400 text-xs font-black uppercase tracking-widest mb-4">Discipline Rating</h3>
+                <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-xl">
+                    {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star} type="button"
+                          onClick={() => setField('disciplineRating', star)}
+                          className={`p-2 rounded-lg transition hover:scale-110 ${formData.disciplineRating && formData.disciplineRating >= star ? 'text-yellow-400' : 'text-slate-700'}`}
+                        >
+                           <Zap size={20} fill={formData.disciplineRating && formData.disciplineRating >= star ? "currentColor" : "none"} />
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-4">
+               <button type="submit" className="w-full py-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black uppercase tracking-widest rounded-xl shadow-xl shadow-indigo-900/50 transition transform hover:scale-[1.02] flex items-center justify-center">
+                  <Save size={18} className="mr-2"/> Save Mission Log
+               </button>
+            </div>
+
+        </div>
       </form>
     </div>
   );

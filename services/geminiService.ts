@@ -1,5 +1,5 @@
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { Trade, StrategyProfile } from "../types";
+import { Trade, StrategyProfile, ParsedVoiceCommand } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
@@ -98,13 +98,10 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 
     let jsonResult = response.text;
     
-    // Append sources if available (standard practice for Grounding) - we'll handle this in the parsing/UI layer or append to the object if we parse it here.
-    // Since we return string, let's parse, add sources, and re-stringify.
     let resultObj: any = {};
     try {
         resultObj = JSON.parse(jsonResult || "{}");
     } catch(e) {
-        // Fallback if model fails to output strict JSON despite config
         return JSON.stringify({
             grade: "?", 
             gradeColor: "gray",
@@ -210,3 +207,48 @@ export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
     return "Protect your capital. The market will be there tomorrow.";
   }
 };
+
+// New Feature: Voice to Log parsing
+export const parseVoiceCommand = async (transcript: string, apiKey?: string): Promise<ParsedVoiceCommand> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required");
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: key });
+        const prompt = `
+            Extract trading data from this voice transcript: "${transcript}".
+            User is an Indian Nifty 50 trader.
+            Fields needed: instrument (NIFTY 50 default), optionType (CE/PE), strikePrice (number), direction (LONG/SHORT), entryPrice (number), quantity (number), entryReason (text), setupName (text).
+            
+            Return JSON only.
+        `;
+
+        const responseSchema = {
+            type: Type.OBJECT,
+            properties: {
+                instrument: { type: Type.STRING },
+                optionType: { type: Type.STRING, enum: ["CE", "PE", "FUT"] },
+                strikePrice: { type: Type.NUMBER },
+                direction: { type: Type.STRING, enum: ["LONG", "SHORT"] },
+                entryPrice: { type: Type.NUMBER },
+                quantity: { type: Type.NUMBER },
+                entryReason: { type: Type.STRING },
+                setupName: { type: Type.STRING }
+            }
+        };
+
+        const response = await ai.models.generateContent({
+            model: FAST_MODEL,
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema
+            }
+        });
+
+        return JSON.parse(response.text || "{}");
+    } catch (e) {
+        console.error("Voice parse error", e);
+        return { entryReason: transcript }; // Fallback
+    }
+}

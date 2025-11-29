@@ -1,5 +1,7 @@
 {
-  "name": "TradeMind AI",
+  "name": "TradeMind.AI",
   "description": "A professional-grade paper trading journal powered by AI to analyze your psychology, strategy adherence, and performance.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }
