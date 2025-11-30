@@ -1,45 +1,21 @@
 
 {
-  "name": "TradeMind.AI",
   "short_name": "TradeMind",
-  "start_url": "/",
-  "id": "trademind-ai-v3",
-  "scope": "/",
-  "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
-  "orientation": "portrait",
-  "categories": ["finance", "productivity"],
-  "description": "Professional Nifty 50 Trading Journal & AI Coach",
+  "name": "TradeMind.AI",
   "icons": [
     {
       "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiYXJHcmFkIiB4MT0iMCIgeTE9IjEiIHgyPSIwIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzMzNDE1NSIgc3RvcC1vcGFjaXR5PSIwLjUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM0NzU1NjkiIHN0b3Atb3BhY2l0eT0iMC44Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImxpbmVHcmFkIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzNiODJmNiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzEwYjk4MSIvPjwvbGluZWFyR3JhZGllbnQ+PGZpbHRlciBpZD0iZ2xvdyI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC44IiByZXN1bHQ9ImNvbG9yZWRCbHVyIi8+PGZlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48/ZmlsdGVyPjwvZGVmcz48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHJ4PSI2IiBmaWxsPSIjMGYxNzJhIi8+PHJlY3QgeD0iNCIgeT0iMTMiIHdpZHRoPSI0IiBoZWlnaHQ9IjciIHJ4PSIxIiBmaWxsPSJ1cmwoI2JhckdyYWQpIi8+PHJlY3QgeD0iMTAiIHk9IjkiIHdpZHRoPSI0IiBoZWlnaHQ9IjExIiByeD0iMSIgZmlsbD0idXJsKCNiYXJHcmFkKSIvPjxyZWN0IHg9IjE2IiB5PSI1IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNSIgcng9IjEiIGZpbGw9InVybCgjYmFyR3JhZCkiLz48cGF0aCBkPSJNMyAxNSBDNiAxNSw4IDExLDExIDExIEMxNCAxMSwxNiA3LDE5IDUiIHN0cm9rZT0idXJsKCNsaW5lR3JhZCkiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxwYXRoIGQ9Ik0xOSAzIEwyMCA0LjUgTDIxLjUgNSBMMjAgNS41IEwxOSA3IEwxOCA1LjUgTDE2LjUgNSBMMTggNC41IFoiIGZpbGw9IiNmZmZmZmYiIGZpbHRlcj0idXJsKCNnbG93KSIvPjwvc3ZnPg==",
       "type": "image/svg+xml",
-      "sizes": "192x192",
-      "purpose": "any maskable"
+      "sizes": "192x192"
     },
     {
       "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiYXJHcmFkIiB4MT0iMCIgeTE9IjEiIHgyPSIwIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzMzNDE1NSIgc3RvcC1vcGFjaXR5PSIwLjUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM0NzU1NjkiIHN0b3Atb3BhY2l0eT0iMC44Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImxpbmVHcmFkIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzNiODJmNiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzEwYjk4MSIvPjwvbGluZWFyR3JhZGllbnQ+PGZpbHRlciBpZD0iZ2xvdyI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC44IiByZXN1bHQ9ImNvbG9yZWRCbHVyIi8+PGZlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48/ZmlsdGVyPjwvZGVmcz48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHJ4PSI2IiBmaWxsPSIjMGYxNzJhIi8+PHJlY3QgeD0iNCIgeT0iMTMiIHdpZHRoPSI0IiBoZWlnaHQ9IjciIHJ4PSIxIiBmaWxsPSJ1cmwoI2JhckdyYWQpIi8+PHJlY3QgeD0iMTAiIHk9IjkiIHdpZHRoPSI0IiBoZWlnaHQ9IjExIiByeD0iMSIgZmlsbD0idXJsKCNiYXJHcmFkKSIvPjxyZWN0IHg9IjE2IiB5PSI1IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNSIgcng9IjEiIGZpbGw9InVybCgjYmFyR3JhZCkiLz48cGF0aCBkPSJNMyAxNSBDNiAxNSw4IDExLDExIDExIEMxNCAxMSwxNiA3LDE5IDUiIHN0cm9rZT0idXJsKCNsaW5lR3JhZCkiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxwYXRoIGQ9Ik0xOSAzIEwyMCA0LjUgTDIxLjUgNSBMMjAgNS41IEwxOSA3IEwxOCA1LjUgTDE2LjUgNSBMMTggNC41IFoiIGZpbGw9IiNmZmZmZmYiIGZpbHRlcj0idXJsKCNnbG93KSIvPjwvc3ZnPg==",
       "type": "image/svg+xml",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "sizes": "512x512"
     }
   ],
-  "screenshots": [
-    {
-      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjgwIDcyMCI+PHJlY3Qgd2lkdGg9IjEyODAiIGhlaWdodD0iNzIwIiBmaWxsPSIjMGYxNzJhIi8+PHRleHQgeD0iNjQwIiB5PSIzNjAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjYwIiBmaWxsPSIjZTI4MDgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5UcmFkZU1pbmQuQUkgRGFzaGJvYXJkPC90ZXh0Pjwvc3ZnPg==",
-      "sizes": "1280x720",
-      "type": "image/svg+xml",
-      "form_factor": "wide",
-      "label": "TradeMind Dashboard"
-    },
-    {
-      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA3MjAgMTI4MCI+PHJlY3Qgd2lkdGg9IjcyMCIgaGVpZ2h0PSIxMjgwIiBmaWxsPSIjMGYxNzJhIi8+PHRleHQgeD0iMzYwIiB5PSI2NDAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjYwIiBmaWxsPSIjZTI4MDgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5UcmFkZU1pbmQuQUkgTW9iaWxlPC90ZXh0Pjwvc3ZnPg==",
-      "sizes": "720x1280",
-      "type": "image/svg+xml",
-      "form_factor": "narrow",
-      "label": "TradeMind Mobile View"
-    }
-  ]
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a"
 }
