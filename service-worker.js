@@ -1,35 +1,34 @@
 
-const CACHE_NAME = 'trademind-ai-v1';
+const CACHE_NAME = 'trademind-ai-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json'
 ];
 
-// Install Event: Cache core assets
 self.addEventListener('install', (event) => {
-  // Force the waiting service worker to become the active service worker
+  // Activate immediately
   self.skipWaiting();
   
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
+        console.log('Opened cache');
         return cache.addAll(urlsToCache);
       })
   );
 });
 
-// Activate Event: Clean up old caches and claim clients
 self.addEventListener('activate', (event) => {
-  // Take control of all clients immediately
+  // Claim clients immediately so the first load is controlled
   event.waitUntil(self.clients.claim());
   
-  const cacheWhitelist = [CACHE_NAME];
+  // Cleanup old caches
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })
@@ -38,33 +37,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event: Handle requests
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  const request = event.request;
+  const url = new URL(request.url);
 
-  // SPA Navigation Handler
-  // If the request is a navigation (e.g. reloading the page, or going to start_url),
-  // serve the index.html from cache.
-  if (event.request.mode === 'navigate') {
+  // 1. Navigation Requests (HTML) - Cache First, then Network
+  // This ensures the app loads instantly and works offline, satisfying PWA requirements.
+  if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/index.html').then((response) => {
-        // Return index.html from cache, or fetch it if missing (then cache it), or fallback to cache again
-        return response || fetch('/index.html').catch(() => caches.match('/index.html'));
+      caches.match('/index.html').then((cached) => {
+        // Return cached index.html if available
+        if (cached) return cached;
+        
+        // If not in cache (first load), fetch from network
+        return fetch(request)
+          .then((response) => {
+            return response;
+          })
+          .catch(() => {
+             // If offline and not in cache, try matching root
+             return caches.match('/');
+          });
       })
     );
     return;
   }
 
-  // Standard Cache-First for assets
+  // 2. Asset Requests - Stale While Revalidate
+  // Serve from cache immediately, then update in background
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Return cached response if found
-        if (response) {
-          return response;
+    caches.match(request).then((cachedResponse) => {
+      const fetchPromise = fetch(request).then((networkResponse) => {
+        // Update cache
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+           const responseToCache = networkResponse.clone();
+           caches.open(CACHE_NAME).then((cache) => {
+             cache.put(request, responseToCache);
+           });
         }
-        // Otherwise fetch from network
-        return fetch(event.request);
-      })
+        return networkResponse;
+      });
+      return cachedResponse || fetchPromise;
+    })
   );
 });
