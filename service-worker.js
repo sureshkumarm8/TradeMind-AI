@@ -1,66 +1,68 @@
-
-const CACHE_NAME = 'trademind-app-v2';
-const urlsToCache = [
+const CACHE_NAME = 'trademind-app-v3';
+const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png'
 ];
 
-// 1. Install Phase: Cache static assets and take control immediately
-self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Force this SW to become the active one immediately
+self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
   );
 });
 
-// 2. Activate Phase: Clean up old caches and claim clients
-self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
+self.addEventListener('activate', event => {
+  const keep = [CACHE_NAME];
   event.waitUntil(
-    Promise.all([
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => {
-            if (cacheWhitelist.indexOf(cacheName) === -1) {
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      }),
-      self.clients.claim() // Take control of all open pages immediately
-    ])
+    caches.keys()
+      .then(keys => Promise.all(keys.map(k => (keep.includes(k) ? null : caches.delete(k)))))
+      .then(() => self.clients.claim())
   );
 });
 
-// 3. Fetch Phase: Network-first for API, Cache-first for Assets, Fallback for Navigation
-self.addEventListener('fetch', (event) => {
-  // Handle Navigation Requests (HTML) - Critical for PWA Start URL to work offline
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      caches.match('/index.html').then((response) => {
-        return response || fetch(event.request);
-      }).catch(() => {
-        // If both cache and network fail, show offline page (mapped to index.html here)
-        return caches.match('/index.html');
-      })
-    );
-    return;
+// Navigation handler — network-first with cache fallback so start_url works offline
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // Only handle same-origin requests
+  if (url.origin === self.location.origin) {
+    // HTML navigation requests
+    if (req.mode === 'navigate') {
+      event.respondWith((async () => {
+        try {
+          const networkResp = await fetch(req);
+          // keep cached index.html updated
+          const cache = await caches.open(CACHE_NAME);
+          cache.put('/index.html', networkResp.clone()).catch(() => {});
+          return networkResp;
+        } catch (err) {
+          const cached = await caches.match('/index.html');
+          return cached || Response.error();
+        }
+      })());
+      return;
+    }
+
+    // For other GET requests use stale-while-revalidate
+    if (req.method === 'GET') {
+      event.respondWith((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(req);
+        const networkPromise = fetch(req).then(networkResp => {
+          if (networkResp && networkResp.status === 200) {
+            try { cache.put(req, networkResp.clone()); } catch (e) { /* ignore */ }
+          }
+          return networkResp;
+        }).catch(() => null);
+        return cached || (await networkPromise) || (await caches.match('/index.html'));
+      })());
+      return;
+    }
   }
 
-  // Handle Asset Requests
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache Hit - return response
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
-  );
+  // Default: let browser handle (cross-origin, non-GET, etc.)
 });

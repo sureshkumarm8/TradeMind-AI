@@ -1,9 +1,7 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJiYXJHcmFkIiB4MT0iMCIgeTE9IjEiIHgyPSIwIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzMzNDE1NSIgc3RvcC1vcGFjaXR5PSIwLjUiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM0NzU1NjkiIHN0b3Atb3BhY2l0eT0iMC44Ii8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImxpbmVHcmFkIiB4MT0iMCIgeTE9IjAiIHgyPSIxIiB5Mj0iMCI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzNiODJmNiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzEwYjk4MSIvPjwvbGluZWFyR3JhZGllbnQ+PGZpbHRlciBpZD0iZ2xvdyI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC44IiByZXN1bHQ9ImNvbG9yZWRCbHVyIi8+PGZlTWVyZ2U+PGZlTWVyZ2VOb2RlIGluPSJjb2xvcmVkQmx1ciIvPjxmZU1lcmdlTm9kZSBpbj0iU291cmNlR3JhcGhpYyIvPjwvZmVNZXJnZT48/ZmlsdGVyPjwvZGVmcz48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHJ4PSI2IiBmaWxsPSIjMGYxNzJhIi8+PHJlY3QgeD0iNCIgeT0iMTMiIHdpZHRoPSI0IiBoZWlnaHQ9IjciIHJ4PSIxIiBmaWxsPSJ1cmwoI2JhckdyYWQpIi8+PHJlY3QgeD0iMTAiIHk9IjkiIHdpZHRoPSI0IiBoZWlnaHQ9IjExIiByeD0iMSIgZmlsbD0idXJsKCNiYXJHcmFkKSIvPjxyZWN0IHg9IjE2IiB5PSI1IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNSIgcng9IjEiIGZpbGw9InVybCgjYmFyR3JhZCkiLz48cGF0aCBkPSJNMyAxNSBDNiAxNSw4IDExLDExIDExIEMxNCAxMSwxNiA3LDE5IDUiIHN0cm9rZT0idXJsKCNsaW5lR3JhZCkiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnbG93KSIvPjxwYXRoIGQ9Ik0xOSAzIEwyMCA0LjUgTDIxLjUgNSBMMjAgNS41IEwxOSA3IEwxOCA1LjUgTDE2LjUgNSBMMTggNC41IFoiIGZpbGw9IiNmZmZmZmYiIGZpbHRlcj0idXJsKCNnbG93KSIvPjwvc3ZnPg==" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#0f172a">
     <meta name="mobile-web-app-capable" content="yes">
@@ -12,100 +10,75 @@
     <meta name="apple-mobile-web-app-title" content="TradeMind">
     <meta name="description" content="TradeMind.AI - Professional Nifty 50 Trading Journal">
     <link rel="manifest" href="/manifest.json">
+
+    <!-- Explicit icons so Android/iOS can find usable assets immediately -->
+    <link rel="icon" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="icon" sizes="512x512" href="/icons/icon-512x512.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+
     <title>TradeMind.AI - Professional Trading Journal</title>
     <script src="https://cdn.tailwindcss.com"></script>
+
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
             colors: {
-              gray: {
-                750: '#2d3748',
-                850: '#1a202c',
-                950: '#0d1117',
-              },
-              trade: {
-                profit: '#10B981', // emerald-500
-                loss: '#EF4444',   // red-500
-                long: '#3B82F6',   // blue-500
-                short: '#F59E0B',  // amber-500
-              }
+              gray: { 750: '#2d3748', 850: '#1a202c', 950: '#0d1117' },
+              trade: { profit: '#10B981', loss: '#EF4444', long: '#3B82F6', short: '#F59E0B' }
             },
-            fontFamily: {
-              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', "Liberation Mono", "Courier New", 'monospace'],
-            },
-            animation: {
-               'fade-in': 'fadeIn 0.5s ease-out',
-               'fade-in-up': 'fadeInUp 0.5s ease-out',
-               'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-               'steady-breath': 'steadyBreath 4s ease-in-out infinite',
-               'float-slow': 'floatSlow 3s ease-in-out infinite'
-            },
-            keyframes: {
-               fadeIn: {
-                  '0%': { opacity: '0' },
-                  '100%': { opacity: '1' },
-               },
-               fadeInUp: {
-                  '0%': { opacity: '0', transform: 'translateY(10px)' },
-                  '100%': { opacity: '1', transform: 'translateY(0)' },
-               },
-               steadyBreath: {
-                  '0%, 100%': { transform: 'scale(1)', opacity: '0.9' },
-                  '50%': { transform: 'scale(1.05)', opacity: '1' },
-               },
-               floatSlow: {
-                  '0%': { transform: 'translateY(0px) scale(0)', opacity: '0' },
-                  '50%': { opacity: '1', transform: 'scale(1)' },
-                  '100%': { transform: 'translateY(-20px) scale(0)', opacity: '0' },
-               }
-            }
+            fontFamily: { mono: ['ui-monospace','SFMono-Regular','Menlo','Monaco','Consolas',"Liberation Mono","Courier New","monospace"] }
           }
         }
       }
     </script>
+
     <style>
-      body {
-        background-color: #0f172a; /* Slate 950 */
-        color: #e2e8f0; /* Slate 200 */
-        -webkit-tap-highlight-color: transparent;
-      }
-      /* Custom Scrollbar for a cleaner look */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1e293b; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #475569; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #64748b; 
-      }
-      .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
-      }
+      body { background-color: #0f172a; color: #e2e8f0; -webkit-tap-highlight-color: transparent; }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: #1e293b; }
+      ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0"
-  }
-}
-</script>
-</head>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+        "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+        "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0"
+      }
+    }
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+
+    <!-- Service Worker registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(reg => {
+              console.log('ServiceWorker registered with scope:', reg.scope);
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('New service worker installed — update available');
+                  }
+                });
+              });
+            })
+            .catch(err => console.error('ServiceWorker registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>
