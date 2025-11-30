@@ -1,0 +1,5 @@
+<svg width="192" height="192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" fill="#0f172a"/>
+  <circle cx="96" cy="96" r="48" fill="#10B981"/>
+  <text x="96" y="106" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="32" font-weight="bold">TM</text>
+</svg>

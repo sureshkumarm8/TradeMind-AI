@@ -1,10 +1,11 @@
-const CACHE_NAME = 'trademind-app-v3';
+const CACHE_NAME = 'trademind-app-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/favicon.svg',
+  '/icons/icon-192x192.svg',
+  '/icons/icon-512x512.svg'
 ];
 
 self.addEventListener('install', event => {
