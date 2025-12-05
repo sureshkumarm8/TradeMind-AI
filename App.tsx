@@ -322,6 +322,23 @@ const App: React.FC = () => {
     setStrategyProfile(importedProfile);
     notify("System Updated", 'success');
   };
+  
+  const handleResetApp = () => {
+      if (window.confirm("WARNING: This will wipe ALL data (Trades, Settings, Strategy). Are you sure?")) {
+          localStorage.clear();
+          setTrades([]);
+          setStrategyProfile(DEFAULT_STRATEGY);
+          setApiKey('');
+          setGoogleClientId('');
+          setPreMarketNotes(undefined);
+          setUserProfile(null);
+          setSyncStatus(SyncStatus.OFFLINE);
+          setAuthError(null);
+          notify("App Reset Successfully", 'info');
+          // Reload to ensure clean state
+          setTimeout(() => window.location.reload(), 1000);
+      }
+  };
 
   const getPageTitle = () => {
      switch(view) {
@@ -423,7 +440,7 @@ const App: React.FC = () => {
 
         <div className="max-w-7xl mx-auto animate-fade-in-up">
           {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
-          {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey} notify={notify}/>}
+          {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey} notify={notify} onDelete={(id) => { handleDeleteTrade(id); setView('journal'); }}/>}
           {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId}/>}
           {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy} notify={notify}/>}
           {view === 'account' && (
@@ -443,6 +460,7 @@ const App: React.FC = () => {
                 onExportJSON={() => exportToJSON(trades, strategyProfile)}
                 onExportCSV={() => exportToCSV(trades)}
                 onImportClick={() => fileInputRef.current?.click()}
+                onReset={handleResetApp}
               />
           )}
         </div>

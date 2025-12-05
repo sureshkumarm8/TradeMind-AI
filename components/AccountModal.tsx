@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw } from 'lucide-react';
+import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw, Trash2 } from 'lucide-react';
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -18,12 +19,13 @@ interface AccountSettingsProps {
   onExportJSON: () => void;
   onExportCSV: () => void;
   onImportClick: () => void;
+  onReset: () => void;
 }
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
   userProfile, syncStatus, authError, onConnect, onLogout,
   apiKey, setApiKey, googleClientId, setGoogleClientId, onSaveSettings,
-  onExportJSON, onExportCSV, onImportClick
+  onExportJSON, onExportCSV, onImportClick, onReset
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'config'>('profile');
   const [isGapiReady, setIsGapiReady] = useState(false);
@@ -238,17 +240,27 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                     )}
 
                     {/* Data Management Section */}
-                    <div className="mt-12 pt-8 border-t border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
-                        <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                             <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Download size={14} className="mr-2"/> Backup Data</h5>
-                             <div className="flex gap-2">
-                                <button onClick={onExportCSV} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To Excel</button>
-                                <button onClick={onExportJSON} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To JSON</button>
-                             </div>
+                    <div className="mt-12 pt-8 border-t border-slate-800 relative z-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                                <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Download size={14} className="mr-2"/> Backup Data</h5>
+                                <div className="flex gap-2">
+                                    <button onClick={onExportCSV} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To Excel</button>
+                                    <button onClick={onExportJSON} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To JSON</button>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                                <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Upload size={14} className="mr-2"/> Restore Data</h5>
+                                <button onClick={onImportClick} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">Restore Data (JSON/CSV)</button>
+                            </div>
                         </div>
-                        <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                             <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Upload size={14} className="mr-2"/> Restore Data</h5>
-                             <button onClick={onImportClick} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">Restore Data (JSON/CSV)</button>
+                        
+                        {/* Danger Zone */}
+                        <div className="mt-8 pt-6 border-t border-red-900/30">
+                            <h5 className="text-xs font-bold text-red-500 uppercase mb-3 flex items-center"><AlertTriangle size={14} className="mr-2"/> Danger Zone</h5>
+                            <button onClick={onReset} className="w-full bg-red-950/20 hover:bg-red-900/40 text-red-400 text-xs font-bold py-3 rounded border border-red-900/50 flex items-center justify-center transition">
+                                <Trash2 size={14} className="mr-2"/> Factory Reset (Clear All Data)
+                            </button>
                         </div>
                     </div>
                 </div>

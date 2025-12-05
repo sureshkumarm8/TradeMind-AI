@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud } from 'lucide-react';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2 } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
 
@@ -11,6 +11,7 @@ interface TradeFormProps {
   initialData?: Trade;
   apiKey?: string;
   notify?: (message: string, type?: NotificationType) => void;
+  onDelete?: (id: string) => void;
 }
 
 const COMMON_CONFLUENCES = [
@@ -43,7 +44,7 @@ const COMMON_SETUPS = [
   "Fakeout / Trap"
 ];
 
-const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify }) => {
+const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
   const [showMistakes, setShowMistakes] = useState(false);
@@ -692,10 +693,15 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
             </div>
 
             {/* Action Buttons */}
-            <div className="pt-4">
-               <button type="submit" className="w-full py-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black uppercase tracking-widest rounded-xl shadow-xl shadow-indigo-900/50 transition transform hover:scale-[1.02] flex items-center justify-center">
+            <div className="pt-4 flex gap-3">
+               <button type="submit" className="flex-1 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black uppercase tracking-widest rounded-xl shadow-xl shadow-indigo-900/50 transition transform hover:scale-[1.02] flex items-center justify-center">
                   <Save size={18} className="mr-2"/> Save Mission Log
                </button>
+               {initialData && onDelete && (
+                 <button type="button" onClick={() => onDelete(initialData.id)} className="px-6 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-600/20 rounded-xl hover:text-red-300 transition flex items-center justify-center shadow-lg hover:shadow-red-900/30">
+                    <Trash2 size={20}/>
+                 </button>
+               )}
             </div>
 
         </div>

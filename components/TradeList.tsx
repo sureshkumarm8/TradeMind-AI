@@ -442,7 +442,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
        {viewMode === 'week' && renderWeeklyView()}
        
        {/* List View */}
-       {viewMode === 'list' && Object.entries(tradesByDate).map(([dateStr, dayTrades]) => (
+       {viewMode === 'list' && (Object.entries(tradesByDate) as [string, Trade[]][]).map(([dateStr, dayTrades]) => (
          <div key={dateStr} className="space-y-4">
              <div className="flex items-center justify-between sticky top-[5.5rem] z-10 bg-slate-950/90 backdrop-blur py-2 border-b border-indigo-500/20">
                  <div className="flex items-center gap-3">
