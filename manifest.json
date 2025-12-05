@@ -2,7 +2,7 @@
   "short_name": "TradeMind",
   "name": "TradeMind.AI",
   "id": "trademind-ai-app",
-  "start_url": "./?source=pwa",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -36,6 +36,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+       "src": "/icons/icon-512x512.png",
+       "sizes": "512x512",
+       "type": "image/png",
+       "form_factor": "wide",
+       "label": "Dashboard"
+    },
+    {
+       "src": "/icons/icon-512x512.png",
+       "sizes": "512x512",
+       "type": "image/png",
+       "form_factor": "narrow",
+       "label": "Mobile View"
     }
   ],
   "prefer_related_applications": false

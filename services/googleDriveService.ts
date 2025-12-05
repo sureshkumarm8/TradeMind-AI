@@ -89,7 +89,7 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
 export const loginToGoogle = (): Promise<boolean> => {
     return new Promise((resolve, reject) => {
         if (!tokenClient) {
-            reject(new Error("Google Client not initialized."));
+            reject(new Error("Google Client not initialized. Please refresh."));
             return;
         }
         loginPromiseResolve = resolve;
@@ -140,6 +140,9 @@ const findBackupFileId = async (): Promise<string | null> => {
  * Returns the merged data to update the App state.
  */
 export const performInitialSync = async (localTrades: Trade[], localStrategy: StrategyProfile, localPreMarket: any): Promise<{ data: BackupData, fileId: string }> => {
+    // Wait a brief moment for auth token to stabilize
+    await new Promise(r => setTimeout(r, 500));
+
     let fileId = await findBackupFileId();
     
     // Construct current local state bundle

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'trademind-app-v4';
+const CACHE_NAME = 'trademind-app-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -15,54 +15,56 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  const keep = [CACHE_NAME];
   event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.map(k => (keep.includes(k) ? null : caches.delete(k)))))
-      .then(() => self.clients.claim())
+    caches.keys().then(keys => Promise.all(
+      keys.map(key => {
+        if (key !== CACHE_NAME) return caches.delete(key);
+      })
+    )).then(() => self.clients.claim())
   );
 });
 
-// Navigation handler — network-first with cache fallback so start_url works offline
+// Navigation Fallback Strategy (Network First -> Cache Fallback -> Offline Page)
 self.addEventListener('fetch', event => {
   const req = event.request;
-  const url = new URL(req.url);
-
-  // Only handle same-origin requests
-  if (url.origin === self.location.origin) {
-    // HTML navigation requests
-    if (req.mode === 'navigate') {
-      event.respondWith((async () => {
-        try {
-          const networkResp = await fetch(req);
-          // keep cached index.html updated
-          const cache = await caches.open(CACHE_NAME);
-          cache.put('./index.html', networkResp.clone()).catch(() => {});
-          return networkResp;
-        } catch (err) {
-          const cached = await caches.match('./index.html');
-          return cached || Response.error();
+  
+  // Navigation requests (HTML)
+  if (req.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        // 1. Try Network
+        const networkResp = await fetch(req);
+        // Update cache with fresh index.html if valid
+        if (networkResp && networkResp.status === 200 && networkResp.type === 'basic') {
+           const cache = await caches.open(CACHE_NAME);
+           cache.put('./index.html', networkResp.clone());
         }
-      })());
-      return;
-    }
-
-    // For other GET requests use stale-while-revalidate
-    if (req.method === 'GET') {
-      event.respondWith((async () => {
+        return networkResp;
+      } catch (error) {
+        // 2. Network failed? Serve cached index.html (SPA Fallback)
         const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match(req);
-        const networkPromise = fetch(req).then(networkResp => {
-          if (networkResp && networkResp.status === 200) {
-            try { cache.put(req, networkResp.clone()); } catch (e) { /* ignore */ }
-          }
-          return networkResp;
-        }).catch(() => null);
-        return cached || (await networkPromise) || (await caches.match('./index.html'));
-      })());
-      return;
-    }
+        const cachedIndex = await cache.match('./index.html');
+        return cachedIndex || Response.error();
+      }
+    })());
+    return;
   }
 
-  // Default: let browser handle (cross-origin, non-GET, etc.)
+  // Asset requests (Images, JS, JSON) - Stale-While-Revalidate
+  if (req.method === 'GET') {
+     event.respondWith((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cachedResp = await cache.match(req);
+        
+        const networkPromise = fetch(req).then(networkResp => {
+           if(networkResp && networkResp.status === 200 && networkResp.type === 'basic') {
+              cache.put(req, networkResp.clone());
+           }
+           return networkResp;
+        }).catch(() => null);
+
+        // Return cached immediately if available, otherwise wait for network
+        return cachedResp || await networkPromise;
+     })());
+  }
 });
