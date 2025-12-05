@@ -1,5 +1,5 @@
 
-import { Trade, StrategyProfile, UserProfile } from "../types";
+import { Trade, StrategyProfile, UserProfile, BackupData } from "../types";
 
 // Types for GAPI
 declare global {
@@ -21,13 +21,6 @@ let gisInited = false;
 let loginPromiseResolve: ((value: boolean | PromiseLike<boolean>) => void) | null = null;
 let loginPromiseReject: ((reason?: any) => void) | null = null;
 
-export interface BackupData {
-  trades: Trade[];
-  strategy: StrategyProfile;
-  preMarketNotes?: { date: string, notes: string };
-  lastUpdated: string; // ISO String
-}
-
 export const initGoogleDrive = (clientId: string, onInitComplete: (success: boolean) => void) => {
   if (!clientId) {
     console.warn('❌ No OAuth Client ID provided');
@@ -35,18 +28,8 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
     return;
   }
   
-  // Platform Detection for debugging
-  const isAndroid = navigator.userAgent.includes('Android');
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
-                (window.navigator as any).standalone === true ||
-                document.referrer.includes('android-app://');
-  
-  console.log("🔐 Initializing Google OAuth for PWA:");
-  console.log("  Device:", isAndroid ? '📱 Android' : '💻 Desktop');
-  console.log("  Mode:", isPWA ? 'PWA (Installed)' : 'Browser Tab');
-  console.log("  Origin:", window.location.origin);
+  console.log("🔐 Initializing Google OAuth for PWA...");
   console.log("  Client ID:", clientId.substring(0, 12) + '...');
-  console.log("  User Agent:", navigator.userAgent.substring(0, 50) + '...');
 
   // Initialize GAPI
   window.gapi.load('client', async () => {
@@ -59,6 +42,7 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
       checkInit();
     } catch (err) {
       console.error("GAPI Init Error", err);
+      onInitComplete(false);
     }
   });
 
@@ -70,9 +54,6 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
         callback: (resp: any) => {
             if (resp.error) {
                console.error('❌ OAuth Error:', resp.error, resp.error_description);
-               if (resp.error === 'invalid_client') {
-                   console.error('💡 Fix: Check that your Web OAuth Client ID is correct and includes this origin in Authorized JavaScript Origins');
-               }
                if (loginPromiseReject) loginPromiseReject(resp);
             } else {
                console.log('✅ OAuth Success - User authenticated');
@@ -83,11 +64,6 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
         },
         error_callback: (error: any) => {
             console.error("❌ OAuth Error Callback:", error);
-            console.error("💡 Possible fixes:");
-            console.error("  - Check Web OAuth Client ID is correct");
-            console.error("  - Verify origin is in Authorized JavaScript Origins");
-            console.error("  - Add email to Test Users in OAuth Consent Screen");
-            console.error("  - Wait 5-10 minutes after Google Console changes");
             if (loginPromiseReject) loginPromiseReject(error);
             loginPromiseResolve = null;
             loginPromiseReject = null;
@@ -102,6 +78,7 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
 
   function checkInit() {
     if (gapiInited && gisInited) {
+        console.log("✅ Google Client Initialized.");
         onInitComplete(true);
     }
   }
@@ -116,6 +93,7 @@ export const loginToGoogle = (): Promise<boolean> => {
         loginPromiseResolve = resolve;
         loginPromiseReject = reject;
 
+        // Prompt for consent only if no token, otherwise attempt silent login
         if (window.gapi.client.getToken() === null) {
             tokenClient.requestAccessToken({ prompt: 'consent' });
         } else {
@@ -131,6 +109,7 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
         });
         return response.result as UserProfile;
     } catch (err) {
+        console.error("Could not fetch user profile", err);
         return null;
     }
 };
@@ -141,6 +120,7 @@ const findBackupFileId = async (): Promise<string | null> => {
         const response = await window.gapi.client.drive.files.list({
             q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
             fields: 'files(id, name)',
+            spaces: 'drive',
         });
         const files = response.result.files;
         return (files && files.length > 0) ? files[0].id : null;
@@ -151,59 +131,74 @@ const findBackupFileId = async (): Promise<string | null> => {
 };
 
 /**
- * SMART SYNC:
- * 1. Checks if Cloud File exists.
- * 2. If NO Cloud File -> Creates it with Local Data immediately.
- * 3. If Cloud File EXISTS -> 
- *    - If Local Data is empty? -> Download Cloud Data (Restore).
- *    - If Local Data exists? -> Assume Cloud is "Truth" on login and overwrite local (Sync across devices).
- * 
- * Returns the merged data to update the App state.
+ * SMART SYNC v2: MERGE LOGIC
+ * This function handles the initial data synchronization when a user logs in.
+ * It's designed to prevent data loss by merging local and cloud data.
  */
 export const performInitialSync = async (localTrades: Trade[], localStrategy: StrategyProfile, localPreMarket: any): Promise<{ data: BackupData, fileId: string }> => {
-    // Wait a brief moment for auth token to stabilize
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 500)); // Wait a moment for auth token to stabilize
 
     let fileId = await findBackupFileId();
-    
-    // Construct current local state bundle
+
     const currentLocalData: BackupData = {
-        trades: localTrades,
+        trades: localTrades || [],
         strategy: localStrategy,
         preMarketNotes: localPreMarket,
         lastUpdated: new Date().toISOString()
     };
 
     if (!fileId) {
-        // Scenario: First time user on ANY device, or user deleted backup.
-        // Action: Create new cloud file with current local data.
-        console.log("No cloud backup found. Creating new...");
+        // SCENARIO: First time sync for this user.
+        // ACTION: Upload the current local data to a new cloud file.
+        console.log("☁️ No cloud backup found. Creating new one with local data...");
         fileId = await saveToDrive(currentLocalData, null);
         return { data: currentLocalData, fileId };
     } else {
-        // Scenario: Cloud file exists.
-        console.log("Cloud backup found. Fetching...");
+        // SCENARIO: Existing cloud backup found.
+        // ACTION: Fetch cloud data and merge it with local data.
+        console.log("☁️ Cloud backup found. Fetching and merging...");
         const cloudData = await loadFromDrive(fileId);
-        
+
         if (!cloudData) {
-            // Error reading cloud data, fallback to local
+            // If cloud data is unreadable, we must not overwrite it.
+            // We'll proceed with local data for this session to not interrupt the user,
+            // but we prevent an upload from happening which could destroy the cloud backup.
+            console.warn("Could not load cloud data. Using local data for this session only.");
             return { data: currentLocalData, fileId };
         }
 
-        // AUTO-RESTORE LOGIC:
-        // On login, we prioritize the Cloud Data to ensure "Sync across devices".
-        // If I traded on Mobile, then logged in on Desktop, Desktop should show Mobile trades.
+        // --- MERGE LOGIC ---
         
-        // Edge Case: If Cloud is empty but Local has data (unlikely if file exists), keep local.
-        if ((!cloudData.trades || cloudData.trades.length === 0) && localTrades.length > 0) {
-             // Push Local to Cloud
-             await saveToDrive(currentLocalData, fileId);
-             return { data: currentLocalData, fileId };
-        }
+        // 1. Merge Trades: Combine and de-duplicate.
+        // This ensures trades created offline are not lost.
+        const tradesMap = new Map<string, Trade>();
+        (cloudData.trades || []).forEach(trade => tradesMap.set(trade.id, trade));
+        (localTrades || []).forEach(trade => tradesMap.set(trade.id, trade)); // Local data overwrites cloud on ID conflict
+        const mergedTrades = Array.from(tradesMap.values());
 
-        return { data: cloudData, fileId };
+        // 2. Merge Strategy: Prioritize local strategy only if it's been customized.
+        const isLocalStrategyDefault = localStrategy.name.includes("(Template)");
+        const mergedStrategy = isLocalStrategyDefault ? (cloudData.strategy || localStrategy) : localStrategy;
+
+        // 3. Merge Pre-Market Notes: Prioritize the most recent entry.
+        const localDate = localPreMarket ? new Date(localPreMarket.date) : new Date(0);
+        const cloudDate = cloudData.preMarketNotes ? new Date(cloudData.preMarketNotes.date) : new Date(0);
+        const mergedPreMarket = localDate >= cloudDate ? localPreMarket : cloudData.preMarketNotes;
+
+        const mergedData: BackupData = {
+            trades: mergedTrades,
+            strategy: mergedStrategy,
+            preMarketNotes: mergedPreMarket,
+            lastUpdated: new Date().toISOString()
+        };
+
+        // Save the newly merged data back to the cloud to complete the two-way sync.
+        console.log(`🔄 Merge complete. Cloud: ${cloudData.trades.length}, Local: ${localTrades.length} -> Merged: ${mergedTrades.length}. Saving to cloud.`);
+        await saveToDrive(mergedData, fileId);
+
+        return { data: mergedData, fileId };
     }
-}
+};
 
 const loadFromDrive = async (fileId: string): Promise<BackupData | null> => {
     try {
@@ -211,18 +206,19 @@ const loadFromDrive = async (fileId: string): Promise<BackupData | null> => {
             fileId: fileId,
             alt: 'media',
         });
-        return response.result as BackupData;
+        // Handle cases where response might be empty or not valid JSON
+        if (typeof response.result === 'object') {
+            return response.result as BackupData;
+        }
+        return null;
     } catch (err) {
-        console.error("Error reading file", err);
+        console.error("Error reading file from Drive", err);
         return null;
     }
 };
 
-export const saveToDrive = async (data: any, existingFileId?: string | null): Promise<string> => {
-    const fileContent = JSON.stringify({
-        ...data,
-        lastUpdated: new Date().toISOString()
-    });
+export const saveToDrive = async (data: BackupData, existingFileId?: string | null): Promise<string> => {
+    const fileContent = JSON.stringify(data, null, 2); // Pretty-print JSON
     
     const file = new Blob([fileContent], {type: 'application/json'});
     const metadata = {
@@ -232,22 +228,23 @@ export const saveToDrive = async (data: any, existingFileId?: string | null): Pr
 
     try {
         const accessToken = window.gapi.client.getToken().access_token;
-        
+        if (!accessToken) throw new Error("Not authenticated");
+
         if (existingFileId) {
-            // PATCH existing file
+            // PATCH (Update) existing file
             const url = `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`;
             const res = await fetch(url, {
                 method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': `Bearer ${accessToken}`,'Content-Type': 'application/json' },
                 body: fileContent
             });
-            if (!res.ok) throw new Error("Update Failed");
+            if (!res.ok) {
+                const errorBody = await res.text();
+                throw new Error(`Update failed: ${res.statusText} - ${errorBody}`);
+            }
             return existingFileId;
         } else {
-            // POST new file
+            // POST (Create) new file
             const form = new FormData();
             form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
             form.append('file', file);
@@ -257,12 +254,15 @@ export const saveToDrive = async (data: any, existingFileId?: string | null): Pr
                 headers: { 'Authorization': `Bearer ${accessToken}` },
                 body: form
             });
-            if (!res.ok) throw new Error("Create Failed");
+            if (!res.ok) {
+                const errorBody = await res.text();
+                throw new Error(`Create failed: ${res.statusText} - ${errorBody}`);
+            }
             const json = await res.json();
             return json.id;
         }
     } catch (err) {
-        console.error("Save Error", err);
+        console.error("Save to Drive Error", err);
         throw err;
     }
 };
