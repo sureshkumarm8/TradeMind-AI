@@ -517,7 +517,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                     </button>
                     <button onClick={() => setSelectedFilter({ type: 'worst', value: 'Worst Trade' })} className="flex-1 bg-red-500/5 hover:bg-red-500/20 p-2 rounded-lg border border-red-500/20 transition text-right group/btn">
                         <div className="text-[10px] text-red-500/70 font-bold uppercase mb-1">Max Loss</div>
-                        <div className="text-sm font-bold text-red-400">-₹{Math.abs(stats.worstTrade).toFixed(0)}</div>
+                        <div className="text-sm font-bold text-red-400">₹{stats.worstTrade.toFixed(0)}</div>
                     </button>
                 </div>
                 </div>

@@ -68,10 +68,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       const isAndroid = navigator.userAgent.includes('Android');
       
       if (err.includes('invalid_client') || err.includes('OAuth client was not found')) {
-          if (isAndroid && isPWA) {
-              return "❌ PWA OAuth Error: Use your WEB OAuth Client ID, not Android. PWAs run in browser context.";
-          }
-          return "❌ Invalid Client ID: Check your Web OAuth Client ID in Google Cloud Console.";
+          return `❌ INVALID CLIENT ID: 
+          1. Check you're using a WEB OAuth Client (not Android/iOS)
+          2. Add ${currentOrigin} to "Authorized JavaScript Origins"
+          3. Verify Client ID is copied correctly (no spaces/typos)`;
       }
       if (err.includes('idpiframe_initialization_failed') || err.includes('origin_mismatch')) {
           return "❌ Origin Mismatch: Add this URL to 'Authorized JavaScript Origins' in Google Cloud Console.";
@@ -273,8 +273,30 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             value={googleClientId} 
                             onChange={(e) => setGoogleClientId(e.target.value)}
                             className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none"
-                            placeholder="Works for both desktop and PWA mobile"
+                            placeholder="123456789-abc123.apps.googleusercontent.com"
                         />
+                        
+                        {/* Real-time validation */}
+                        {googleClientId && (
+                            <div className="mt-2">
+                                {googleClientId.includes('.googleusercontent.com') ? (
+                                    googleClientId.toLowerCase().includes('android') ? (
+                                        <div className="text-xs bg-red-900/20 border border-red-500/30 p-2 rounded text-red-400">
+                                            ❌ This appears to be an Android Client ID. You need a <strong>Web application</strong> client for PWAs.
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs bg-green-900/20 border border-green-500/30 p-2 rounded text-green-400">
+                                            ✅ Format looks correct for Web OAuth Client
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="text-xs bg-amber-900/20 border border-amber-500/30 p-2 rounded text-amber-400">
+                                        ⚠️ Should end with .googleusercontent.com
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
                          <p className="text-[10px] text-blue-400/70 mt-1">Application type: <strong>Web application</strong> (used for both desktop and PWA)</p>
                          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-[10px] text-blue-400 mt-1 inline-block hover:underline">Create Web OAuth Client &rarr;</a>
                     </div>
@@ -300,6 +322,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 </code>
                                 <button onClick={copyOrigin} className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded transition" title="Copy URL">
                                     <Copy size={12}/>
+                                </button>
+                            </div>
+                            <div className="mt-2">
+                                <a href={`https://console.cloud.google.com/apis/credentials`} target="_blank" className="inline-flex items-center text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition">
+                                    <ExternalLink size={12} className="mr-1"/> Open Google Console
+                                </a>
+                                <button onClick={() => {
+                                    const message = `🔧 Quick Fix for "invalid_client" Error:\n\n1. Create/Edit Web OAuth Client\n2. Add this to "Authorized JavaScript Origins":\n   ${currentOrigin}\n3. Remove any "Authorized redirect URIs"\n4. Add your email to Test Users\n5. Wait 5 minutes & try again`;
+                                    alert(message);
+                                }} className="ml-2 text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded transition">
+                                    Quick Fix Help
                                 </button>
                             </div>
                         </div>
