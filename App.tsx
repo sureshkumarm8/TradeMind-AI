@@ -220,7 +220,13 @@ const App: React.FC = () => {
           }
 
       } catch (e: any) {
-          if (e && (e.type === 'popup_closed' || e.type === 'popup_closed_by_user')) {
+          const isPopupClosed = 
+            e?.type === 'popup_closed' || 
+            e?.type === 'popup_closed_by_user' || 
+            e?.message === 'popup_closed_by_user' ||
+            JSON.stringify(e).includes('popup_closed');
+
+          if (isPopupClosed) {
               setSyncStatus(SyncStatus.OFFLINE);
               return;
           }

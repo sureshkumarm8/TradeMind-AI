@@ -66,8 +66,15 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
             loginPromiseReject = null;
         },
         error_callback: (error: any) => {
-            console.error("GIS Error Callback:", error);
-            if (loginPromiseReject) loginPromiseReject(error);
+            // Don't log as error if user closed it, just debug info
+            if (error.type === 'popup_closed' || error.type === 'popup_closed_by_user') {
+                 console.log("User closed Google Auth popup");
+                 if (loginPromiseReject) loginPromiseReject({ type: 'popup_closed' });
+            } else {
+                 console.error("GIS Error Callback:", error);
+                 if (loginPromiseReject) loginPromiseReject(error);
+            }
+            
             loginPromiseResolve = null;
             loginPromiseReject = null;
         }
@@ -95,11 +102,9 @@ export const loginToGoogle = (): Promise<boolean> => {
         loginPromiseResolve = resolve;
         loginPromiseReject = reject;
 
-        if (window.gapi.client.getToken() === null) {
-            tokenClient.requestAccessToken({ prompt: 'consent' });
-        } else {
-            tokenClient.requestAccessToken({prompt: ''});
-        }
+        // Force 'select_account' to allow user to switch or choose accounts
+        // Also include 'consent' to ensure we get permissions if needed
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
     });
 };
 
