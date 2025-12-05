@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
 import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon } from 'lucide-react';
@@ -131,7 +130,6 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     try {
       data = JSON.parse(feedbackString);
     } catch (e) {
-      // Fallback for old legacy text format
       return (
         <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700 text-sm text-slate-300 leading-relaxed">
            {feedbackString}
@@ -388,470 +386,301 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   };
 
   if (trades.length === 0) {
-    return (
-      <div className="text-center py-24 bg-slate-800/50 rounded-2xl border border-slate-700 border-dashed text-slate-500">
-         <div className="mb-6 flex flex-col items-center">
-            <div className="bg-slate-800 p-4 rounded-full mb-4">
-                <Upload size={32} className="text-slate-600"/>
-            </div>
-            <p className="text-lg font-medium text-slate-300 mb-2">Your journal is empty</p>
-            <p className="text-sm mb-6 max-w-xs mx-auto">Start logging your Nifty trades or import data to get analysis.</p>
-            {!readOnly && (
-              <>
-                <button 
-                    onClick={handleImportClick}
-                    className="inline-flex items-center text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-lg transition font-medium shadow-lg shadow-indigo-900/20"
-                >
-                    <Upload size={16} className="mr-2"/> Import JSON / CSV
-                </button>
-                <input 
-                    type="file" ref={fileInputRef} onChange={handleFileChange} 
-                    className="hidden" accept=".json,.csv"
-                />
-              </>
-            )}
-         </div>
-      </div>
-    );
+      return (
+          <div className="text-center py-20 animate-fade-in-up">
+              <div className="bg-slate-800 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-slate-700 shadow-xl">
+                  <Target size={48} className="text-slate-500" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Journal Empty</h3>
+              <p className="text-slate-400 mb-8">Start by logging your first mission or restore a backup.</p>
+              
+              <div className="flex justify-center gap-4">
+                  <button onClick={handleImportClick} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-bold transition border border-slate-600 flex items-center">
+                     <Upload size={18} className="mr-2"/> Restore Data
+                  </button>
+                  <button onClick={() => onEdit({} as Trade)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-indigo-900/50 flex items-center">
+                     <Activity size={18} className="mr-2"/> Log First Trade
+                  </button>
+              </div>
+          </div>
+      )
   }
 
   return (
-    <div className="space-y-8">
-      {/* Control Center Toolbar */}
-      <div className="bg-slate-800 p-2 rounded-xl border border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg sticky top-24 z-20">
-         
-         {/* View Toggles */}
-         <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800 w-full md:w-auto">
-             <button 
-                onClick={() => setViewMode('list')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md transition text-sm font-medium flex items-center justify-center gap-2 ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-             >
-                <List size={16} /> List
-             </button>
-             <button 
-                onClick={() => setViewMode('week')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md transition text-sm font-medium flex items-center justify-center gap-2 ${viewMode === 'week' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-             >
-                <CalendarDays size={16} /> Week
-             </button>
-             <button 
-                onClick={() => setViewMode('calendar')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-md transition text-sm font-medium flex items-center justify-center gap-2 ${viewMode === 'calendar' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-             >
-                <Grid size={16} /> Month
-             </button>
-         </div>
-
-         {/* Data Actions */}
-         {!readOnly && (
-           <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-              <button onClick={handleExportJSON} className="flex items-center text-xs font-bold bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg border border-slate-600 transition whitespace-nowrap" title="Backup Full Data">
-                  <FileJson size={14} className="mr-2"/> Backup
-              </button>
-              <button onClick={handleExportCSV} className="flex items-center text-xs font-bold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 px-4 py-2 rounded-lg border border-emerald-500/30 transition whitespace-nowrap" title="Export for Excel">
-                  <FileSpreadsheet size={14} className="mr-2"/> Excel
-              </button>
-              <button onClick={handleImportClick} className="flex items-center text-xs font-bold bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-4 py-2 rounded-lg border border-blue-500/30 transition whitespace-nowrap">
-                  <Upload size={14} className="mr-2"/> Import
-              </button>
-              <input 
-                  type="file" ref={fileInputRef} onChange={handleFileChange} 
-                  className="hidden" accept=".json,.csv"
-              />
+    <div className="space-y-6 pb-20 animate-fade-in">
+       {/* Hidden File Input */}
+       <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json,.csv" />
+       
+       {/* Toolbar */}
+       <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-20 z-20 flex justify-between items-center shadow-lg">
+           <div className="flex bg-slate-800/50 p-1 rounded-lg">
+               <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                   <List size={14} className="mr-2"/> List
+               </button>
+               <button onClick={() => setViewMode('week')} className={`px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                   <Grid size={14} className="mr-2"/> Week
+               </button>
+               <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                   <CalendarDays size={14} className="mr-2"/> Month
+               </button>
            </div>
-         )}
-      </div>
+           
+           <div className="flex gap-2">
+               <button onClick={handleExportCSV} className="p-2 text-slate-400 hover:text-emerald-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-emerald-500/30 transition" title="Backup (CSV)">
+                   <FileSpreadsheet size={18}/>
+               </button>
+               <button onClick={handleExportJSON} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-blue-500/30 transition" title="Backup (JSON)">
+                   <FileJson size={18}/>
+               </button>
+               <button onClick={handleImportClick} className="p-2 text-slate-400 hover:text-indigo-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-indigo-500/30 transition" title="Restore Data">
+                   <Upload size={18}/>
+               </button>
+           </div>
+       </div>
 
-      {viewMode === 'calendar' && renderCalendar()}
-      {viewMode === 'week' && renderWeeklyView()}
-      
-      {viewMode === 'list' && (
-         // List View
-         <>
-         {(Object.entries(tradesByDate) as [string, Trade[]][]).map(([dateStr, dayTrades]) => {
-            const dayPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
-            
-            return (
-              <div key={dateStr} className="space-y-3 animate-fade-in-up">
-                 {/* Day Header */}
-                 <div className="flex flex-col md:flex-row md:items-center justify-between bg-slate-800/80 backdrop-blur-sm p-4 rounded-xl border border-slate-700 shadow-sm sticky top-44 z-10">
-                    <div className="flex items-center gap-3 mb-3 md:mb-0">
-                       <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
-                          <Calendar size={20} />
-                       </div>
-                       <div>
-                           <h3 className="text-slate-200 font-bold text-lg">{dateStr}</h3>
-                           <span className="text-xs text-slate-500 font-medium">
-                              {dayTrades.length} Trades Executed
-                           </span>
-                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-6">
-                       <div className="text-right">
-                          <span className={`font-mono font-bold text-xl ${dayPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                             {dayPnL >= 0 ? '+' : ''}₹{dayPnL.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Net PnL</span>
-                       </div>
-                       
-                       {!readOnly && (
-                         <button 
-                           onClick={() => handleAnalyzeDay(dateStr, dayTrades)}
-                           disabled={!!analyzingDay}
-                           className="flex items-center text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg transition shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                         >
-                           {analyzingDay === dateStr ? (
-                              <span className="animate-pulse flex items-center"><Bot size={14} className="mr-2"/> Analyzing...</span>
-                           ) : (
-                              <>
-                                <Sparkles size={14} className="mr-2" /> AI Coach
-                              </>
-                           )}
-                         </button>
-                       )}
-                    </div>
+       {viewMode === 'calendar' && renderCalendar()}
+       {viewMode === 'week' && renderWeeklyView()}
+       
+       {/* List View */}
+       {viewMode === 'list' && Object.entries(tradesByDate).map(([dateStr, dayTrades]) => (
+         <div key={dateStr} className="space-y-4">
+             <div className="flex items-center justify-between sticky top-[5.5rem] z-10 bg-slate-950/90 backdrop-blur py-2 border-b border-indigo-500/20">
+                 <div className="flex items-center gap-3">
+                     <div className="w-2 h-8 bg-indigo-500 rounded-r-lg"></div>
+                     <h3 className="text-white font-bold text-sm uppercase tracking-wide">{dateStr}</h3>
+                     <span className="text-xs text-slate-500 font-mono">({dayTrades.length})</span>
                  </div>
+                 
+                 <div className="flex items-center gap-2">
+                    <span className={`text-xs font-mono font-bold ${dayTrades.reduce((a,t)=>a+(t.pnl||0),0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {dayTrades.reduce((a,t)=>a+(t.pnl||0),0) >= 0 ? '+' : ''}₹{dayTrades.reduce((a,t)=>a+(t.pnl||0),0).toFixed(2)}
+                    </span>
+                    {dailyAnalysis[dateStr] ? (
+                       <button onClick={() => alert(dailyAnalysis[dateStr])} className="text-[10px] bg-emerald-900 text-emerald-300 border border-emerald-700 px-2 py-1 rounded">View Report</button>
+                    ) : (
+                       <button onClick={() => handleAnalyzeDay(dateStr, dayTrades)} className="text-[10px] bg-indigo-900/50 text-indigo-300 border border-indigo-700 px-2 py-1 rounded flex items-center hover:bg-indigo-900 transition">
+                           {analyzingDay === dateStr ? <Bot size={12} className="mr-1 animate-spin"/> : <BrainCircuit size={12} className="mr-1"/>}
+                           {analyzingDay === dateStr ? 'Analyzing...' : 'Audit Day'}
+                       </button>
+                    )}
+                 </div>
+             </div>
 
-                 {/* Daily Analysis Result */}
-                 {dailyAnalysis[dateStr] && (
-                   <div className="bg-gradient-to-br from-slate-900 to-indigo-950/40 border border-indigo-500/30 p-6 rounded-xl mb-4 shadow-xl relative overflow-hidden animate-fade-in">
-                     <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                        <Bot size={120} />
-                     </div>
-                     <h4 className="text-indigo-300 font-bold text-sm uppercase mb-4 flex items-center tracking-wider">
-                        <Bot size={16} className="mr-2" /> Daily Performance Report
-                     </h4>
-                     
-                     <div className="prose prose-sm prose-invert max-w-none text-slate-300">
-                        <div className="whitespace-pre-wrap font-light leading-relaxed">
-                            {dailyAnalysis[dateStr]}
-                        </div>
-                     </div>
+             {dayTrades.map((trade) => {
+               const isOpen = trade.outcome === TradeOutcome.OPEN;
+               const isWin = trade.outcome === TradeOutcome.WIN;
+               const isExpanded = expandedId === trade.id;
+               const aiGrade = getAiGrade(trade.aiFeedback);
+               const isAnalyzing = analyzingTradeId === trade.id;
+               
+               // "Outcome Strip" Color
+               const stripColor = isOpen ? 'bg-slate-600' : isWin ? 'bg-emerald-500' : trade.outcome === TradeOutcome.BREAK_EVEN ? 'bg-amber-500' : 'bg-red-500';
+
+               return (
+                 <div key={trade.id} className={`bg-slate-800 rounded-xl border ${isExpanded ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-slate-700'} overflow-hidden transition-all duration-300 hover:shadow-xl relative pl-2 group`}>
+                   
+                   {/* Colored Strip */}
+                   <div className={`absolute top-0 bottom-0 left-0 w-2 ${stripColor} transition-all`}></div>
+
+                   {/* Main Card */}
+                   <div className="p-4 cursor-pointer" onClick={() => toggleExpand(trade.id)}>
+                       <div className="flex justify-between items-start">
+                           <div className="flex items-start gap-3">
+                               <div className={`mt-1 p-2 rounded-lg ${trade.direction === TradeDirection.LONG ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                   {trade.direction === TradeDirection.LONG ? <ArrowUpRight size={20}/> : <ArrowDownRight size={20}/>}
+                               </div>
+                               <div>
+                                   <div className="flex items-center gap-2">
+                                       <h4 className="text-white font-bold text-base">{trade.instrument}</h4>
+                                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${trade.optionType === OptionType.CE ? 'bg-green-900 text-green-300' : trade.optionType === OptionType.PE ? 'bg-red-900 text-red-300' : 'bg-indigo-900 text-indigo-300'}`}>
+                                           {trade.optionType}
+                                       </span>
+                                       {aiGrade && !isExpanded && (
+                                            <span className={`ml-2 text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>
+                                                Grade: {aiGrade.grade}
+                                            </span>
+                                       )}
+                                   </div>
+                                   <div className="flex items-center gap-3 mt-1 text-slate-400 text-xs font-mono">
+                                       <span className="flex items-center"><Clock size={12} className="mr-1"/> {trade.entryTime}</span>
+                                       <span>|</span>
+                                       <span>{trade.quantity} Qty</span>
+                                       <span>|</span>
+                                       <span className={trade.pnl && trade.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                           {isOpen ? 'HOLDING' : `₹${trade.pnl?.toFixed(2)}`}
+                                       </span>
+                                   </div>
+                               </div>
+                           </div>
+                           <div className="text-right">
+                               {isAnalyzing ? (
+                                   <div className="flex items-center gap-2 bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-500/30 animate-pulse">
+                                       <BrainCircuit size={14} className="text-indigo-400 animate-spin"/>
+                                       <span className="text-[10px] font-bold text-indigo-300 uppercase">Syncing...</span>
+                                   </div>
+                               ) : (
+                                   <div className="flex items-center gap-2">
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{trade.setupName || 'No Setup'}</div>
+                                        {isExpanded ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
+                                   </div>
+                               )}
+                           </div>
+                       </div>
                    </div>
-                 )}
 
-                 {/* Trades for this day */}
-                 <div className="space-y-3 pl-2 md:pl-4 border-l-2 border-slate-800">
-                   {dayTrades.map(trade => {
-                    const aiBadge = getAiGrade(trade.aiFeedback);
-                    const isAiFolded = collapsedAi.has(trade.id);
-                    
-                    return (
-                    <div key={trade.id} className={`bg-slate-800 rounded-xl border border-slate-700 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg group relative ${trade.outcome === TradeOutcome.WIN ? 'border-l-4 border-l-emerald-500' : trade.outcome === TradeOutcome.LOSS ? 'border-l-4 border-l-red-500' : ''}`}>
-                      
-                      {/* AI Grade Badge (Scorecard) */}
-                      {aiBadge && (
-                          <div className={`absolute top-0 right-12 z-10 px-2 py-0.5 rounded-b-lg border-x border-b text-[10px] font-black uppercase tracking-widest ${aiBadge.color}`}>
-                              Grade: {aiBadge.grade}
-                          </div>
-                      )}
-
-                      {/* Trade Summary */}
-                      <div 
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between cursor-pointer gap-4 sm:gap-0"
-                        onClick={() => toggleExpand(trade.id)}
-                      >
-                        <div className="flex items-center space-x-4">
-                          <div className={`p-3 rounded-xl flex-shrink-0 transition-colors ${trade.direction === TradeDirection.LONG ? 'bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20' : 'bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20'}`}>
-                            {trade.direction === TradeDirection.LONG ? <ArrowUpRight size={24} strokeWidth={3} /> : <ArrowDownRight size={24} strokeWidth={3} />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-bold text-white text-lg tracking-tight">
-                                {trade.instrument}
-                              </h3>
-                                {trade.strikePrice && <span className="bg-slate-700 px-2 py-0.5 rounded text-slate-200 font-mono text-xs border border-slate-600">{trade.strikePrice}</span>}
-                                {trade.optionType && trade.optionType !== OptionType.SPOT && (
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${trade.optionType === OptionType.CE ? 'bg-green-900/60 text-green-400 border border-green-800' : 'bg-red-900/60 text-red-400 border border-red-800'}`}>
-                                    {trade.optionType}
-                                  </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-1">
-                                 {trade.timeframe && <span className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10}/> {trade.timeframe}</span>}
-                                 {trade.spotPointsCaptured ? <span className="text-[10px] text-indigo-400 font-medium flex items-center gap-1"><Target size={10}/> {trade.spotPointsCaptured} pts</span> : null}
-                                 {(trade.chartImage || trade.oiImage) && <ImageIcon size={12} className="text-indigo-400 ml-1" />}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between sm:justify-end sm:space-x-8 w-full sm:w-auto mt-2 sm:mt-0">
-                          <div className="text-left sm:text-right">
-                            {trade.outcome !== TradeOutcome.OPEN ? (
-                              <>
-                                <p className={`font-mono font-bold text-lg ${trade.pnl && trade.pnl > 0 ? 'text-emerald-400' : trade.pnl && trade.pnl < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                  {trade.pnl && trade.pnl > 0 ? '+' : ''}₹{trade.pnl?.toFixed(2)}
-                                </p>
-                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{trade.outcome}</p>
-                              </>
-                            ) : (
-                              <span className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-xs font-medium border border-slate-600">HOLDING</span>
-                            )}
-                          </div>
-                          <div className="text-slate-600 group-hover:text-slate-400 transition ml-4">
-                            {expandedId === trade.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Expanded Details */}
-                      {expandedId === trade.id && (
-                        <div className="bg-slate-900/50 p-6 border-t border-slate-700 animate-fade-in">
-                          {/* System Adherence Badge */}
-                          <div className="mb-6 bg-slate-800 p-4 rounded-xl border border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-4">
-                             <div className="flex items-center gap-3">
-                                <div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400"><Clock size={16}/></div>
-                                <div>
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Session Time</span>
-                                    <span className="text-xs text-white font-mono">{trade.entryTime} - {trade.exitTime}</span>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${trade.systemChecks?.waitedForOpen ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'}`}>
-                                    {trade.systemChecks?.waitedForOpen ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-                                </div>
-                                <div>
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Wait 15m</span>
-                                    <span className={`text-xs ${trade.systemChecks?.waitedForOpen ? 'text-emerald-400' : 'text-red-400'}`}>{trade.systemChecks?.waitedForOpen ? 'Passed' : 'Failed'}</span>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${trade.systemChecks?.checkedSensibullOI ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'}`}>
-                                    {trade.systemChecks?.checkedSensibullOI ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-                                </div>
-                                <div>
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold block">OI Check</span>
-                                    <span className={`text-xs ${trade.systemChecks?.checkedSensibullOI ? 'text-emerald-400' : 'text-red-400'}`}>{trade.systemChecks?.checkedSensibullOI ? 'Verified' : 'Skipped'}</span>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${trade.systemChecks?.exitTimeLimit ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'}`}>
-                                    {trade.systemChecks?.exitTimeLimit ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
-                                </div>
-                                <div>
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold block">Time Limit</span>
-                                    <span className={`text-xs ${trade.systemChecks?.exitTimeLimit ? 'text-emerald-400' : 'text-red-400'}`}>{trade.tradeDurationMins} mins</span>
-                                </div>
-                             </div>
-                          </div>
-                          
-                          {/* Evidence Locker Visuals */}
-                          {(trade.chartImage || trade.oiImage) && (
-                            <div className="mb-6 grid grid-cols-2 gap-4">
-                                {trade.chartImage && (
-                                    <div className="bg-slate-800 rounded-lg p-2 border border-slate-700">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nifty Chart</span>
-                                        <img src={trade.chartImage} alt="Chart Evidence" className="w-full rounded h-32 object-cover hover:h-auto hover:object-contain transition-all cursor-zoom-in" />
-                                    </div>
-                                )}
-                                {trade.oiImage && (
-                                    <div className="bg-slate-800 rounded-lg p-2 border border-slate-700">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">OI Evidence</span>
-                                        <img src={trade.oiImage} alt="OI Evidence" className="w-full rounded h-32 object-cover hover:h-auto hover:object-contain transition-all cursor-zoom-in" />
-                                    </div>
-                                )}
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            {/* Details Column */}
-                            <div className="space-y-6">
-                              
-                              {/* Nifty Spot Grid */}
-                              <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-                                 <h4 className="text-slate-400 text-xs uppercase font-bold mb-3 flex items-center">
-                                    <TrendingUp size={14} className="mr-2 text-indigo-400"/> Nifty 50 Underlying
-                                 </h4>
-                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-slate-900/50 p-2 rounded border border-slate-800">
-                                       <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Entry Spot</span>
-                                       <span className="text-emerald-400 font-mono text-sm font-bold">{trade.niftyEntryPrice || 'N/A'}</span>
-                                    </div>
-                                    <div className="bg-slate-900/50 p-2 rounded border border-slate-800">
-                                       <span className="text-slate-500 text-[10px] uppercase font-bold block mb-1">Exit Spot</span>
-                                       <span className="text-emerald-400 font-mono text-sm font-bold">{trade.niftyExitPrice || 'N/A'}</span>
-                                    </div>
-                                 </div>
-                              </div>
-
-                              <div className="grid grid-cols-4 gap-2 text-sm bg-slate-800 p-4 rounded-lg border border-slate-700">
-                                <div className="col-span-2 sm:col-span-1">
-                                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Premium Entry</span>
-                                  <span className="text-white font-mono">{trade.entryPrice}</span>
-                                </div>
-                                 <div className="col-span-2 sm:col-span-1">
-                                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Premium Exit</span>
-                                  <span className="text-white font-mono">{trade.exitPrice || '-'}</span>
-                                </div>
-                                 <div className="col-span-2 sm:col-span-1">
-                                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Qty</span>
-                                  <span className="text-white font-mono">{trade.quantity}</span>
-                                </div>
-                                 <div className="col-span-2 sm:col-span-1">
-                                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Result</span>
-                                  <span className={`font-bold ${trade.outcome === TradeOutcome.WIN ? 'text-emerald-400' : trade.outcome === TradeOutcome.LOSS ? 'text-red-400' : 'text-slate-300'}`}>{trade.outcome}</span>
-                                </div>
-                              </div>
-
-                              <div className="space-y-4">
-                                 {trade.confluences && trade.confluences.length > 0 && (
-                                   <div>
-                                     <h4 className="text-slate-400 text-xs uppercase font-bold mb-2 flex items-center">
-                                        <CheckCircle size={12} className="mr-1 text-emerald-500"/> Confluences
-                                     </h4>
-                                     <div className="flex flex-wrap gap-2">
-                                        {trade.confluences.map(c => (
-                                          <span key={c} className="text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded">
-                                            {c}
-                                          </span>
-                                        ))}
-                                     </div>
+                   {/* Expanded Details */}
+                   {isExpanded && (
+                       <div className="bg-slate-900/50 border-t border-slate-800 p-5 space-y-6 animate-fade-in">
+                           
+                           {/* Stats Grid */}
+                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                               <div className="bg-slate-800 p-3 rounded border border-slate-700">
+                                   <span className="text-[10px] text-slate-500 uppercase font-bold">Entry Price</span>
+                                   <div className="text-blue-400 font-mono font-bold">₹{trade.entryPrice}</div>
+                               </div>
+                               <div className="bg-slate-800 p-3 rounded border border-slate-700">
+                                   <span className="text-[10px] text-slate-500 uppercase font-bold">Exit Price</span>
+                                   <div className="text-blue-400 font-mono font-bold">{trade.exitPrice || '-'}</div>
+                               </div>
+                               <div className="bg-slate-800 p-3 rounded border border-slate-700">
+                                   <span className="text-[10px] text-slate-500 uppercase font-bold">Nifty Spot</span>
+                                   <div className="text-emerald-400 font-mono font-bold text-xs">
+                                       {trade.niftyEntryPrice || '?'} <span className="text-slate-600">→</span> {trade.niftyExitPrice || '?'}
                                    </div>
-                                 )}
-
-                                 {trade.mistakes && trade.mistakes.length > 0 && (
-                                   <div>
-                                     <h4 className="text-slate-400 text-xs uppercase font-bold mb-2 flex items-center">
-                                        <AlertCircle size={12} className="mr-1 text-red-500"/> Mistakes
-                                     </h4>
-                                     <div className="flex flex-wrap gap-2">
-                                        {trade.mistakes.map(m => (
-                                          <span key={m} className="text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 rounded">
-                                            {m}
-                                          </span>
-                                        ))}
-                                     </div>
+                               </div>
+                               <div className="bg-slate-800 p-3 rounded border border-slate-700">
+                                   <span className="text-[10px] text-slate-500 uppercase font-bold">Points / Time</span>
+                                   <div className="text-white font-mono font-bold text-xs">
+                                       {trade.spotPointsCaptured} pts <span className="text-slate-600">|</span> {trade.tradeDurationMins}m
                                    </div>
-                                 )}
-                              </div>
-                            </div>
+                               </div>
+                           </div>
 
-                            {/* Analysis Column */}
-                            <div className="space-y-4">
-                              <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-                                <h4 className="text-slate-400 text-xs uppercase font-bold mb-2">Pre-Market & Context</h4>
-                                <p className="text-slate-300 text-sm leading-relaxed italic border-l-2 border-indigo-500 pl-3">
-                                   {trade.openingType && <span className="text-indigo-400 font-bold text-xs uppercase mr-2">[{trade.openingType}]</span>}
-                                   {trade.marketContext}
-                                </p>
-                              </div>
-                               <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-                                <h4 className="text-slate-400 text-xs uppercase font-bold mb-2">Entry Reason</h4>
-                                <p className="text-slate-300 text-sm leading-relaxed">{trade.entryReason}</p>
-                              </div>
-                              
-                              <div className="flex items-center gap-6 text-sm text-slate-400 pt-2">
-                                  <div className="flex flex-col">
-                                      <span className="text-[10px] uppercase font-bold">Discipline</span>
-                                      <div className="flex gap-1 mt-1">
-                                          {[1,2,3,4,5].map(i => (
-                                              <div key={i} className={`w-2 h-2 rounded-full ${i <= trade.disciplineRating ? 'bg-blue-400' : 'bg-slate-700'}`}></div>
-                                          ))}
-                                      </div>
-                                  </div>
-                                  <div className="flex flex-col">
-                                      <span className="text-[10px] uppercase font-bold">Emotional State</span>
-                                      <span className="text-white font-medium">{trade.emotionalState}</span>
-                                  </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Single Trade AI Section */}
-                          <div className="mt-8 bg-slate-950 rounded-xl p-1 border border-slate-800 relative group">
-                             {/* AI Section Header */}
-                             <div className="flex items-center justify-between px-4 py-3 relative z-10">
-                                <div className="flex items-center text-indigo-300">
-                                   <div className="bg-indigo-900/30 p-1.5 rounded-lg mr-2">
-                                       <Bot size={16} />
-                                   </div>
-                                   <span className="font-bold text-xs uppercase tracking-wide">Coach's Reality Check</span>
-                                </div>
-                                
-                                <div className="flex items-center gap-2">
-                                    {!trade.aiFeedback && !readOnly && analyzingTradeId !== trade.id && (
-                                        <button 
-                                            onClick={() => onAnalyze(trade)}
-                                            disabled={!!analyzingTradeId}
-                                            className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-900/20"
-                                        >
-                                            Run Check
-                                        </button>
-                                    )}
-
-                                    {/* Fold / Delete Actions */}
-                                    {trade.aiFeedback && (
-                                        <>
-                                            {!readOnly && onDeleteAiAnalysis && (
-                                                <button 
-                                                    onClick={() => onDeleteAiAnalysis(trade.id)}
-                                                    className="p-1.5 hover:bg-red-900/20 text-slate-500 hover:text-red-400 rounded-lg transition"
-                                                    title="Delete Analysis"
-                                                >
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            )}
-                                            <button 
-                                                onClick={() => toggleAiFold(trade.id)}
-                                                className="p-1.5 hover:bg-slate-800 text-slate-500 hover:text-white rounded-lg transition"
-                                                title={isAiFolded ? "Expand" : "Collapse"}
-                                            >
-                                                {isAiFolded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                             </div>
-                             
-                             {/* Analysis Content or Thinking State */}
-                             <div className="relative z-10">
-                                 {analyzingTradeId === trade.id ? (
-                                    <div className="p-8 flex flex-col items-center justify-center text-center animate-fade-in bg-indigo-900/10 rounded-b-xl border-t border-indigo-500/20">
-                                       <div className="relative mb-3">
-                                          <div className="absolute inset-0 bg-indigo-500/30 blur-xl rounded-full animate-pulse"></div>
-                                          <BrainCircuit size={40} className="text-indigo-400 animate-pulse relative z-10" />
+                           {/* Images */}
+                           {(trade.chartImage || trade.oiImage) && (
+                               <div className="flex gap-4 overflow-x-auto pb-2">
+                                   {trade.chartImage && (
+                                       <div className="relative group shrink-0">
+                                           <p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">Chart</p>
+                                           <img src={trade.chartImage} alt="Chart" className="h-24 rounded border border-slate-700 cursor-zoom-in transition hover:scale-105" onClick={() => {const w = window.open(""); w?.document.write(`<img src="${trade.chartImage}" style="max-width:100%"/>`)}}/>
                                        </div>
-                                       <h4 className="text-indigo-300 font-bold text-sm tracking-wide mb-1">Syncing with Market Data...</h4>
-                                       <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Verifying Nifty Spot vs Entry</p>
-                                    </div>
-                                 ) : trade.aiFeedback ? (
-                                    <div className="p-2 animate-fade-in">
-                                       {renderAiFeedback(trade.aiFeedback, isAiFolded)}
-                                    </div>
-                                 ) : (
-                                    <div className="p-6 text-center">
-                                       <p className="text-xs text-slate-500 italic">
-                                         AI will verify the actual Nifty chart action during {trade.entryTime}-{trade.exitTime} to validate your entry logic.
-                                       </p>
-                                    </div>
-                                 )}
-                             </div>
-                          </div>
+                                   )}
+                                   {trade.oiImage && (
+                                       <div className="relative group shrink-0">
+                                           <p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">OI Data</p>
+                                           <img src={trade.oiImage} alt="OI" className="h-24 rounded border border-slate-700 cursor-zoom-in transition hover:scale-105" onClick={() => {const w = window.open(""); w?.document.write(`<img src="${trade.oiImage}" style="max-width:100%"/>`)}}/>
+                                       </div>
+                                   )}
+                               </div>
+                           )}
 
-                          {/* Actions */}
-                          {!readOnly && (
-                            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-slate-800/50">
-                              <button onClick={() => onEdit(trade)} className="flex items-center px-4 py-2 text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition">
-                                <Edit2 size={14} className="mr-2" /> Edit Log
-                              </button>
-                              <button onClick={() => onDelete(trade.id)} className="flex items-center px-4 py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition">
-                                <Trash2 size={14} className="mr-2" /> Delete
-                              </button>
-                            </div>
-                          )}
+                           {/* Checklist & Psychology */}
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                               <div>
+                                   <h5 className="text-xs font-bold text-indigo-400 uppercase mb-3 flex items-center"><CheckCircle size={14} className="mr-2"/> Strategy Checklist</h5>
+                                   <ul className="space-y-2">
+                                       {trade.systemChecks && Object.entries(trade.systemChecks).map(([key, val]) => (
+                                           <li key={key} className="flex items-center text-xs text-slate-300">
+                                               <div className={`w-3 h-3 rounded-full mr-2 ${val ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                                               <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                           </li>
+                                       ))}
+                                       {!trade.systemChecks && <li className="text-xs text-slate-500 italic">No checklist data</li>}
+                                   </ul>
+                               </div>
+                               <div>
+                                   <h5 className="text-xs font-bold text-amber-400 uppercase mb-3 flex items-center"><ShieldAlert size={14} className="mr-2"/> Psychology & Tags</h5>
+                                   <div className="flex flex-wrap gap-2 mb-3">
+                                       {trade.confluences?.map((c,i) => <span key={i} className="text-[10px] px-2 py-1 rounded bg-emerald-900/30 text-emerald-400 border border-emerald-900">{c}</span>)}
+                                       {trade.mistakes?.map((m,i) => <span key={i} className="text-[10px] px-2 py-1 rounded bg-red-900/30 text-red-400 border border-red-900">{m}</span>)}
+                                   </div>
+                                   <div className="flex items-center gap-2 text-xs text-slate-400">
+                                       <span>Discipline:</span>
+                                       <div className="flex">
+                                           {Array.from({length:5}).map((_,i) => (
+                                               <Zap key={i} size={12} className={i < (trade.disciplineRating || 0) ? "text-yellow-400 fill-yellow-400" : "text-slate-700"} />
+                                           ))}
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           {/* Narrative */}
+                           <div className="bg-slate-950/30 p-4 rounded-lg border border-slate-800">
+                               <p className="text-xs text-slate-400 mb-2"><span className="text-slate-500 font-bold uppercase">Logic:</span> {trade.entryReason}</p>
+                               {trade.exitReason && <p className="text-xs text-slate-400"><span className="text-slate-500 font-bold uppercase">Exit:</span> {trade.exitReason}</p>}
+                           </div>
 
-                        </div>
-                      )}
-                    </div>
-                   );
-                  })}
+                           {/* AI ANALYSIS SECTION */}
+                           <div className="border-t border-slate-800 pt-4">
+                               <div className="flex justify-between items-center mb-4">
+                                   <div className="flex items-center gap-2">
+                                       <Sparkles size={16} className="text-indigo-400" />
+                                       <h4 className="text-sm font-bold text-white uppercase tracking-wider">Coach's Analysis</h4>
+                                   </div>
+                                   <div className="flex gap-2">
+                                        {/* Toggle Fold Button */}
+                                        {trade.aiFeedback && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); toggleAiFold(trade.id); }} 
+                                                className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded border border-slate-700 transition"
+                                                title={collapsedAi.has(trade.id) ? "Expand Report" : "Collapse Report"}
+                                            >
+                                                {collapsedAi.has(trade.id) ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
+                                            </button>
+                                        )}
+                                        
+                                        {/* Trash Analysis Button */}
+                                        {trade.aiFeedback && onDeleteAiAnalysis && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onDeleteAiAnalysis(trade.id); }} 
+                                                className="p-1.5 text-slate-400 hover:text-red-400 bg-slate-800 rounded border border-slate-700 transition"
+                                                title="Delete Analysis"
+                                            >
+                                                <Trash2 size={14}/>
+                                            </button>
+                                        )}
+
+                                        {/* Run Analysis Button */}
+                                        {!trade.aiFeedback && !readOnly && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onAnalyze(trade); }}
+                                                disabled={analyzingTradeId !== null}
+                                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded font-bold transition flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {analyzingTradeId === trade.id ? <Bot size={14} className="animate-spin mr-1"/> : <Bot size={14} className="mr-1"/>}
+                                                {analyzingTradeId === trade.id ? 'Analyzing...' : 'Run Reality Check'}
+                                            </button>
+                                        )}
+                                   </div>
+                               </div>
+
+                               {/* Render the Feedback */}
+                               {trade.aiFeedback ? renderAiFeedback(trade.aiFeedback, collapsedAi.has(trade.id)) : (
+                                   <div className="text-center py-6 bg-slate-800/30 rounded border border-dashed border-slate-700">
+                                       <p className="text-xs text-slate-500 italic">No AI analysis yet. Run a check to see if you followed your rules.</p>
+                                   </div>
+                               )}
+                           </div>
+
+                           {/* Footer Actions */}
+                           {!readOnly && (
+                               <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+                                   <button onClick={(e) => { e.stopPropagation(); onEdit(trade); }} className="text-xs flex items-center text-slate-400 hover:text-white transition">
+                                       <Edit2 size={14} className="mr-1"/> Edit Log
+                                   </button>
+                                   <button onClick={(e) => { e.stopPropagation(); onDelete(trade.id); }} className="text-xs flex items-center text-red-500/70 hover:text-red-500 transition">
+                                       <Trash2 size={14} className="mr-1"/> Delete
+                                   </button>
+                               </div>
+                           )}
+                       </div>
+                   )}
                  </div>
-              </div>
-            );
-          })}
-         </>
-      )}
+               );
+             })}
+         </div>
+       ))}
     </div>
   );
 };

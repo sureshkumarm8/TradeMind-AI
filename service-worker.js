@@ -1,8 +1,8 @@
-const CACHE_NAME = 'trademind-app-v5';
+const CACHE_NAME = 'trademind-app-v6';
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
+  '/',
+  '/index.html',
+  '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png'
 ];
@@ -37,13 +37,13 @@ self.addEventListener('fetch', event => {
         // Update cache with fresh index.html if valid
         if (networkResp && networkResp.status === 200 && networkResp.type === 'basic') {
            const cache = await caches.open(CACHE_NAME);
-           cache.put('./index.html', networkResp.clone());
+           cache.put('/index.html', networkResp.clone());
         }
         return networkResp;
       } catch (error) {
         // 2. Network failed? Serve cached index.html (SPA Fallback)
         const cache = await caches.open(CACHE_NAME);
-        const cachedIndex = await cache.match('./index.html');
+        const cachedIndex = await cache.match('/index.html');
         return cachedIndex || Response.error();
       }
     })());
