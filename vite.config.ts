@@ -18,6 +18,15 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: undefined,
+          }
+        }
+      },
+      // Ensure PWA assets are served correctly
+      assetsInclude: ['**/*.png', '**/*.jpg', '**/*.svg', '**/*.ico', '**/manifest.json']
     };
 });

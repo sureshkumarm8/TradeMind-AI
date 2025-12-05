@@ -9,12 +9,35 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TradeMind">
     <meta name="description" content="TradeMind.AI - Professional Nifty 50 Trading Journal">
+    
+    <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
+    
+    <!-- PWA Installation Meta Tags -->
+    <meta name="application-name" content="TradeMind.AI">
+    <meta name="msapplication-TileColor" content="#0f172a">
+    <meta name="msapplication-config" content="none">
+    
+    <!-- Ensure HTTPS redirect for PWA -->
+    <script>
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        location.replace('https:' + window.location.href.substring(window.location.protocol.length));
+      }
+    </script>
 
-    <!-- Explicit icons so Android/iOS can find usable assets immediately -->
-    <link rel="icon" sizes="192x192" href="/icons/icon-192x192.png">
-    <link rel="icon" sizes="512x512" href="/icons/icon-512x512.png">
-    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <!-- Favicons and Touch Icons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/icons/icon-48x48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512x512.png">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png">
+    
+    <!-- Android Chrome Icons -->
+    <link rel="shortcut icon" href="/icons/icon-192x192.png">
 
     <title>TradeMind.AI - Professional Trading Journal</title>
     <script src="https://cdn.tailwindcss.com"></script>

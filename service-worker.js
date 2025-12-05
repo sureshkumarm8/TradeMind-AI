@@ -1,26 +1,45 @@
-const CACHE_NAME = 'trademind-app-v5';
+const CACHE_NAME = 'trademind-app-v6';
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './manifest.json',
+  '/',
+  '/index.html',
+  '/manifest.json',
   '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/icon-512x512.png',
+  '/index.tsx',
+  '/App.tsx'
 ];
 
 self.addEventListener('install', event => {
+  console.log('Service Worker installing...');
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then(cache => {
+      console.log('Caching app shell');
+      return cache.addAll(ASSETS_TO_CACHE);
+    }).catch(err => {
+      console.warn('Failed to cache some resources:', err);
+      // Cache essential files only if full caching fails
+      return caches.open(CACHE_NAME).then(cache => 
+        cache.addAll(['/', '/index.html', '/manifest.json'])
+      );
+    })
   );
 });
 
 self.addEventListener('activate', event => {
+  console.log('Service Worker activating...');
   event.waitUntil(
     caches.keys().then(keys => Promise.all(
       keys.map(key => {
-        if (key !== CACHE_NAME) return caches.delete(key);
+        if (key !== CACHE_NAME) {
+          console.log('Deleting old cache:', key);
+          return caches.delete(key);
+        }
       })
-    )).then(() => self.clients.claim())
+    )).then(() => {
+      console.log('Service Worker activated');
+      return self.clients.claim();
+    })
   );
 });
 
