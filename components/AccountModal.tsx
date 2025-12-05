@@ -58,6 +58,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   }, [isGapiReady]);
 
   const handleConnectClick = async () => {
+      // Basic client ID validation before attempting connection
+      if (!googleClientId || !googleClientId.endsWith('.apps.googleusercontent.com')) {
+          setActiveTab('config');
+          alert("Please enter a valid Google Client ID in the Configuration tab first.");
+          return;
+      }
+      
       setIsConnecting(true);
       try {
         await onConnect();
@@ -85,10 +92,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       if (err.includes('popup_closed')) {
           return "Popup Closed. Please allow popups for this site (Check browser settings).";
       }
+      if (err.includes('invalid_client') || err.includes('401')) {
+          return "Invalid Client ID. Please check the ID in the Config tab.";
+      }
       return err;
   }
 
   const isAccessDenied = authError && (authError.includes('access_denied') || authError.includes('not_authorized') || authError.includes('403'));
+  const isInvalidClient = authError && (authError.includes('invalid_client') || authError.includes('401'));
+
+  // Helper to validate client ID format
+  const isValidClientId = googleClientId && googleClientId.trim().endsWith('.apps.googleusercontent.com');
 
   return (
     <div className="max-w-4xl mx-auto pb-12 animate-fade-in-up">
@@ -164,6 +178,16 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                     >
                                         Open Google Console <ExternalLink size={12} className="ml-2"/>
                                     </a>
+                                </div>
+                            )}
+
+                            {isInvalidClient && (
+                                <div className="ml-8 bg-slate-900/50 border border-red-500/30 p-3 rounded-lg">
+                                    <h6 className="text-xs font-bold text-red-300 uppercase mb-2">Check Configuration</h6>
+                                    <p className="text-xs text-slate-300 mb-2">You may have pasted the Project Number or API Key instead of the Client ID.</p>
+                                    <button onClick={() => setActiveTab('config')} className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded transition">
+                                        Go to Config Tab
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -279,7 +303,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <input 
                             type="password" 
                             value={apiKey} 
-                            onChange={(e) => setApiKey(e.target.value)}
+                            onChange={(e) => setApiKey(e.target.value.trim())}
                             className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-indigo-500 outline-none"
                             placeholder="Required for AI Analysis"
                         />
@@ -294,10 +318,18 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <input 
                             type="text" 
                             value={googleClientId} 
-                            onChange={(e) => setGoogleClientId(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none"
+                            onChange={(e) => setGoogleClientId(e.target.value.trim())}
+                            className={`w-full bg-slate-950 border rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none ${!isValidClientId && googleClientId ? 'border-red-500 focus:border-red-500' : 'border-slate-700'}`}
                             placeholder="Required for Google Login"
                         />
+                        {!isValidClientId && googleClientId && (
+                            <p className="text-[10px] text-red-400 mt-1 font-bold">
+                                Invalid Format. Should end in '.apps.googleusercontent.com'
+                            </p>
+                        )}
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            Note: Settings are per-device. Copy the ID from your desktop.
+                        </p>
                     </div>
 
                     {/* Helper */}
