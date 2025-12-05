@@ -1,7 +1,55 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus } from 'lucide-react';
+import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, Smartphone } from 'lucide-react';
+
+// --- PWA Installation ---
+// This hook manages the Progressive Web App installation prompt.
+const usePWAInstall = () => {
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const [isPWAInstalled, setIsPWAInstalled] = useState(false);
+    const [canInstallPWA, setCanInstallPWA] = useState(false);
+
+    useEffect(() => {
+        const handleBeforeInstallPrompt = (e: Event) => {
+            e.preventDefault();
+            setInstallPrompt(e);
+            setCanInstallPWA(true); 
+        };
+
+        const handleAppInstalled = () => {
+            setIsPWAInstalled(true);
+            setCanInstallPWA(false); 
+        };
+        
+        // Check if the app is running in standalone mode (already installed)
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            setIsPWAInstalled(true);
+        }
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.addEventListener('appinstalled', handleAppInstalled);
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
+        };
+    }, []);
+
+    const triggerInstall = async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        const { outcome } = await installPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setIsPWAInstalled(true);
+            setCanInstallPWA(false);
+        }
+        setInstallPrompt(null);
+    };
+
+    return { triggerInstall, isPWAInstalled, canInstallPWA };
+};
+
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -27,14 +75,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   onExportJSON, onExportCSV, onImportClick
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'config'>('profile');
+  const { triggerInstall, isPWAInstalled, canInstallPWA } = usePWAInstall();
   
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  // Check if running in a Sandbox/Preview environment (Common cause of Auth errors)
+  
+  // --- Sandbox/Preview Detection ---
+  // This helps identify environments where Google Auth might be blocked.
   const isSandbox = currentOrigin === 'null' || 
                     currentOrigin.includes('storagerelay') || 
                     currentOrigin.includes('webcontainer') || 
-                    currentOrigin.includes('stackblitz') ||
-                    currentOrigin.includes('codesandbox');
+                    !currentOrigin.startsWith('http'); // A more robust check for non-standard origins
+
 
   const copyOrigin = () => {
       navigator.clipboard.writeText(currentOrigin);
@@ -79,6 +130,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
             {activeTab === 'profile' && (
                 <div className="bg-slate-900 rounded-2xl border border-slate-700 p-8 shadow-xl relative overflow-hidden animate-fade-in">
                     
+                    {/* --- PWA Installation Prompt --- */}
+                    {canInstallPWA && !isPWAInstalled && (
+                         <div className="mb-6 bg-indigo-900/40 border border-indigo-500/30 p-4 rounded-xl flex items-center justify-between gap-4 relative z-10">
+                            <div>
+                                <h5 className="font-bold text-indigo-300 text-sm">Install TradeMind on Your Device</h5>
+                                <p className="text-xs text-indigo-300/60 mt-1">Access your journal faster, right from your home screen.</p>
+                            </div>
+                            <button 
+                                onClick={triggerInstall}
+                                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-500 transition-colors shrink-0"
+                            >
+                                <Smartphone size={16}/> Install App
+                            </button>
+                        </div>
+                    )}
+
                     {/* Sandbox Warning */}
                     {isSandbox && (
                         <div className="mb-6 bg-amber-900/20 border border-amber-500/30 p-4 rounded-xl flex items-start gap-3 relative z-10">
@@ -86,8 +153,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             <div>
                                 <h5 className="font-bold text-amber-400 text-sm uppercase">Preview Environment Detected</h5>
                                 <p className="text-xs text-amber-200/70 mt-1 leading-relaxed">
-                                    Google Login blocks preview URLs (like <code>storagerelay://</code>).
-                                    <br/><strong>Fix:</strong> Open your Vercel URL in a new browser tab to sign in properly.
+                                    Google Login may be blocked in preview windows.
+                                    <br/><strong>Fix:</strong> Open your app in a new, dedicated browser tab to sign in.
                                 </p>
                             </div>
                         </div>
