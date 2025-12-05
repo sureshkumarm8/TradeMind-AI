@@ -30,22 +30,23 @@ export interface BackupData {
 
 export const initGoogleDrive = (clientId: string, onInitComplete: (success: boolean) => void) => {
   if (!clientId) {
-    console.warn('No OAuth Client ID provided');
+    console.warn('❌ No OAuth Client ID provided');
     onInitComplete(false);
     return;
   }
   
-  // Platform Detection
+  // Platform Detection for debugging
   const isAndroid = navigator.userAgent.includes('Android');
   const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
                 (window.navigator as any).standalone === true ||
                 document.referrer.includes('android-app://');
   
-  console.log("🔐 Initializing Google OAuth:");
-  console.log("  Platform:", isAndroid ? 'Android' : 'Desktop/Web');
-  console.log("  PWA Mode:", isPWA);
+  console.log("🔐 Initializing Google OAuth for PWA:");
+  console.log("  Device:", isAndroid ? '📱 Android' : '💻 Desktop');
+  console.log("  Mode:", isPWA ? 'PWA (Installed)' : 'Browser Tab');
   console.log("  Origin:", window.location.origin);
   console.log("  Client ID:", clientId.substring(0, 12) + '...');
+  console.log("  User Agent:", navigator.userAgent.substring(0, 50) + '...');
 
   // Initialize GAPI
   window.gapi.load('client', async () => {
@@ -68,15 +69,25 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
         scope: SCOPES,
         callback: (resp: any) => {
             if (resp.error) {
+               console.error('❌ OAuth Error:', resp.error, resp.error_description);
+               if (resp.error === 'invalid_client') {
+                   console.error('💡 Fix: Check that your Web OAuth Client ID is correct and includes this origin in Authorized JavaScript Origins');
+               }
                if (loginPromiseReject) loginPromiseReject(resp);
             } else {
+               console.log('✅ OAuth Success - User authenticated');
                if (loginPromiseResolve) loginPromiseResolve(true);
             }
             loginPromiseResolve = null;
             loginPromiseReject = null;
         },
         error_callback: (error: any) => {
-            console.error("GIS Error Callback:", error);
+            console.error("❌ OAuth Error Callback:", error);
+            console.error("💡 Possible fixes:");
+            console.error("  - Check Web OAuth Client ID is correct");
+            console.error("  - Verify origin is in Authorized JavaScript Origins");
+            console.error("  - Add email to Test Users in OAuth Consent Screen");
+            console.error("  - Wait 5-10 minutes after Google Console changes");
             if (loginPromiseReject) loginPromiseReject(error);
             loginPromiseResolve = null;
             loginPromiseReject = null;

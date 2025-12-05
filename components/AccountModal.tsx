@@ -15,8 +15,6 @@ interface AccountSettingsProps {
   setApiKey: (key: string) => void;
   googleClientId: string;
   setGoogleClientId: (id: string) => void;
-  androidClientId: string;
-  setAndroidClientId: (id: string) => void;
   onSaveSettings: () => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
@@ -25,8 +23,7 @@ interface AccountSettingsProps {
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
   userProfile, syncStatus, authError, onConnect, onLogout,
-  apiKey, setApiKey, googleClientId, setGoogleClientId, 
-  androidClientId, setAndroidClientId, onSaveSettings,
+  apiKey, setApiKey, googleClientId, setGoogleClientId, onSaveSettings,
   onExportJSON, onExportCSV, onImportClick
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'config'>('profile');
@@ -67,11 +64,23 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   };
 
   const getErrorDiagnosis = (err: string) => {
+      const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+      const isAndroid = navigator.userAgent.includes('Android');
+      
+      if (err.includes('invalid_client') || err.includes('OAuth client was not found')) {
+          if (isAndroid && isPWA) {
+              return "❌ PWA OAuth Error: Use your WEB OAuth Client ID, not Android. PWAs run in browser context.";
+          }
+          return "❌ Invalid Client ID: Check your Web OAuth Client ID in Google Cloud Console.";
+      }
       if (err.includes('idpiframe_initialization_failed') || err.includes('origin_mismatch')) {
-          return "Origin Mismatch. Your current URL is not whitelisted in Google Cloud Console.";
+          return "❌ Origin Mismatch: Add this URL to 'Authorized JavaScript Origins' in Google Cloud Console.";
       }
       if (err.includes('access_denied') || err.includes('not_authorized') || err.includes('403')) {
-          return "TEST USER REQUIRED. Your app is in 'Testing' mode. You MUST add your email to the 'Test Users' list in Google Cloud Console.";
+          return "❌ Access Denied: Add your email to 'Test Users' in OAuth Consent Screen.";
+      }
+      if (err.includes('redirect_uri_mismatch')) {
+          return "❌ Redirect URI Error: Remove any redirect URIs from your Web OAuth Client (not needed for PWAs).";
       }
       return err;
   }
@@ -209,20 +218,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 </button>
                             )}
 
-                            {(() => {
-                                const isAndroid = navigator.userAgent.includes('Android');
-                                const missingWebClient = !googleClientId;
-                                const missingAndroidClient = !androidClientId && isAndroid;
-                                
-                                if (missingWebClient || missingAndroidClient) {
-                                    return (
-                                        <p className="text-xs text-amber-500 mt-4 font-bold bg-amber-900/10 p-2 rounded inline-block">
-                                            ⚠️ Config Missing: {isAndroid ? 'Android' : 'Web'} OAuth Client ID required
-                                        </p>
-                                    );
-                                }
-                                return null;
-                            })()}
+                            {!googleClientId && (
+                                <p className="text-xs text-amber-500 mt-4 font-bold bg-amber-900/10 p-2 rounded inline-block">
+                                    ⚠️ Config Missing: Web OAuth Client ID required for PWA login
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -266,33 +266,20 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                     {/* Web Client ID */}
                     <div className="mb-6">
                         <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
-                            <Cloud size={16} className="text-blue-400"/> Google Client ID (Web)
+                            <Cloud size={16} className="text-blue-400"/> Google OAuth Client ID
                         </label>
                         <input 
                             type="text" 
                             value={googleClientId} 
                             onChange={(e) => setGoogleClientId(e.target.value)}
                             className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none"
-                            placeholder="For Chrome/Safari/Firefox browsers"
+                            placeholder="Works for both desktop and PWA mobile"
                         />
-                         <p className="text-[10px] text-blue-400/70 mt-1">Application type: <strong>Web application</strong></p>
+                         <p className="text-[10px] text-blue-400/70 mt-1">Application type: <strong>Web application</strong> (used for both desktop and PWA)</p>
+                         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-[10px] text-blue-400 mt-1 inline-block hover:underline">Create Web OAuth Client &rarr;</a>
                     </div>
 
-                    {/* Android Client ID */}
-                    <div className="mb-6">
-                        <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
-                            <Cloud size={16} className="text-green-400"/> Android Client ID (PWA)
-                        </label>
-                        <input 
-                            type="text" 
-                            value={androidClientId} 
-                            onChange={(e) => setAndroidClientId(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-green-500 outline-none"
-                            placeholder="For Android PWA/Chrome mobile apps"
-                        />
-                         <p className="text-[10px] text-green-400/70 mt-1">Application type: <strong>Android</strong> | Package: <code>com.android.chrome</code></p>
-                         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-[10px] text-green-400 mt-1 inline-block hover:underline">Create Android OAuth Client &rarr;</a>
-                    </div>
+
 
                     {/* Helper */}
                     <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 text-xs text-slate-400 mb-6">
@@ -300,11 +287,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         
                         {/* Web OAuth Setup */}
                         <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded">
-                            <p className="font-bold text-blue-300 mb-2">1️⃣ Web OAuth Client (Desktop/Laptop)</p>
+                            <p className="font-bold text-blue-300 mb-2">🌐 Web OAuth Client Setup</p>
                             <ul className="list-disc list-inside space-y-1 mb-2">
                                 <li>Application type: <strong>Web application</strong></li>
                                 <li>Add URL below to <strong>Authorized JavaScript Origins</strong></li>
                                 <li>Remove trailing slashes (e.g., <code>.app</code> not <code>.app/</code>)</li>
+                                <li><strong>This works for both desktop browser AND Android PWA</strong></li>
                             </ul>
                             <div className="flex items-center gap-2 mt-2">
                                 <code className="flex-1 bg-black/30 p-2 rounded text-blue-400 font-mono select-all border border-slate-600 cursor-pointer hover:bg-black/50 transition text-[10px]" onClick={copyOrigin}>
@@ -316,24 +304,25 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </div>
                         </div>
 
-                        {/* Android OAuth Setup */}
-                        <div className="mb-4 p-3 bg-green-900/20 border border-green-500/30 rounded">
-                            <p className="font-bold text-green-300 mb-2">2️⃣ Android OAuth Client (PWA/Mobile)</p>
-                            <ul className="list-disc list-inside space-y-1">
-                                <li>Application type: <strong>Android</strong></li>
-                                <li>Package name: <code className="bg-black/30 px-1 rounded">com.android.chrome</code></li>
-                                <li>SHA-1: Use Chrome's debug certificate or leave blank for testing</li>
-                                <li><strong>Critical:</strong> This fixes "OAuth client not found" on Android PWA</li>
+                        {/* PWA OAuth Note */}
+                        <div className="mb-4 p-3 bg-purple-900/20 border border-purple-500/30 rounded">
+                            <p className="font-bold text-purple-300 mb-2">📱 PWA Authentication Note</p>
+                            <ul className="list-disc list-inside space-y-1 text-purple-200">
+                                <li><strong>PWAs use Web OAuth Client</strong> - they run in browser context</li>
+                                <li>Same Client ID works for desktop Chrome and Android Chrome PWA</li>
+                                <li>Android OAuth Client is only for native APK apps, not PWAs</li>
+                                <li>If getting "OAuth client not found" on Android PWA, check your <strong>Web Client</strong> setup</li>
                             </ul>
                         </div>
 
                         {/* Final Steps */}
                         <div className="p-3 bg-amber-900/20 border border-amber-500/30 rounded">
-                            <p className="font-bold text-amber-300 mb-2">3️⃣ Final Steps</p>
+                            <p className="font-bold text-amber-300 mb-2">✅ Final Steps</p>
                             <ul className="list-disc list-inside space-y-1">
                                 <li>Add your email to <strong>Test Users</strong> in OAuth Consent Screen</li>
-                                <li>Wait <strong>5-10 minutes</strong> for changes to propagate</li>
-                                <li>Test on both desktop browser and Android PWA</li>
+                                <li>Wait <strong>5-10 minutes</strong> for Google changes to propagate</li>
+                                <li>Test login works on both desktop browser and Android PWA</li>
+                                <li><strong>Common fix:</strong> Clear browser cache on Android if still getting errors</li>
                             </ul>
                         </div>
                     </div>
