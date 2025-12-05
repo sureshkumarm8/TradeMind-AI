@@ -557,7 +557,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{trade.outcome}</p>
                               </>
                             ) : (
-                              <span className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-xs font-medium border border-slate-600">OPEN</span>
+                              <span className="px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-xs font-medium border border-slate-600">HOLDING</span>
                             )}
                           </div>
                           <div className="text-slate-600 group-hover:text-slate-400 transition ml-4">

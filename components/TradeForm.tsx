@@ -162,7 +162,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     }
   }, [formData.niftyEntryPrice, formData.niftyExitPrice, formData.direction]);
 
-  // Live PnL Feedback
+  // Live PnL Feedback & Outcome Auto-set
   useEffect(() => {
     if (formData.entryPrice && formData.exitPrice && formData.quantity) {
         const diff = formData.exitPrice - formData.entryPrice;
@@ -171,19 +171,25 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
             : (formData.entryPrice - formData.exitPrice) * formData.quantity;
         setLivePnL(pnl);
         
-        // Auto-set outcome if not manually overridden to OPEN
-        if (formData.outcome !== TradeOutcome.OPEN) {
-             let suggestedOutcome = TradeOutcome.BREAK_EVEN;
-             if (pnl > 0) suggestedOutcome = TradeOutcome.WIN;
-             if (pnl < 0) suggestedOutcome = TradeOutcome.LOSS;
+        let suggestedOutcome = TradeOutcome.BREAK_EVEN;
+        if (pnl > 0) suggestedOutcome = TradeOutcome.WIN;
+        if (pnl < 0) suggestedOutcome = TradeOutcome.LOSS;
              
-             setFormData(prev => {
-                 if (prev.outcome === suggestedOutcome) return prev;
-                 return { ...prev, outcome: suggestedOutcome };
-             });
-        }
+        setFormData(prev => {
+             // Only update if outcome matches one of the results or is open. 
+             // We prioritize the calculated outcome based on price.
+             if (prev.outcome === suggestedOutcome) return prev;
+             return { ...prev, outcome: suggestedOutcome };
+        });
     } else {
         setLivePnL(null);
+        // If exit price is removed, revert to OPEN
+        if (!formData.exitPrice) {
+            setFormData(prev => {
+                if (prev.outcome === TradeOutcome.OPEN) return prev;
+                return { ...prev, outcome: TradeOutcome.OPEN };
+            });
+        }
     }
   }, [formData.entryPrice, formData.exitPrice, formData.quantity, formData.direction]);
 
