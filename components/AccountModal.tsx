@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw, Trash2 } from 'lucide-react';
+import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw, Trash2, Share2, Eye, EyeOff } from 'lucide-react';
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -31,6 +31,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [isGapiReady, setIsGapiReady] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [scriptTimeout, setScriptTimeout] = useState(false);
+  const [showSecrets, setShowSecrets] = useState(false);
   
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   // Check if running in a Sandbox/Preview environment
@@ -59,9 +60,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   const handleConnectClick = async () => {
       // Basic client ID validation before attempting connection
-      if (!googleClientId || !googleClientId.endsWith('.apps.googleusercontent.com')) {
+      if (!googleClientId || !googleClientId.trim().endsWith('.apps.googleusercontent.com')) {
           setActiveTab('config');
-          alert("Please enter a valid Google Client ID in the Configuration tab first.");
+          alert("Please enter a valid Google Client ID in the Configuration tab first.\nIt must end with '.apps.googleusercontent.com'");
           return;
       }
       
@@ -93,7 +94,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
           return "Popup Closed. Please allow popups for this site (Check browser settings).";
       }
       if (err.includes('invalid_client') || err.includes('401')) {
-          return "Invalid Client ID. Please check the ID in the Config tab.";
+          return "Invalid Client ID. The ID sent to Google does not exist.";
       }
       return err;
   }
@@ -103,6 +104,48 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   // Helper to validate client ID format
   const isValidClientId = googleClientId && googleClientId.trim().endsWith('.apps.googleusercontent.com');
+
+  // Input sanitizer to prevent mobile keyboard issues
+  const handleClientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Remove all whitespace, newlines, and non-printable chars
+      const clean = e.target.value.replace(/\s/g, '').trim();
+      setGoogleClientId(clean);
+  }
+
+  const handleShareConfig = () => {
+      const configData = JSON.stringify({ k: apiKey, c: googleClientId });
+      if (navigator.share) {
+          navigator.share({
+              title: 'TradeMind Config',
+              text: configData
+          }).catch(console.error);
+      } else {
+          navigator.clipboard.writeText(configData);
+          alert("Config copied! Paste this on your other device to sync settings.");
+      }
+  };
+
+  const handlePasteConfig = async () => {
+      try {
+          const text = await navigator.clipboard.readText();
+          try {
+              // Try parsing as JSON first
+              const data = JSON.parse(text);
+              if (data.k) setApiKey(data.k);
+              if (data.c) setGoogleClientId(data.c);
+              alert("Configuration pasted successfully!");
+          } catch {
+              // Fallback for direct string paste
+              if (text.includes('.apps.googleusercontent.com')) {
+                  setGoogleClientId(text.trim());
+              } else if (text.length > 20) {
+                  setApiKey(text.trim());
+              }
+          }
+      } catch (err) {
+          alert("Could not read clipboard. Please paste manually.");
+      }
+  };
 
   return (
     <div className="max-w-4xl mx-auto pb-12 animate-fade-in-up">
@@ -184,9 +227,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             {isInvalidClient && (
                                 <div className="ml-8 bg-slate-900/50 border border-red-500/30 p-3 rounded-lg">
                                     <h6 className="text-xs font-bold text-red-300 uppercase mb-2">Check Configuration</h6>
-                                    <p className="text-xs text-slate-300 mb-2">You may have pasted the Project Number or API Key instead of the Client ID.</p>
+                                    <p className="text-xs text-slate-300 mb-2">The Client ID is incorrect. It might have typos or whitespace.</p>
                                     <button onClick={() => setActiveTab('config')} className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded transition">
-                                        Go to Config Tab
+                                        Fix in Config Tab
                                     </button>
                                 </div>
                             )}
@@ -226,6 +269,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 </button>
                             ) : (
                                 <div className="space-y-4">
+                                    <div className="text-xs font-mono text-slate-500 mb-2">{currentOrigin}</div>
                                     <button 
                                         onClick={handleConnectClick} 
                                         disabled={!isGapiReady || isConnecting}
@@ -255,11 +299,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                     )}
                                 </div>
                             )}
-                            
-                            {/* Always show Origin to help debug Mobile/Xiaomi www mismatch */}
-                            <div className="mt-6 p-2 bg-slate-800/50 rounded text-[10px] text-slate-500 font-mono border border-slate-700 select-all">
-                                {currentOrigin}
-                            </div>
                         </div>
                     )}
 
@@ -293,20 +332,46 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
             {/* --- TAB: CONFIGURATION (Technical) --- */}
             {activeTab === 'config' && (
                 <div className="bg-slate-900 rounded-2xl border border-slate-700 p-8 shadow-xl animate-fade-in">
-                    <h4 className="text-xl font-bold text-white mb-6">Developer Settings</h4>
+                    <div className="flex justify-between items-center mb-6">
+                        <h4 className="text-xl font-bold text-white">Developer Settings</h4>
+                        <div className="flex gap-2">
+                            <button onClick={handleShareConfig} className="text-xs bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded flex items-center hover:bg-indigo-600/40 transition">
+                                <Share2 size={14} className="mr-2"/> Share Config
+                            </button>
+                            <button onClick={handlePasteConfig} className="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded flex items-center hover:bg-slate-700 transition">
+                                Paste
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-lg mb-6">
+                        <p className="text-xs text-blue-300 mb-2">
+                            <strong>Syncing with Mobile?</strong> Use "Share Config" on your desktop to send your keys to your phone. 
+                            Then "Paste" them here to ensure they match exactly.
+                        </p>
+                    </div>
 
                     {/* API Key */}
                     <div className="mb-6">
                         <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
                             <Key size={16} className="text-indigo-400"/> Gemini API Key
                         </label>
-                        <input 
-                            type="password" 
-                            value={apiKey} 
-                            onChange={(e) => setApiKey(e.target.value.trim())}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-indigo-500 outline-none"
-                            placeholder="Required for AI Analysis"
-                        />
+                        <div className="relative">
+                            <input 
+                                type={showSecrets ? "text" : "password"}
+                                value={apiKey} 
+                                onChange={(e) => setApiKey(e.target.value.trim())}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-indigo-500 outline-none pr-10"
+                                placeholder="Required for AI Analysis"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
+                            />
+                            <button type="button" onClick={() => setShowSecrets(!showSecrets)} className="absolute right-3 top-3 text-slate-500 hover:text-white">
+                                {showSecrets ? <EyeOff size={16}/> : <Eye size={16}/>}
+                            </button>
+                        </div>
                          <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-[10px] text-indigo-400 mt-1 inline-block hover:underline">Get API Key &rarr;</a>
                     </div>
                     
@@ -315,20 +380,29 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
                             <Cloud size={16} className="text-blue-400"/> Google Client ID
                         </label>
-                        <input 
-                            type="text" 
-                            value={googleClientId} 
-                            onChange={(e) => setGoogleClientId(e.target.value.trim())}
-                            className={`w-full bg-slate-950 border rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none ${!isValidClientId && googleClientId ? 'border-red-500 focus:border-red-500' : 'border-slate-700'}`}
-                            placeholder="Required for Google Login"
-                        />
+                        <div className="relative">
+                            <input 
+                                type={showSecrets ? "text" : "password"}
+                                value={googleClientId} 
+                                onChange={handleClientChange}
+                                className={`w-full bg-slate-950 border rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none pr-10 ${!isValidClientId && googleClientId ? 'border-red-500 focus:border-red-500' : 'border-slate-700'}`}
+                                placeholder="Required for Google Login"
+                                autoComplete="off"
+                                autoCorrect="off"
+                                autoCapitalize="off"
+                                spellCheck="false"
+                            />
+                             <button type="button" onClick={() => setShowSecrets(!showSecrets)} className="absolute right-3 top-3 text-slate-500 hover:text-white">
+                                {showSecrets ? <EyeOff size={16}/> : <Eye size={16}/>}
+                            </button>
+                        </div>
                         {!isValidClientId && googleClientId && (
                             <p className="text-[10px] text-red-400 mt-1 font-bold">
                                 Invalid Format. Should end in '.apps.googleusercontent.com'
                             </p>
                         )}
                         <p className="text-[10px] text-slate-500 mt-1">
-                            Note: Settings are per-device. Copy the ID from your desktop.
+                            Note: Settings are per-device. Use "Share Config" to transfer.
                         </p>
                     </div>
 

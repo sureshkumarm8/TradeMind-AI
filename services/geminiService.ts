@@ -42,7 +42,11 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
     const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
     
-    // Construct a prompt specifically for Nifty/Index traders
+    // Format timeline for prompt
+    const timeline = trade.notes 
+        ? trade.notes.map(n => `[${n.timestamp}] ${n.content} (${n.type})`).join('\n') 
+        : "No live timeline logged.";
+
     const promptText = `
       You are a strict Quantitative Trading Mentor.
       The user follows a specific system.
@@ -53,6 +57,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       2. If a chart image is provided, analyze the visual price structure (Candles, Patterns) to verify the entry.
       3. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
       4. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
+      5. Analyze their "Live Mission Timeline" (below) to check emotional stability and decision making during the trade.
       
       User's Logged Trade:
       - Date: ${trade.date}
@@ -61,7 +66,10 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       - Instrument: ${trade.instrument} ${trade.strikePrice || ''} ${trade.optionType || ''}
       - Direction: ${trade.direction}
       - Result: ${trade.outcome} (PnL: ₹${trade.pnl})
-      - Logic: "${trade.entryReason}"
+      - Logic Summary: "${trade.entryReason}"
+      
+      LIVE MISSION TIMELINE (Thoughts during trade):
+      ${timeline}
       
       Output strict JSON format ONLY. Do not output markdown code blocks.
       
@@ -84,7 +92,6 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
     
     // Add Chart Image if exists (base64)
     if (trade.chartImage) {
-        // Strip prefix "data:image/jpeg;base64," if present
         const base64Data = trade.chartImage.split(',')[1];
         parts.push({
             inlineData: {
@@ -102,13 +109,12 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         tools: [{ googleSearch: {} }], // Enable Grounding
         systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search. Return strictly valid JSON.",
         temperature: 0.3,
-        // NOTE: responseMimeType and responseSchema CANNOT be used with googleSearch tool.
       }
     });
 
     let jsonResult = response.text || "{}";
     
-    // Clean markdown if present (e.g. ```json ... ```)
+    // Clean markdown if present
     if (jsonResult.includes('```')) {
         jsonResult = jsonResult.replace(/```json/g, '').replace(/```/g, '');
     }
@@ -243,7 +249,8 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
                 entryPrice: { type: Type.NUMBER },
                 quantity: { type: Type.NUMBER },
                 entryReason: { type: Type.STRING },
-                setupName: { type: Type.STRING }
+                setupName: { type: Type.STRING },
+                note: { type: Type.STRING }
             }
         };
 
@@ -260,10 +267,14 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
                 {
                    text: `
                     Listen to this trader's voice note. Extract trading data for the Indian Nifty 50 market.
-                    Default to "NIFTY 50" instrument if not specified.
-                    Extract Option Type (CE/PE), Strike, Entry Price, Qty.
-                    Capture the "Logic" or "Reason" for the trade into 'entryReason'.
-                    Capture any technical setup name into 'setupName'.
+                    
+                    TASK 1: IF they are dictating trade parameters (e.g. "Buy Nifty 21500 CE at 150"):
+                    - Extract Option Type (CE/PE), Strike, Entry Price, Qty.
+                    
+                    TASK 2: IF they are dictating a thought/feeling (e.g. "I am feeling nervous about this resistance"):
+                    - Put the entire text into the 'note' field.
+                    
+                    TASK 3: IF mixed, extract parameters AND put the logic/feeling into 'entryReason' or 'note'.
                    `
                 }
               ]
@@ -277,6 +288,6 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
         return JSON.parse(response.text || "{}");
     } catch (e) {
         console.error("Voice parse error", e);
-        return { entryReason: "Error processing voice note." }; 
+        return { note: "Error processing voice note." }; 
     }
 }

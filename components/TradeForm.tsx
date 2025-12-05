@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2 } from 'lucide-react';
+import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote } from '../types';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
 
@@ -44,6 +44,15 @@ const COMMON_SETUPS = [
   "Fakeout / Trap"
 ];
 
+const QUICK_THOUGHTS = [
+    { label: "Nervous", type: 'emotion' },
+    { label: "Confident", type: 'emotion' },
+    { label: "Price Stalling", type: 'market' },
+    { label: "Momentum Strong", type: 'market' },
+    { label: "Target Near", type: 'logic' },
+    { label: "Adding Qty", type: 'logic' }
+];
+
 const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
@@ -51,6 +60,10 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
   
   // Real-time PnL calc for UI feedback
   const [livePnL, setLivePnL] = useState<number | null>(null);
+
+  // Commentary State
+  const [currentNote, setCurrentNote] = useState('');
+  const notesContainerRef = useRef<HTMLDivElement>(null);
 
   // Voice State (MediaRecorder)
   const [isRecording, setIsRecording] = useState(false);
@@ -81,6 +94,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         marketContext: '',
         entryReason: '',
         exitReason: '',
+        notes: [], // New Timeline
         confluences: [],
         mistakes: [],
         entryPrice: 0,
@@ -103,6 +117,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         return {
             ...defaults,
             ...initialData,
+            notes: initialData.notes || [],
             systemChecks: {
                 ...defaults.systemChecks,
                 ...(initialData.systemChecks || {})
@@ -118,6 +133,13 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     if (initialData?.confluences && initialData.confluences.length > 0) setShowConfluences(true);
     if (initialData?.mistakes && initialData.mistakes.length > 0) setShowMistakes(true);
   }, []);
+
+  // Scroll to bottom of notes when added
+  useEffect(() => {
+     if (notesContainerRef.current) {
+         notesContainerRef.current.scrollTop = notesContainerRef.current.scrollHeight;
+     }
+  }, [formData.notes]);
 
   // Auto-calculate duration
   useEffect(() => {
@@ -241,6 +263,23 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     });
   };
 
+  const addNote = (text: string, type: 'logic' | 'emotion' | 'market' = 'logic') => {
+      if (!text.trim()) return;
+      
+      const newNote: TradeNote = {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          content: text,
+          type
+      };
+
+      setFormData(prev => ({
+          ...prev,
+          notes: [...(prev.notes || []), newNote]
+      }));
+      setCurrentNote('');
+  };
+
   // --- Voice Log Logic (MediaRecorder) ---
   const startRecording = async () => {
     if (!apiKey && !process.env.API_KEY) {
@@ -272,8 +311,17 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
              const base64String = (reader.result as string).split(',')[1];
              try {
                 const parsed = await parseVoiceCommand(base64String, apiKey);
-                setFormData(prev => ({ ...prev, ...parsed }));
-                if (notify) notify("Voice Log Processed", "success");
+                
+                // If it's just a note (not full trade data), append to timeline
+                if (parsed.note) {
+                    addNote(parsed.note, 'logic');
+                    if (notify) notify("Voice note added", "success");
+                } else {
+                    // It's structured data (e.g. initial entry)
+                    setFormData(prev => ({ ...prev, ...parsed }));
+                    if (parsed.entryReason) addNote(parsed.entryReason, 'logic');
+                    if (notify) notify("Mission data updated", "success");
+                }
              } catch(e) {
                 console.error(e);
                 if (notify) notify("Failed to analyze voice", "error");
@@ -310,6 +358,9 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
       ...formData as Trade,
       id: initialData?.id || crypto.randomUUID(),
       pnl: livePnL || 0,
+      // Concatenate notes into legacy text fields for CSV backward compatibility
+      entryReason: formData.entryReason || (formData.notes?.[0]?.content) || "No reason logged",
+      marketContext: formData.marketContext || "Logged in timeline"
     };
     onSave(trade);
   };
@@ -503,12 +554,81 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                </div>
             </div>
             
-            {/* 3. Evidence Locker (Images) - NEW SECTION */}
+            {/* 3. Narrative & Context (LIVE TIMELINE) */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col h-[500px]">
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest flex items-center">
+                        <MessageSquare size={14} className="mr-2 text-indigo-400"/> Live Mission Timeline
+                    </h3>
+                    <div className="text-[10px] text-slate-600 font-bold uppercase">Chat Logic</div>
+                 </div>
+
+                 {/* Timeline Feed */}
+                 <div ref={notesContainerRef} className="flex-1 bg-slate-900/50 rounded-xl border border-slate-800 p-4 overflow-y-auto mb-4 custom-scrollbar space-y-4">
+                    {formData.notes && formData.notes.length > 0 ? (
+                        formData.notes.map(note => (
+                            <div key={note.id} className="animate-fade-in flex gap-3">
+                                <div className="text-[10px] font-mono text-slate-500 pt-1 shrink-0">{note.timestamp.slice(0,5)}</div>
+                                <div className={`flex-1 text-sm p-3 rounded-tr-xl rounded-bl-xl rounded-br-xl ${note.type === 'emotion' ? 'bg-purple-900/20 text-purple-200 border border-purple-500/20' : note.type === 'market' ? 'bg-amber-900/20 text-amber-200 border border-amber-500/20' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>
+                                    {note.content}
+                                </div>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600 text-xs italic opacity-50">
+                            <Zap size={24} className="mb-2"/>
+                            Log your thoughts live...
+                        </div>
+                    )}
+                 </div>
+
+                 {/* Quick Chips */}
+                 <div className="flex gap-2 mb-3 overflow-x-auto pb-1 custom-scrollbar">
+                     {QUICK_THOUGHTS.map((qt, idx) => (
+                         <button 
+                            key={idx} 
+                            type="button" 
+                            onClick={() => addNote(qt.label, qt.type as any)}
+                            className={`whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition ${qt.type === 'emotion' ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10' : qt.type === 'market' ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' : 'border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10'}`}
+                         >
+                            {qt.label}
+                         </button>
+                     ))}
+                 </div>
+
+                 {/* Input Area */}
+                 <div className="flex gap-2">
+                     <input 
+                        type="text" 
+                        value={currentNote}
+                        onChange={(e) => setCurrentNote(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNote(currentNote))}
+                        placeholder="Log thought..."
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                     />
+                     <button 
+                        type="button" 
+                        onClick={() => addNote(currentNote)}
+                        className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition"
+                     >
+                        <Send size={18}/>
+                     </button>
+                     <button 
+                        type="button" 
+                        onClick={isRecording ? stopRecording : startRecording}
+                        className={`p-2 rounded-lg transition ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                        title="Voice Log (Append to Timeline)"
+                     >
+                        {isProcessingVoice ? <Loader2 size={18} className="animate-spin"/> : <Mic size={18}/>}
+                     </button>
+                 </div>
+            </div>
+            
+            {/* 4. Evidence Locker (Images) */}
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
                  <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
                     <ImageIcon size={14} className="mr-2 text-indigo-400"/> Evidence Locker
                  </h3>
-                 <p className="text-xs text-slate-500 mb-4">Optional: Upload screenshots if you have them. Can be added later.</p>
                  
                  <div className="grid grid-cols-2 gap-4">
                      {/* Chart Upload */}
@@ -551,36 +671,28 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                  </div>
             </div>
 
-            {/* 4. Narrative & Context */}
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+             {/* Collapsible Chips (Tags) */}
+             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
                  <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
-                    <Activity size={14} className="mr-2"/> Trade Narrative
+                    <Activity size={14} className="mr-2"/> Tags & Setup
                  </h3>
-                 <div className="space-y-4">
-                    <div>
-                        <input 
-                            list="setup-options"
-                            type="text" 
-                            name="setupName" 
-                            value={formData.setupName} 
-                            onChange={handleChange} 
-                            placeholder="Setup Name (e.g. 5m VWAP Rejection)" 
-                            className="w-full bg-slate-900 border-b border-slate-700 px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none transition" 
-                        />
-                        <datalist id="setup-options">
-                            {COMMON_SETUPS.map(s => <option key={s} value={s} />)}
-                        </datalist>
-                    </div>
-                    <div>
-                        <textarea name="marketContext" rows={2} value={formData.marketContext} onChange={handleChange} placeholder="Market Context (Gap Up, Trending, Rangebound...)" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs focus:border-indigo-500 outline-none resize-none" />
-                    </div>
-                    <div>
-                        <textarea name="entryReason" rows={2} value={formData.entryReason} onChange={handleChange} placeholder="Entry Logic (Why take this trade?)" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs focus:border-indigo-500 outline-none resize-none" />
-                    </div>
+                 
+                 <div className="mb-4">
+                    <input 
+                        list="setup-options"
+                        type="text" 
+                        name="setupName" 
+                        value={formData.setupName} 
+                        onChange={handleChange} 
+                        placeholder="Setup Name (e.g. 5m VWAP Rejection)" 
+                        className="w-full bg-slate-900 border-b border-slate-700 px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none transition" 
+                    />
+                    <datalist id="setup-options">
+                        {COMMON_SETUPS.map(s => <option key={s} value={s} />)}
+                    </datalist>
                  </div>
 
-                 {/* Collapsible Chips */}
-                 <div className="mt-6 space-y-4">
+                 <div className="space-y-4">
                      {/* Confluences */}
                      <div className="border border-slate-700 rounded-xl overflow-hidden">
                         <button type="button" onClick={() => setShowConfluences(!showConfluences)} className="w-full flex items-center justify-between p-3 bg-slate-900/50 hover:bg-slate-900 transition">

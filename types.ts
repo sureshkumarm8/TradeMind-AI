@@ -55,6 +55,13 @@ export interface AiAnalysisResponse {
   sources?: string[]; // Grounding links
 }
 
+export interface TradeNote {
+    id: string;
+    timestamp: string; // HH:mm:ss
+    content: string;
+    type: 'logic' | 'emotion' | 'market';
+}
+
 export interface Trade {
   id: string;
   date: string; // ISO String YYYY-MM-DD
@@ -93,6 +100,9 @@ export interface Trade {
   marketContext: string; 
   entryReason: string;
   exitReason?: string;
+  
+  // NEW: Live Commentary Timeline
+  notes?: TradeNote[];
   
   // Visual Evidence (Base64 Strings)
   chartImage?: string;
@@ -196,4 +206,5 @@ export interface ParsedVoiceCommand {
     quantity?: number;
     entryReason?: string;
     setupName?: string;
+    note?: string; // New: For appending notes
 }
