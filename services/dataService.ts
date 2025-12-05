@@ -1,13 +1,18 @@
 
 import { Trade, TradeDirection, TradeOutcome, OptionType, StrategyProfile } from '../types';
 
-export const exportToJSON = (trades: Trade[], strategy?: StrategyProfile) => {
-  const data = {
+// Helper to generate the backup object structure
+export const getBackupObject = (trades: Trade[], strategy?: StrategyProfile) => {
+  return {
     trades,
     strategy,
     version: '1.0',
     exportDate: new Date().toISOString()
   };
+};
+
+export const exportToJSON = (trades: Trade[], strategy?: StrategyProfile) => {
+  const data = getBackupObject(trades, strategy);
   const dataStr = JSON.stringify(data, null, 2);
   const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
   const exportFileDefaultName = `trademind_backup_${new Date().toISOString().split('T')[0]}.json`;
@@ -17,6 +22,30 @@ export const exportToJSON = (trades: Trade[], strategy?: StrategyProfile) => {
   linkElement.setAttribute('download', exportFileDefaultName);
   linkElement.click();
 }
+
+export const shareBackupData = async (trades: Trade[], strategy?: StrategyProfile) => {
+  const data = getBackupObject(trades, strategy);
+  const fileName = `trademind_data_${new Date().toISOString().split('T')[0]}.json`;
+  const file = new File([JSON.stringify(data, null, 2)], fileName, { type: 'application/json' });
+
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: 'TradeMind Backup',
+        text: 'Here is my TradeMind journal backup file.'
+      });
+      return true;
+    } catch (err) {
+      console.warn("Share cancelled or failed", err);
+      return false;
+    }
+  } else {
+    // Fallback to standard download if sharing not supported
+    exportToJSON(trades, strategy);
+    return true;
+  }
+};
 
 export const exportSystemProfile = (profile: StrategyProfile) => {
   const dataStr = JSON.stringify(profile, null, 2);

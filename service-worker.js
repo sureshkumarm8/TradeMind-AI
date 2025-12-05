@@ -1,17 +1,19 @@
 
-const CACHE_NAME = 'trademind-app-v7';
+const CACHE_NAME = 'trademind-app-v8';
+// Only cache files we know exist. Do NOT cache png icons since we now use Data URIs in manifest.
+// Caching missing files causes the Service Worker to fail installation.
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/manifest.json'
 ];
 
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS_TO_CACHE))
+      .catch(err => console.error("SW Cache Error", err))
   );
 });
 
@@ -45,12 +47,12 @@ self.addEventListener('fetch', event => {
       } catch (error) {
         // 2. Network failed? Serve cached index.html (SPA Fallback)
         const cache = await caches.open(CACHE_NAME);
-        // Try exact match first
-        const cachedIndex = await cache.match('/index.html');
-        if (cachedIndex) return cachedIndex;
-        // Try root
+        // Try root first
         const cachedRoot = await cache.match('/');
         if (cachedRoot) return cachedRoot;
+        // Try index.html
+        const cachedIndex = await cache.match('/index.html');
+        if (cachedIndex) return cachedIndex;
         
         return Response.error();
       }

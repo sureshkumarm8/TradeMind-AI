@@ -1,7 +1,7 @@
 {
   "short_name": "TradeMind",
   "name": "TradeMind.AI",
-  "id": "trademind-ai-app",
+  "id": "trademind-ai-app-v2",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -14,42 +14,42 @@
   "lang": "en-US",
   "icons": [
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%230f172a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%231e293b;stop-opacity:1' /%3E%3C/linearGradient%3E%3ClinearGradient id='glow' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' style='stop-color:%233b82f6;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2310b981;stop-opacity:1' /%3E%3C/linearGradient%3E%3Cfilter id='neon'%3E%3CfeGaussianBlur stdDeviation='2.5' result='coloredBlur'/%3E%3CfeMerge%3E%3CfeMergeNode in='coloredBlur'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E%3C/filter%3E%3C/defs%3E%3Crect width='512' height='512' rx='100' fill='url(%23bg)'/%3E%3Crect x='100' y='300' width='60' height='100' rx='8' fill='%23334155' /%3E%3Crect x='190' y='220' width='60' height='180' rx='8' fill='%23475569' /%3E%3Crect x='280' y='160' width='60' height='240' rx='8' fill='%2364748b' /%3E%3Cpath d='M80 350 Q 200 350, 240 250 T 420 120' fill='none' stroke='url(%23glow)' stroke-width='16' stroke-linecap='round' filter='url(%23neon)' /%3E%3Ccircle cx='240' cy='250' r='12' fill='%233b82f6' filter='url(%23neon)' /%3E%3Ccircle cx='420' cy='120' r='16' fill='%2310b981' filter='url(%23neon)' /%3E%3Cpath d='M420 60 L430 100 L470 110 L430 120 L420 160 L410 120 L370 110 L410 100 Z' fill='white' filter='url(%23neon)' /%3E%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%230f172a;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%231e293b;stop-opacity:1' /%3E%3C/linearGradient%3E%3ClinearGradient id='glow' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' style='stop-color:%233b82f6;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2310b981;stop-opacity:1' /%3E%3C/linearGradient%3E%3Cfilter id='neon'%3E%3CfeGaussianBlur stdDeviation='2.5' result='coloredBlur'/%3E%3CfeMerge%3E%3CfeMergeNode in='coloredBlur'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E%3C/filter%3E%3C/defs%3E%3Crect width='512' height='512' rx='100' fill='url(%23bg)'/%3E%3Crect x='100' y='300' width='60' height='100' rx='8' fill='%23334155' /%3E%3Crect x='190' y='220' width='60' height='180' rx='8' fill='%23475569' /%3E%3Crect x='280' y='160' width='60' height='240' rx='8' fill='%2364748b' /%3E%3Cpath d='M80 350 Q 200 350, 240 250 T 420 120' fill='none' stroke='url(%23glow)' stroke-width='16' stroke-linecap='round' filter='url(%23neon)' /%3E%3Ccircle cx='240' cy='250' r='12' fill='%233b82f6' filter='url(%23neon)' /%3E%3Ccircle cx='420' cy='120' r='16' fill='%2310b981' filter='url(%23neon)' /%3E%3Cpath d='M420 60 L430 100 L470 110 L430 120 L420 160 L410 120 L370 110 L410 100 Z' fill='white' filter='url(%23neon)' /%3E%3C/svg%3E",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230f172a'/%3E%3Cpath d='M80 350 Q 200 350, 240 250 T 420 120' fill='none' stroke='%2310b981' stroke-width='20' /%3E%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230f172a'/%3E%3Cpath d='M80 350 Q 200 350, 240 250 T 420 120' fill='none' stroke='%2310b981' stroke-width='20' /%3E%3C/svg%3E",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ],
   "screenshots": [
     {
-       "src": "/icons/icon-512x512.png",
-       "sizes": "512x512",
-       "type": "image/png",
+       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 720'%3E%3Crect width='1280' height='720' fill='%230f172a'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='64' text-anchor='middle'%3ETRADEMIND DASHBOARD%3C/text%3E%3C/svg%3E",
+       "sizes": "1280x720",
+       "type": "image/svg+xml",
        "form_factor": "wide",
        "label": "Dashboard"
     },
     {
-       "src": "/icons/icon-512x512.png",
-       "sizes": "512x512",
-       "type": "image/png",
+       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 720 1280'%3E%3Crect width='720' height='1280' fill='%230f172a'/%3E%3Ctext x='50%25' y='50%25' fill='white' font-size='64' text-anchor='middle'%3EMOBILE VIEW%3C/text%3E%3C/svg%3E",
+       "sizes": "720x1280",
+       "type": "image/svg+xml",
        "form_factor": "narrow",
        "label": "Mobile View"
     }

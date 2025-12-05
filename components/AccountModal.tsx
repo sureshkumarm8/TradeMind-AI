@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, SyncStatus } from '../types';
 import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw, Trash2, Share2, Eye, EyeOff } from 'lucide-react';
+import { shareBackupData, getBackupObject, exportToJSON } from '../services/dataService'; // Import shareBackupData
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -32,6 +33,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [scriptTimeout, setScriptTimeout] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   // Check if running in a Sandbox/Preview environment
@@ -146,6 +148,29 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
           alert("Could not read clipboard. Please paste manually.");
       }
   };
+
+  const handleShareData = async () => {
+    // We need trades and strategy from local storage or props, but AccountModal 
+    // doesn't have trades/strategy prop. 
+    // However, onExportJSON uses `exportToJSON(trades, strategyProfile)` passed as prop.
+    // So we need a similar prop `onShareData` or reuse `onExportJSON` if we refactor App.tsx.
+    // Given the props, we can't directly access trades here.
+    // We should probably rely on onExportJSON to be the trigger, but AccountModal UI
+    // needs a specific Share button.
+    // For now, let's assume we can fetch from localStorage as a fallback since App.tsx
+    // syncs to localStorage.
+    
+    setIsSharing(true);
+    try {
+        const trades = JSON.parse(localStorage.getItem('tradeMind_trades') || '[]');
+        const strategy = JSON.parse(localStorage.getItem('tradeMind_strategy') || '{}');
+        await shareBackupData(trades, strategy);
+    } catch (e) {
+        alert("Failed to share data.");
+    } finally {
+        setIsSharing(false);
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto pb-12 animate-fade-in-up">
@@ -307,10 +332,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
                                 <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Download size={14} className="mr-2"/> Backup Data</h5>
-                                <div className="flex gap-2">
-                                    <button onClick={onExportCSV} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To Excel</button>
-                                    <button onClick={onExportJSON} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To JSON</button>
+                                <div className="flex gap-2 mb-2">
+                                    <button onClick={onExportCSV} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600 flex items-center justify-center"><FileSpreadsheet size={12} className="mr-1"/> CSV</button>
+                                    <button onClick={onExportJSON} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600 flex items-center justify-center"><FileJson size={12} className="mr-1"/> JSON</button>
                                 </div>
+                                <button onClick={handleShareData} disabled={isSharing} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600 flex items-center justify-center disabled:opacity-50">
+                                   {isSharing ? <Loader2 size={12} className="animate-spin mr-1"/> : <Share2 size={12} className="mr-1"/>} Share File
+                                </button>
                             </div>
                             <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
                                 <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Upload size={14} className="mr-2"/> Restore Data</h5>

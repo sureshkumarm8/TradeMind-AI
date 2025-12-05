@@ -499,7 +499,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                   <Calculator size={14} className="mr-2"/> Trade Telemetry
                </h3>
 
-               {/* Prices Grid */}
+               {/* Prices Grid - REFACTORED FOR BETTER LAYOUT */}
                <div className="grid grid-cols-2 md:grid-cols-12 gap-4 mb-6">
                   {/* Nifty Spot */}
                   <div className="col-span-1 md:col-span-3">
@@ -512,19 +512,19 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                   </div>
 
                   {/* Premium */}
-                  <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Entry Price ₹</label>
+                  <div className="col-span-1 md:col-span-2">
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Entry ₹</label>
                       <input type="number" step="0.05" name="entryPrice" required value={formData.entryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
                   </div>
-                  <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Exit Price ₹</label>
+                  <div className="col-span-1 md:col-span-2">
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Exit ₹</label>
                       <input type="number" step="0.05" name="exitPrice" value={formData.exitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
                   </div>
                   
-                  {/* Quantity */}
-                  <div className="col-span-2 md:col-span-12 mt-2">
-                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
-                       <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-lg font-mono font-bold text-white focus:border-indigo-500 outline-none" />
+                  {/* Quantity - NOW INLINE */}
+                  <div className="col-span-2 md:col-span-2">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qty</label>
+                       <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono font-bold focus:border-indigo-500 outline-none" />
                   </div>
                </div>
 
