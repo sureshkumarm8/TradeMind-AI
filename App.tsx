@@ -53,6 +53,7 @@ const App: React.FC = () => {
   const [driveFileId, setDriveFileId] = useState<string | null>(null);
   const [isDriveInitialized, setIsDriveInitialized] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null); 
+  const [authError, setAuthError] = useState<string | null>(null); // New state for login errors
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
@@ -91,9 +92,12 @@ const App: React.FC = () => {
   // Initialize Google Drive Client if ID exists
   useEffect(() => {
      if (googleClientId && !isDriveInitialized) {
+        setAuthError(null);
         initGoogleDrive(googleClientId, (success) => {
              if(success) {
                  setIsDriveInitialized(true);
+             } else {
+                 setAuthError("Failed to initialize Google API. Check Client ID.");
              }
         });
      }
@@ -167,13 +171,15 @@ const App: React.FC = () => {
   const handleSaveSettings = () => {
       localStorage.setItem('tradeMind_apiKey', apiKey);
       localStorage.setItem('tradeMind_googleClientId', googleClientId);
+      setAuthError(null);
       getDailyCoachTip(apiKey).then(setDailyTip);
       alert("Config Saved!");
   };
 
   const handleConnectDrive = async () => {
+      setAuthError(null);
       if (!isDriveInitialized) {
-          alert("Google Client not ready. Please check your Client ID in the Config tab.");
+          setAuthError("Google Client not ready. Please check your Client ID in the Config tab.");
           // Attempt re-init?
           initGoogleDrive(googleClientId, (s) => setIsDriveInitialized(s));
           return;
@@ -198,7 +204,7 @@ const App: React.FC = () => {
              setSyncStatus(SyncStatus.SYNCED);
           } else {
              setSyncStatus(SyncStatus.ERROR);
-             alert("Sync initialization failed. Check console.");
+             setAuthError("Sync initialization failed. Could not create/read backup file.");
           }
 
       } catch (e: any) {
@@ -208,7 +214,7 @@ const App: React.FC = () => {
           }
           console.error("Drive Connect Error", e);
           setSyncStatus(SyncStatus.ERROR);
-          alert(`Failed to connect: ${e.message || 'Unknown Error'}.`);
+          setAuthError(e.message || JSON.stringify(e));
       }
   };
 
@@ -216,6 +222,7 @@ const App: React.FC = () => {
       setUserProfile(null);
       setSyncStatus(SyncStatus.OFFLINE);
       setDriveFileId(null);
+      setAuthError(null);
       localStorage.removeItem('tradeMind_userProfile');
   }
 
@@ -250,6 +257,12 @@ const App: React.FC = () => {
     const updatedTrade = { ...trade, aiFeedback: feedback };
     setTrades(prev => prev.map(t => t.id === trade.id ? updatedTrade : t));
     setAnalyzingTradeId(null);
+  };
+
+  const handleDeleteAiAnalysis = (tradeId: string) => {
+     if (window.confirm("Remove AI feedback for this trade?")) {
+         setTrades(prev => prev.map(t => t.id === tradeId ? { ...t, aiFeedback: undefined } : t));
+     }
   };
   
   const handleImportTrades = (importedTrades: Trade[]) => {
@@ -383,7 +396,7 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto animate-fade-in-up">
           {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
           {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey}/>}
-          {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId}/>}
+          {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId}/>}
           {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy}/>}
           {view === 'account' && (
               <AccountModal 
@@ -391,6 +404,7 @@ const App: React.FC = () => {
                 onClose={() => {}} 
                 userProfile={userProfile}
                 syncStatus={syncStatus}
+                authError={authError}
                 onConnect={handleConnectDrive}
                 onLogout={handleLogout}
                 apiKey={apiKey}

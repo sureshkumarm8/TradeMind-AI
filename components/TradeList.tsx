@@ -12,21 +12,33 @@ interface TradeListProps {
   onEdit: (trade: Trade) => void;
   onDelete: (id: string) => void;
   onAnalyze: (trade: Trade) => void;
+  onDeleteAiAnalysis?: (id: string) => void;
   onImport: (trades: Trade[]) => void;
   analyzingTradeId: string | null;
   readOnly?: boolean;
 }
 
-const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onImport, analyzingTradeId, readOnly = false }) => {
+const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onDeleteAiAnalysis, onImport, analyzingTradeId, readOnly = false }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dailyAnalysis, setDailyAnalysis] = useState<Record<string, string>>({});
   const [analyzingDay, setAnalyzingDay] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'week'>('list');
   const [currentDate, setCurrentDate] = useState(new Date()); // For Calendar/Week navigation
+  
+  // Track folded/collapsed AI Analysis sections
+  const [collapsedAi, setCollapsedAi] = useState<Set<string>>(new Set());
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
+  };
+
+  const toggleAiFold = (id: string) => {
+      const newSet = new Set(collapsedAi);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setCollapsedAi(newSet);
   };
 
   const sortedTrades = [...trades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -112,7 +124,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   }
 
   // --- Render AI Feedback UI (Prop Desk Style) ---
-  const renderAiFeedback = (feedbackString: string) => {
+  const renderAiFeedback = (feedbackString: string, isFolded: boolean) => {
     if (!feedbackString) return null;
 
     let data: AiAnalysisResponse;
@@ -136,6 +148,22 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     };
     
     const gradeStyle = getGradeColor(data.grade);
+
+    if (isFolded) {
+        return (
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                     <span className={`text-xs font-black uppercase px-2 py-0.5 rounded border ${gradeStyle}`}>
+                        Grade: {data.grade}
+                     </span>
+                     <span className="text-xs text-slate-400 font-medium truncate max-w-[200px] md:max-w-md">
+                        {data.marketTrend} • {data.strategyAudit.rulesFollowed ? 'Rules OK' : 'Rules Broken'}
+                     </span>
+                </div>
+                <span className="text-[10px] text-slate-500 uppercase font-bold hidden sm:block">Click chevron to expand</span>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden shadow-inner">
@@ -507,6 +535,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                  <div className="space-y-3 pl-2 md:pl-4 border-l-2 border-slate-800">
                    {dayTrades.map(trade => {
                     const aiBadge = getAiGrade(trade.aiFeedback);
+                    const isAiFolded = collapsedAi.has(trade.id);
                     
                     return (
                     <div key={trade.id} className={`bg-slate-800 rounded-xl border border-slate-700 overflow-hidden transition-all duration-200 hover:border-slate-500 hover:shadow-lg group relative ${trade.outcome === TradeOutcome.WIN ? 'border-l-4 border-l-emerald-500' : trade.outcome === TradeOutcome.LOSS ? 'border-l-4 border-l-red-500' : ''}`}>
@@ -740,15 +769,39 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                    <span className="font-bold text-xs uppercase tracking-wide">Coach's Reality Check</span>
                                 </div>
                                 
-                                {!trade.aiFeedback && !readOnly && analyzingTradeId !== trade.id && (
-                                  <button 
-                                    onClick={() => onAnalyze(trade)}
-                                    disabled={!!analyzingTradeId}
-                                    className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-900/20"
-                                  >
-                                    Run Reality Check
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    {!trade.aiFeedback && !readOnly && analyzingTradeId !== trade.id && (
+                                        <button 
+                                            onClick={() => onAnalyze(trade)}
+                                            disabled={!!analyzingTradeId}
+                                            className="text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-900/20"
+                                        >
+                                            Run Check
+                                        </button>
+                                    )}
+
+                                    {/* Fold / Delete Actions */}
+                                    {trade.aiFeedback && (
+                                        <>
+                                            {!readOnly && onDeleteAiAnalysis && (
+                                                <button 
+                                                    onClick={() => onDeleteAiAnalysis(trade.id)}
+                                                    className="p-1.5 hover:bg-red-900/20 text-slate-500 hover:text-red-400 rounded-lg transition"
+                                                    title="Delete Analysis"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            )}
+                                            <button 
+                                                onClick={() => toggleAiFold(trade.id)}
+                                                className="p-1.5 hover:bg-slate-800 text-slate-500 hover:text-white rounded-lg transition"
+                                                title={isAiFolded ? "Expand" : "Collapse"}
+                                            >
+                                                {isAiFolded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
                              </div>
                              
                              {/* Analysis Content or Thinking State */}
@@ -763,8 +816,8 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Verifying Nifty Spot vs Entry</p>
                                     </div>
                                  ) : trade.aiFeedback ? (
-                                    <div className="p-2">
-                                       {renderAiFeedback(trade.aiFeedback)}
+                                    <div className="p-2 animate-fade-in">
+                                       {renderAiFeedback(trade.aiFeedback, isAiFolded)}
                                     </div>
                                  ) : (
                                     <div className="p-6 text-center">

@@ -63,7 +63,21 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       - Result: ${trade.outcome} (PnL: ₹${trade.pnl})
       - Logic: "${trade.entryReason}"
       
-      Output strict JSON. Do not output markdown code blocks.
+      Output strict JSON format ONLY. Do not output markdown code blocks.
+      
+      Expected JSON Structure:
+      {
+        "grade": "Letter grade A, B, C, D, F based on timing and trend alignment",
+        "gradeColor": "green, yellow, or red",
+        "marketTrend": "Short phrase describing Nifty action during trade window (e.g. 'Strong Bullish Trend', 'Choppy Range')",
+        "realityCheck": "Direct comparison of User Entry vs Actual Market Price Action found via Search",
+        "strategyAudit": {
+            "timing": "Early, Late, or Perfect",
+            "direction": "With Trend or Counter Trend",
+            "rulesFollowed": true or false
+        },
+        "coachCommand": "One specific, actionable command for the next trade."
+      }
     `;
     
     const parts: any[] = [{ text: promptText }];
@@ -81,26 +95,6 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
     }
 
-    // Define strict schema for UI consistency
-    const responseSchema = {
-      type: Type.OBJECT,
-      properties: {
-        grade: { type: Type.STRING, description: "Letter grade A, B, C, D, F based on timing and trend alignment" },
-        gradeColor: { type: Type.STRING, description: "Color suggestion: green, yellow, red" },
-        marketTrend: { type: Type.STRING, description: "Short phrase describing Nifty action during trade window (e.g. 'Strong Bullish Trend', 'Choppy Range')" },
-        realityCheck: { type: Type.STRING, description: "Direct comparison of User Entry vs Actual Market Price Action" },
-        strategyAudit: {
-           type: Type.OBJECT,
-           properties: {
-              timing: { type: Type.STRING, description: "Early, Late, or Perfect" },
-              direction: { type: Type.STRING, description: "With Trend or Counter Trend" },
-              rulesFollowed: { type: Type.BOOLEAN, description: "Did they follow their system rules?" }
-           }
-        },
-        coachCommand: { type: Type.STRING, description: "One specific, actionable command for the next trade." }
-      }
-    };
-
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
       contents: { parts },
@@ -108,22 +102,27 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         tools: [{ googleSearch: {} }], // Enable Grounding
         systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search. Return strictly valid JSON.",
         temperature: 0.3,
-        responseMimeType: "application/json",
-        responseSchema: responseSchema
+        // NOTE: responseMimeType and responseSchema CANNOT be used with googleSearch tool.
       }
     });
 
-    let jsonResult = response.text;
+    let jsonResult = response.text || "{}";
+    
+    // Clean markdown if present (e.g. ```json ... ```)
+    if (jsonResult.includes('```')) {
+        jsonResult = jsonResult.replace(/```json/g, '').replace(/```/g, '');
+    }
     
     let resultObj: any = {};
     try {
-        resultObj = JSON.parse(jsonResult || "{}");
+        resultObj = JSON.parse(jsonResult);
     } catch(e) {
+        console.error("JSON Parse Error", e, jsonResult);
         return JSON.stringify({
             grade: "?", 
             gradeColor: "gray",
             marketTrend: "Analysis Error", 
-            realityCheck: response.text || "Could not parse analysis.", 
+            realityCheck: "AI returned invalid format. Please try again.", 
             strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
             coachCommand: "Try again."
         });

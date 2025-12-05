@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus } from 'lucide-react';
 
 interface AccountSettingsProps {
   isOpen: boolean; 
   onClose: () => void;
   userProfile: UserProfile | null;
   syncStatus: SyncStatus;
+  authError?: string | null;
   onConnect: () => void;
   onLogout: () => void;
   apiKey: string;
@@ -21,20 +22,36 @@ interface AccountSettingsProps {
 }
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
-  userProfile, syncStatus, onConnect, onLogout,
+  userProfile, syncStatus, authError, onConnect, onLogout,
   apiKey, setApiKey, googleClientId, setGoogleClientId, onSaveSettings,
   onExportJSON, onExportCSV, onImportClick
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'config'>('profile');
-  const [showConfig, setShowConfig] = useState(false);
   
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  const isSandbox = currentOrigin === 'null' || currentOrigin.includes('storagerelay') || currentOrigin.includes('webcontainer');
+  // Check if running in a Sandbox/Preview environment (Common cause of Auth errors)
+  const isSandbox = currentOrigin === 'null' || 
+                    currentOrigin.includes('storagerelay') || 
+                    currentOrigin.includes('webcontainer') || 
+                    currentOrigin.includes('stackblitz') ||
+                    currentOrigin.includes('codesandbox');
 
   const copyOrigin = () => {
       navigator.clipboard.writeText(currentOrigin);
       alert("URL copied! Paste into 'Authorized JavaScript Origins' in Google Cloud Console.");
   };
+
+  const getErrorDiagnosis = (err: string) => {
+      if (err.includes('idpiframe_initialization_failed') || err.includes('origin_mismatch')) {
+          return "Origin Mismatch. Your current URL is not whitelisted in Google Cloud Console.";
+      }
+      if (err.includes('access_denied') || err.includes('not_authorized') || err.includes('403')) {
+          return "TEST USER REQUIRED. Your app is in 'Testing' mode. You MUST add your email to the 'Test Users' list in Google Cloud Console.";
+      }
+      return err;
+  }
+
+  const isAccessDenied = authError && (authError.includes('access_denied') || authError.includes('not_authorized') || authError.includes('403'));
 
   return (
     <div className="max-w-4xl mx-auto pb-12 animate-fade-in-up">
@@ -67,12 +84,53 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <div className="mb-6 bg-amber-900/20 border border-amber-500/30 p-4 rounded-xl flex items-start gap-3 relative z-10">
                             <AlertTriangle className="text-amber-500 shrink-0 mt-1" size={20} />
                             <div>
-                                <h5 className="font-bold text-amber-400 text-sm uppercase">Sandbox Detected</h5>
+                                <h5 className="font-bold text-amber-400 text-sm uppercase">Preview Environment Detected</h5>
                                 <p className="text-xs text-amber-200/70 mt-1 leading-relaxed">
-                                    Google Login is blocked in preview windows. 
-                                    <br/><strong>Fix:</strong> Open this app in a New Tab (Full Browser Window) to log in.
+                                    Google Login blocks preview URLs (like <code>storagerelay://</code>).
+                                    <br/><strong>Fix:</strong> Open your Vercel URL in a new browser tab to sign in properly.
                                 </p>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Auth Error Diagnostic Alert */}
+                    {authError && (
+                        <div className="mb-6 bg-red-900/20 border border-red-500/30 p-4 rounded-xl flex flex-col gap-3 relative z-10 animate-fade-in">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="text-red-500 shrink-0 mt-1" size={20} />
+                                <div>
+                                    <h5 className="font-bold text-red-400 text-sm uppercase">Connection Failed</h5>
+                                    <p className="text-sm text-white mt-1 leading-relaxed font-bold">
+                                        {getErrorDiagnosis(authError)}
+                                    </p>
+                                    <div className="mt-2 text-[10px] text-red-400/50 break-all border-t border-red-500/20 pt-2 font-mono">
+                                        Raw Error: {authError}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Smart Action Button for Access Denied */}
+                            {isAccessDenied && (
+                                <div className="ml-8 bg-slate-900/50 border border-red-500/30 p-3 rounded-lg">
+                                    <h6 className="text-xs font-bold text-red-300 uppercase mb-2 flex items-center">
+                                        <UserPlus size={14} className="mr-2"/> How to Fix:
+                                    </h6>
+                                    <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1">
+                                        <li>Go to <strong>Google Cloud Console</strong> &gt; <strong>OAuth Consent Screen</strong>.</li>
+                                        <li>Scroll down to <strong>Test users</strong>.</li>
+                                        <li>Click <strong>+ ADD USERS</strong> and enter your email.</li>
+                                        <li>Save and try signing in again.</li>
+                                    </ol>
+                                    <a 
+                                        href="https://console.cloud.google.com/apis/credentials/consent" 
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="mt-3 inline-flex items-center text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded transition"
+                                    >
+                                        Open Google Console <ExternalLink size={12} className="ml-2"/>
+                                    </a>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -103,10 +161,16 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 Sign in to automatically back up your trades and sync across your phone and desktop.
                             </p>
                             
-                            <button onClick={onConnect} className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-lg font-bold flex items-center justify-center transition shadow-2xl shadow-blue-900/40 mx-auto hover:-translate-y-1 w-full md:w-auto">
-                                <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6 mr-3 bg-white rounded-full p-0.5" alt="G"/> 
-                                Sign in with Google
-                            </button>
+                            {isSandbox ? (
+                                <button disabled className="px-8 py-4 bg-slate-700 text-slate-400 rounded-xl text-lg font-bold flex items-center justify-center mx-auto w-full md:w-auto cursor-not-allowed border border-slate-600">
+                                    <AlertTriangle size={20} className="mr-2" /> Login Disabled in Preview
+                                </button>
+                            ) : (
+                                <button onClick={onConnect} className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-lg font-bold flex items-center justify-center transition shadow-2xl shadow-blue-900/40 mx-auto hover:-translate-y-1 w-full md:w-auto">
+                                    <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6 mr-3 bg-white rounded-full p-0.5" alt="G"/> 
+                                    Sign in with Google
+                                </button>
+                            )}
 
                             {!googleClientId && (
                                 <p className="text-xs text-amber-500 mt-4 font-bold bg-amber-900/10 p-2 rounded inline-block">
@@ -119,7 +183,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                     {/* Data Management Section (Always Visible) */}
                     <div className="mt-12 pt-8 border-t border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
                         <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                             <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Download size={14} className="mr-2"/> Local Export</h5>
+                             <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Download size={14} className="mr-2"/> Local Export (Fallback)</h5>
                              <div className="flex gap-2">
                                 <button onClick={onExportCSV} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To Excel</button>
                                 <button onClick={onExportJSON} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">To JSON</button>
@@ -175,6 +239,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             <li>Create <strong>OAuth 2.0 Client ID</strong> (Web App) in Google Console.</li>
                             <li>Add the exact URL below to <strong>Authorized JavaScript Origins</strong>.</li>
                             <li><strong>Important:</strong> Remove any trailing slash (e.g. <code>.app</code> not <code>.app/</code>).</li>
+                            <li>Add your email to <strong>Test Users</strong> in OAuth Consent Screen.</li>
                             <li>Wait <strong>5-10 minutes</strong> for Google changes to propagate.</li>
                         </ul>
                         <div className="flex items-center gap-2">
