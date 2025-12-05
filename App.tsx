@@ -9,7 +9,7 @@ import AccountModal from './components/AccountModal'; // Now acts as AccountPage
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles } from 'lucide-react';
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
@@ -313,7 +313,8 @@ const App: React.FC = () => {
       }
       
     } catch (error) {
-      alert("Import Failed: " + error);
+      console.error(error);
+      notify("Import Failed: " + (error instanceof Error ? error.message : "Unknown error"), 'error');
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -403,13 +404,44 @@ const App: React.FC = () => {
          </div>
          
          <div className="hidden md:block mt-auto space-y-4">
-             <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                <div className="flex items-center gap-2 mb-2 text-amber-400"><BrainCircuit size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">Coach's Tip</span></div>
-                <p className="text-xs text-slate-400 italic leading-relaxed">"{dailyTip || 'Loading tip...'}"</p>
+             {/* 🔮 BEAUTIFIED COACH'S TIP CARD */}
+             <div className="relative group cursor-default">
+                 {/* Glowing Background */}
+                 <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
+                 
+                 <div className="relative p-5 bg-slate-950 rounded-xl border border-slate-800 shadow-xl">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20">
+                            <Sparkles size={12} className="group-hover:animate-spin-slow" />
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-indigo-300 transition-colors">Daily Wisdom</span>
+                    </div>
+
+                    {/* The Quote */}
+                    <blockquote className="relative mb-2">
+                        <span className="absolute -top-3 -left-1 text-4xl text-slate-800 font-serif leading-none select-none opacity-50">“</span>
+                        <p className="text-xs font-medium text-slate-300 leading-relaxed italic pl-2 relative z-10">
+                            {dailyTip || "Patience is the sniper's greatest weapon."}
+                        </p>
+                    </blockquote>
+
+                    {/* Mini Footer */}
+                    <div className="pt-3 border-t border-slate-900 flex justify-between items-center">
+                        <span className="text-[9px] text-slate-600 font-mono">AI Coach v1.0</span>
+                        <div className="flex space-x-0.5">
+                            <div className="w-1 h-1 rounded-full bg-emerald-500/50"></div>
+                            <div className="w-1 h-1 rounded-full bg-emerald-500/30"></div>
+                            <div className="w-1 h-1 rounded-full bg-emerald-500/10"></div>
+                        </div>
+                    </div>
+                 </div>
              </div>
              
-             <div className="pt-3 border-t border-slate-800">
-                <div className="text-[10px] text-center text-slate-600">TradeMind.AI v1.0</div>
+             <div className="pt-2">
+                <div className="text-[10px] text-center text-slate-700 font-medium hover:text-slate-600 transition">
+                    TradeMind.AI © 2024
+                </div>
              </div>
          </div>
       </nav>

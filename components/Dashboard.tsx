@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend, ReferenceLine } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, OptionType, UserSettings, PlaybookStat } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, Calendar, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, Clock, Flame, ShieldCheck, Zap, HeartPulse, Info, Calculator, AlertTriangle, ChevronDown, ChevronUp, Share2, Book, Sword, Dice6 } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat } from '../types';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -187,24 +187,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
       });
   }, [trades]);
 
-  const dayOfWeekData = useMemo(() => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const pnlByDay = new Array(7).fill(0);
-    
-    trades.forEach(t => {
-       if (t.outcome !== TradeOutcome.OPEN) {
-          const dayIndex = new Date(t.date).getDay();
-          pnlByDay[dayIndex] += (t.pnl || 0);
-       }
-    });
-
-    return [1, 2, 3, 4, 5].map(i => ({
-      day: days[i],
-      index: i,
-      pnl: pnlByDay[i]
-    }));
-  }, [trades]);
-
   const handleGenerateReport = async () => {
     setIsGeneratingReport(true);
     setAiReport(null);
@@ -249,8 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
   const filteredTrades = useMemo(() => {
      if (!selectedFilter) return [];
      const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
-     const sortedTrades = [...closedTrades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
+     
      let result = [];
      switch (selectedFilter.type) {
         case 'all_closed': result = closedTrades; break;
@@ -313,6 +294,22 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
       onUpdatePreMarket(tempPreMarket);
       setIsEditingPreMarket(false);
   }
+
+  // Format Max Loss / Max Win Display
+  const renderExtremeTrade = (pnl: number, isBest: boolean) => {
+      if (pnl === 0 && trades.length === 0) return { label: 'No Data', value: '₹0', color: 'text-slate-500' };
+      
+      const isPositive = pnl >= 0;
+      // If it's the "Worst Trade" card but value is Positive, it means the trader has no losses (Lowest Win)
+      const label = isBest ? 'Max Win' : (isPositive ? 'Lowest Win' : 'Max Loss');
+      const color = isPositive ? 'text-emerald-400' : 'text-red-400';
+      const valueStr = `${isPositive ? '+' : '-'}₹${Math.abs(pnl).toFixed(0)}`;
+      
+      return { label, value: valueStr, color };
+  };
+
+  const bestTradeDisplay = renderExtremeTrade(stats.bestTrade, true);
+  const worstTradeDisplay = renderExtremeTrade(stats.worstTrade, false);
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
@@ -461,7 +458,9 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                     {stats.totalPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
                     </span>
                 </div>
-                <p className={`text-2xl lg:text-3xl font-black font-mono relative z-10 ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{stats.totalPnL.toFixed(2)}</p>
+                <p className={`text-2xl lg:text-3xl font-black font-mono relative z-10 ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {stats.totalPnL >= 0 ? '+' : ''}₹{stats.totalPnL.toFixed(2)}
+                </p>
                 <div className="flex justify-between items-center mt-3 text-[10px] font-medium text-slate-500 uppercase relative z-10">
                     <span>{stats.totalTrades} Trades</span>
                     <span className="group-hover:text-emerald-400 transition-colors flex items-center">View Ledger <ArrowRight size={10} className="ml-1"/></span>
@@ -512,12 +511,12 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                 </div>
                 <div className="flex items-end justify-between gap-2 relative z-10 mt-2">
                     <button onClick={() => setSelectedFilter({ type: 'best', value: 'Best Trade' })} className="flex-1 bg-emerald-500/5 hover:bg-emerald-500/20 p-2 rounded-lg border border-emerald-500/20 transition text-left group/btn">
-                        <div className="text-[10px] text-emerald-500/70 font-bold uppercase mb-1">Max Win</div>
-                        <div className="text-sm font-bold text-emerald-400">₹{stats.bestTrade.toFixed(0)}</div>
+                        <div className="text-[10px] text-emerald-500/70 font-bold uppercase mb-1">{bestTradeDisplay.label}</div>
+                        <div className={`text-sm font-bold ${bestTradeDisplay.color}`}>{bestTradeDisplay.value}</div>
                     </button>
                     <button onClick={() => setSelectedFilter({ type: 'worst', value: 'Worst Trade' })} className="flex-1 bg-red-500/5 hover:bg-red-500/20 p-2 rounded-lg border border-red-500/20 transition text-right group/btn">
-                        <div className="text-[10px] text-red-500/70 font-bold uppercase mb-1">Max Loss</div>
-                        <div className="text-sm font-bold text-red-400">-₹{Math.abs(stats.worstTrade).toFixed(0)}</div>
+                        <div className="text-[10px] text-red-500/70 font-bold uppercase mb-1">{worstTradeDisplay.label}</div>
+                        <div className={`text-sm font-bold ${worstTradeDisplay.color}`}>{worstTradeDisplay.value}</div>
                     </button>
                 </div>
                 </div>
@@ -779,7 +778,9 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                         <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800 sticky top-0"><tr><th className="px-6 py-4 font-bold tracking-wider">Date</th><th className="px-6 py-4 font-bold tracking-wider">Instrument</th><th className="px-6 py-4 font-bold tracking-wider text-right">PnL</th></tr></thead>
                         <tbody className="divide-y divide-slate-800/50">
                             {filteredTrades.map(t => (
-                                <tr key={t.id} className="hover:bg-slate-800/30 transition-colors"><td className="px-6 py-4 text-white font-mono">{t.date}</td><td className="px-6 py-4 text-indigo-300 font-bold">{t.instrument}</td><td className={`px-6 py-4 text-right font-mono font-bold ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{t.pnl?.toFixed(0)}</td></tr>
+                                <tr key={t.id} className="hover:bg-slate-800/30 transition-colors"><td className="px-6 py-4 text-white font-mono">{t.date}</td><td className="px-6 py-4 text-indigo-300 font-bold">{t.instrument}</td><td className={`px-6 py-4 text-right font-mono font-bold ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {t.pnl && t.pnl > 0 ? '+' : ''}₹{t.pnl?.toFixed(0)}
+                                </td></tr>
                             ))}
                         </tbody>
                     </table>

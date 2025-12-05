@@ -1,4 +1,3 @@
-
 import { Trade, TradeDirection, TradeOutcome, OptionType, StrategyProfile } from '../types';
 
 export const exportToJSON = (trades: Trade[], strategy?: StrategyProfile) => {
@@ -174,7 +173,8 @@ const parseCSV = (csvText: string): Trade[] => {
       // Helper to strictly parse numbers (prevents string concatenation bugs in Dashboard)
       const num = (val: string, def: number = 0): number => {
           if (!val || val.trim() === '') return def;
-          const cleanVal = val.replace(/,/g, ''); // Remove commas if any
+          // AGGRESSIVE CLEANUP: Remove everything except numbers, dot, and minus
+          const cleanVal = val.replace(/[^0-9.-]/g, '');
           const n = parseFloat(cleanVal);
           return isNaN(n) ? def : n;
       };

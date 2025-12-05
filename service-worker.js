@@ -1,4 +1,5 @@
-const CACHE_NAME = 'trademind-app-v6';
+
+const CACHE_NAME = 'trademind-app-v7';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -38,13 +39,20 @@ self.addEventListener('fetch', event => {
         if (networkResp && networkResp.status === 200 && networkResp.type === 'basic') {
            const cache = await caches.open(CACHE_NAME);
            cache.put('/index.html', networkResp.clone());
+           cache.put('/', networkResp.clone()); // Explicitly cache root for PWA start_url check
         }
         return networkResp;
       } catch (error) {
         // 2. Network failed? Serve cached index.html (SPA Fallback)
         const cache = await caches.open(CACHE_NAME);
+        // Try exact match first
         const cachedIndex = await cache.match('/index.html');
-        return cachedIndex || Response.error();
+        if (cachedIndex) return cachedIndex;
+        // Try root
+        const cachedRoot = await cache.match('/');
+        if (cachedRoot) return cachedRoot;
+        
+        return Response.error();
       }
     })());
     return;

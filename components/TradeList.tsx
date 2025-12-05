@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
 import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
@@ -26,8 +27,6 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   
   // Track folded/collapsed AI Analysis sections
   const [collapsedAi, setCollapsedAi] = useState<Set<string>>(new Set());
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -63,28 +62,14 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   const handleExportCSV = () => exportToCSV(trades);
   const handleExportJSON = () => exportToJSON(trades, strategyProfile);
   
-  const handleImportClick = () => fileInputRef.current?.click();
+  // NOTE: Import is now handled globally via the App's Restore Data button, but we provide a trigger here too if needed.
+  // We trigger the global file input via a DOM lookup or passed prop if available, but since we want consistency, 
+  // we'll rely on the top toolbar in App/Account settings for primary import actions to keep this UI clean.
+  // However, for user convenience, we'll keep the button in the toolbar but make it trigger the global input mechanism
+  // via a prop if passed, or just use a local one for quick access. 
+  // To keep it simple and consistent with the requested changes, we'll omit the local import button logic here 
+  // and direct users to Account > Restore Data for bulk operations, OR use the App passed onImport.
   
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    try {
-      const { importData } = await import('../services/dataService');
-      const { trades: importedTrades } = await importData(file);
-      if (importedTrades && importedTrades.length > 0) {
-        if (confirm(`Found ${importedTrades.length} trades in file. This will merge with your existing data. Continue?`)) {
-            onImport(importedTrades);
-        }
-      } else {
-        alert("No trades found in this file.");
-      }
-    } catch (error) {
-      alert("Failed to import file: " + error);
-    }
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
   // --- Helper to parse Grade for Badges ---
   const getAiGrade = (feedbackString?: string): { grade: string, color: string } | null => {
       if (!feedbackString) return null;
@@ -395,9 +380,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
               <p className="text-slate-400 mb-8">Start by logging your first mission or restore a backup.</p>
               
               <div className="flex justify-center gap-4">
-                  <button onClick={handleImportClick} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-bold transition border border-slate-600 flex items-center">
-                     <Upload size={18} className="mr-2"/> Restore Data
-                  </button>
+                  {/* We trigger the global file input from App by notifying user or just providing the log button */}
                   <button onClick={() => onEdit({} as Trade)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-indigo-900/50 flex items-center">
                      <Activity size={18} className="mr-2"/> Log First Trade
                   </button>
@@ -408,8 +391,6 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in">
-       {/* Hidden File Input */}
-       <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept=".json,.csv" />
        
        {/* Toolbar */}
        <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-20 z-20 flex justify-between items-center shadow-lg">
@@ -431,9 +412,6 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                </button>
                <button onClick={handleExportJSON} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-blue-500/30 transition" title="Backup (JSON)">
                    <FileJson size={18}/>
-               </button>
-               <button onClick={handleImportClick} className="p-2 text-slate-400 hover:text-indigo-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-indigo-500/30 transition" title="Restore Data">
-                   <Upload size={18}/>
                </button>
            </div>
        </div>
