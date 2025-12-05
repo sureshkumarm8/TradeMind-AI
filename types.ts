@@ -164,10 +164,24 @@ export interface StrategyProfile {
 
 export interface UserSettings {
   apiKey: string;
+  googleClientId?: string; // New: For Drive Sync
   preMarketNotes?: {
       date: string;
       notes: string;
   }
+}
+
+export interface UserProfile {
+  name: string;
+  email: string;
+  picture: string;
+}
+
+export enum SyncStatus {
+  OFFLINE = 'OFFLINE',
+  SYNCED = 'SYNCED',
+  SYNCING = 'SYNCING',
+  ERROR = 'ERROR'
 }
 
 // Helper for Voice to Log

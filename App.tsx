@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Trade, StrategyProfile, TradeOutcome } from './types';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
+import AccountModal from './components/AccountModal'; // Now acts as AccountPage
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert } from 'lucide-react';
+import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile } from './services/googleDriveService';
+import { exportToCSV, exportToJSON, importData } from './services/dataService';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User } from 'lucide-react';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
   name: "Intraday Trend System (Template)",
@@ -37,15 +41,23 @@ const DEFAULT_STRATEGY: StrategyProfile = {
 };
 
 const App: React.FC = () => {
-  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [apiKey, setApiKey] = useState<string>('');
   const [preMarketNotes, setPreMarketNotes] = useState<{date: string, notes: string} | undefined>(undefined);
   
-  const [showSettings, setShowSettings] = useState(false);
-  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  // Cloud Sync State
+  const [googleClientId, setGoogleClientId] = useState<string>('');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(SyncStatus.OFFLINE);
+  const [driveFileId, setDriveFileId] = useState<string | null>(null);
+  const [isDriveInitialized, setIsDriveInitialized] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); 
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null); 
+
   // Track specific trade being analyzed instead of global boolean
   const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
   const [dailyTip, setDailyTip] = useState<string>("");
@@ -60,31 +72,54 @@ const App: React.FC = () => {
     const savedStrategy = localStorage.getItem('tradeMind_strategy');
     const savedApiKey = localStorage.getItem('tradeMind_apiKey');
     const savedPreMarket = localStorage.getItem('tradeMind_preMarket');
+    const savedClientId = localStorage.getItem('tradeMind_googleClientId');
+    const savedProfile = localStorage.getItem('tradeMind_userProfile');
     
     if (savedTrades) {
-      try {
-        setTrades(JSON.parse(savedTrades));
-      } catch (e) {
-        console.error("Failed to parse trades:", e);
-      }
+      try { setTrades(JSON.parse(savedTrades)); } catch (e) { console.error(e); }
     }
-    
     if (savedStrategy) {
-      try {
-        setStrategyProfile(JSON.parse(savedStrategy));
-      } catch (e) {
-        console.error("Failed to parse strategy:", e);
-      }
+      try { setStrategyProfile(JSON.parse(savedStrategy)); } catch (e) { console.error(e); }
     }
-
     if (savedApiKey) setApiKey(savedApiKey);
+    if (savedClientId) setGoogleClientId(savedClientId);
     if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
+    if (savedProfile) try { setUserProfile(JSON.parse(savedProfile)); } catch(e) {};
     
   }, []);
 
+  // Initialize Google Drive Client if ID exists
+  useEffect(() => {
+     if (googleClientId && !isDriveInitialized) {
+        initGoogleDrive(googleClientId, (success) => {
+             if(success) {
+                 setIsDriveInitialized(true);
+             }
+        });
+     }
+  }, [googleClientId]);
+
+  // Auto-Sync Logic (Debounced)
+  useEffect(() => {
+     if (syncStatus !== SyncStatus.OFFLINE && driveFileId) {
+         setSyncStatus(SyncStatus.SYNCING);
+         if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+         
+         syncTimeoutRef.current = setTimeout(async () => {
+             try {
+                 await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
+                 setSyncStatus(SyncStatus.SYNCED);
+             } catch(e) {
+                 console.error("Auto Sync Failed", e);
+                 setSyncStatus(SyncStatus.ERROR);
+             }
+         }, 5000); // 5 seconds debounce
+     }
+     return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
+  }, [trades, strategyProfile, preMarketNotes]);
+
   // Check for Tilt Logic whenever trades update
   useEffect(() => {
-     // Logic: If last 2 closed trades were losses within 30 mins, trigger tilt lock
      const closedTrades = trades
         .filter(t => t.outcome !== TradeOutcome.OPEN)
         .sort((a,b) => new Date(b.date + 'T' + b.entryTime).getTime() - new Date(a.date + 'T' + a.entryTime).getTime());
@@ -98,18 +133,16 @@ const App: React.FC = () => {
              const time2 = new Date(`${t2.date}T${t2.exitTime}`).getTime();
              const diffMins = Math.abs(time1 - time2) / 60000;
              
-             // If 2 losses in 30 mins and not yet locked today
              const lockKey = `tilt_lock_${new Date().toDateString()}`;
              if (diffMins < 30 && !sessionStorage.getItem(lockKey)) {
                  setIsTiltLocked(true);
-                 setTiltTimer(60); // 60 seconds breathe time
+                 setTiltTimer(60); 
                  sessionStorage.setItem(lockKey, 'true');
              }
          }
      }
   }, [trades]);
 
-  // Tilt Timer
   useEffect(() => {
       let interval: any;
       if (isTiltLocked && tiltTimer > 0) {
@@ -121,22 +154,70 @@ const App: React.FC = () => {
   }, [isTiltLocked, tiltTimer]);
 
 
-  // Get daily tip after loading key
   useEffect(() => {
      getDailyCoachTip(apiKey).then(setDailyTip);
   }, [apiKey]);
 
-  // Persistence Effects
+  // Persistence Effects (Local)
   useEffect(() => { localStorage.setItem('tradeMind_trades', JSON.stringify(trades)); }, [trades]);
   useEffect(() => { localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile)); }, [strategyProfile]);
   useEffect(() => { if (preMarketNotes) localStorage.setItem('tradeMind_preMarket', JSON.stringify(preMarketNotes)); }, [preMarketNotes]);
+  useEffect(() => { if (userProfile) localStorage.setItem('tradeMind_userProfile', JSON.stringify(userProfile)); }, [userProfile]);
 
-  const handleSaveApiKey = (e: React.FormEvent) => {
-      e.preventDefault();
+  const handleSaveSettings = () => {
       localStorage.setItem('tradeMind_apiKey', apiKey);
-      setShowSettings(false);
+      localStorage.setItem('tradeMind_googleClientId', googleClientId);
       getDailyCoachTip(apiKey).then(setDailyTip);
+      alert("Config Saved!");
   };
+
+  const handleConnectDrive = async () => {
+      if (!isDriveInitialized) {
+          alert("Google Client not ready. Please check your Client ID in the Config tab.");
+          // Attempt re-init?
+          initGoogleDrive(googleClientId, (s) => setIsDriveInitialized(s));
+          return;
+      }
+      try {
+          await loginToGoogle();
+          const profile = await getUserProfile();
+          if (profile) setUserProfile(profile);
+
+          setSyncStatus(SyncStatus.SYNCING);
+          
+          // SILENT SYNC LOGIC
+          // 1. Find or Create File
+          // 2. Decide if we pull (restore) or push (first save)
+          const { data, fileId } = await performInitialSync(trades, strategyProfile, preMarketNotes);
+          
+          if (data && fileId) {
+             setDriveFileId(fileId);
+             if (data.trades) setTrades(data.trades);
+             if (data.strategy) setStrategyProfile(data.strategy);
+             if (data.preMarketNotes) setPreMarketNotes(data.preMarketNotes);
+             setSyncStatus(SyncStatus.SYNCED);
+          } else {
+             setSyncStatus(SyncStatus.ERROR);
+             alert("Sync initialization failed. Check console.");
+          }
+
+      } catch (e: any) {
+          if (e && (e.type === 'popup_closed' || e.type === 'popup_closed_by_user')) {
+              setSyncStatus(SyncStatus.OFFLINE);
+              return;
+          }
+          console.error("Drive Connect Error", e);
+          setSyncStatus(SyncStatus.ERROR);
+          alert(`Failed to connect: ${e.message || 'Unknown Error'}.`);
+      }
+  };
+
+  const handleLogout = () => {
+      setUserProfile(null);
+      setSyncStatus(SyncStatus.OFFLINE);
+      setDriveFileId(null);
+      localStorage.removeItem('tradeMind_userProfile');
+  }
 
   const handleUpdatePreMarket = (notes: string) => {
       setPreMarketNotes({ date: new Date().toISOString().split('T')[0], notes });
@@ -166,7 +247,6 @@ const App: React.FC = () => {
   const handleAnalyzeTrade = async (trade: Trade) => {
     setAnalyzingTradeId(trade.id);
     const feedback = await analyzeTradeWithAI(trade, strategyProfile, apiKey);
-    
     const updatedTrade = { ...trade, aiFeedback: feedback };
     setTrades(prev => prev.map(t => t.id === trade.id ? updatedTrade : t));
     setAnalyzingTradeId(null);
@@ -180,6 +260,26 @@ const App: React.FC = () => {
       });
   };
 
+  const handleGlobalFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { trades: importedTrades, strategy: importedStrategy } = await importData(file);
+      if (importedTrades && importedTrades.length > 0) {
+         if (confirm(`Found ${importedTrades.length} trades. Merge?`)) {
+             handleImportTrades(importedTrades);
+         }
+      }
+      if (importedStrategy && confirm("Found a strategy profile. Update your system?")) {
+          setStrategyProfile(importedStrategy);
+      }
+      alert("Import Successful");
+    } catch (error) {
+      alert("Import Failed: " + error);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleUpdateStrategy = (importedProfile: StrategyProfile) => {
     setStrategyProfile(importedProfile);
   };
@@ -190,6 +290,7 @@ const App: React.FC = () => {
         case 'journal': return 'Trade Journal';
         case 'system': return 'My System';
         case 'new': return editingTrade ? 'Edit Trade' : 'Log Trade';
+        case 'account': return 'Account & Settings';
         default: return 'TradeMind.AI';
      }
   }
@@ -197,7 +298,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 relative">
       
-      {/* 🚨 TILT BREAKER OVERLAY */}
+      {/* Hidden Global Input */}
+      <input type="file" ref={fileInputRef} onChange={handleGlobalFileChange} className="hidden" accept=".json,.csv" />
+
+      {/* Tilt Overlay */}
       {isTiltLocked && (
           <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
               <div className="mb-8 relative">
@@ -208,66 +312,8 @@ const App: React.FC = () => {
               <p className="text-xl text-slate-400 max-w-lg mb-8">
                   You have taken 2 consecutive losses in a short time. Your brain is in fight-or-flight mode. You are <strong>banned</strong> from trading until you calm down.
               </p>
-              <div className="text-6xl font-black font-mono text-indigo-400 mb-8 animate-pulse">
-                  {tiltTimer}s
-              </div>
-              <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">
-                  Breathe In... Breathe Out...
-              </p>
-          </div>
-      )}
-
-      {/* Settings Modal */}
-      {showSettings && (
-          <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-slate-800 w-full max-w-md rounded-2xl border border-slate-700 shadow-2xl overflow-hidden animate-fade-in">
-                  <div className="flex justify-between items-center p-4 border-b border-slate-700 bg-slate-900/50">
-                      <h3 className="font-bold text-white flex items-center"><Settings size={20} className="mr-2"/> App Settings</h3>
-                      <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white transition"><X size={20}/></button>
-                  </div>
-                  <div className="p-6 space-y-6">
-                      <form onSubmit={handleSaveApiKey}>
-                          <div className="flex justify-between items-center mb-2">
-                             <label className="block text-xs font-bold text-slate-400 uppercase">Gemini API Key</label>
-                             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center">
-                                Get Key <ExternalLink size={10} className="ml-1"/>
-                             </a>
-                          </div>
-                          <div className="relative mb-2">
-                            <Key size={16} className="absolute left-3 top-3 text-slate-500"/>
-                            <input 
-                                type="password" 
-                                value={apiKey} 
-                                onChange={(e) => setApiKey(e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"
-                                placeholder="Paste your Google Gemini API Key"
-                            />
-                          </div>
-                          <p className="text-xs text-slate-500 mb-4">
-                              Required for AI features. Stored locally.
-                          </p>
-                          <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-lg transition shadow-lg shadow-indigo-900/20">
-                              Save Key
-                          </button>
-                      </form>
-
-                      <div className="pt-6 border-t border-slate-700">
-                          <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">About Developer</h4>
-                          <div className="bg-slate-900 rounded-lg p-4 border border-slate-700/50">
-                             <div className="flex items-center gap-3 mb-2">
-                                <div className="bg-blue-600/20 p-2 rounded-full text-blue-400"><Code size={18}/></div>
-                                <div>
-                                    <p className="text-sm font-bold text-white">Suresh Kumar M</p>
-                                    <p className="text-xs text-slate-500">Full Stack Developer</p>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-2 text-xs text-slate-400 mt-2">
-                                <Mail size={12}/> sureshkumarm8dev@gmail.com
-                             </div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
+              <div className="text-6xl font-black font-mono text-indigo-400 mb-8 animate-pulse">{tiltTimer}s</div>
+              <p className="text-sm text-slate-500 uppercase tracking-widest font-bold">Breathe In... Breathe Out...</p>
           </div>
       )}
 
@@ -281,65 +327,35 @@ const App: React.FC = () => {
          </div>
 
          <div className="flex md:flex-col w-full justify-around md:justify-start space-x-1 md:space-x-0 md:space-y-1">
-            <button 
-              onClick={() => setView('dashboard')}
-              className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            >
-              <LayoutDashboard size={18} />
-              <span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Dashboard</span>
+            <button onClick={() => setView('dashboard')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <LayoutDashboard size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Dashboard</span>
             </button>
-            
-            <button 
-              onClick={() => setView('journal')}
-              className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'journal' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            >
-              <BookOpen size={18} />
-              <span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Journal</span>
+            <button onClick={() => setView('journal')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'journal' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <BookOpen size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Journal</span>
             </button>
-
-            <button 
-              onClick={() => { setEditingTrade(null); setView('new'); }}
-              className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'new' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            >
-              <PlusCircle size={18} />
-              <span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Log Trade</span>
+            <button onClick={() => { setEditingTrade(null); setView('new'); }} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'new' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <PlusCircle size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Log Trade</span>
             </button>
-
-            <button 
-              onClick={() => setView('system')}
-              className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'system' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-            >
-              <Target size={18} />
-              <span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">My System</span>
+            <button onClick={() => setView('system')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'system' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <Target size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">My System</span>
+            </button>
+            <button onClick={() => setView('account')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'account' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <User size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Account</span>
             </button>
          </div>
          
          <div className="hidden md:block mt-auto space-y-4">
              <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                <div className="flex items-center gap-2 mb-2 text-amber-400">
-                   <BrainCircuit size={14} />
-                   <span className="text-[10px] font-bold uppercase tracking-wider">Coach's Tip</span>
-                </div>
-                <p className="text-xs text-slate-400 italic leading-relaxed">
-                   "{dailyTip || 'Loading tip...'}"
-                </p>
+                <div className="flex items-center gap-2 mb-2 text-amber-400"><BrainCircuit size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">Coach's Tip</span></div>
+                <p className="text-xs text-slate-400 italic leading-relaxed">"{dailyTip || 'Loading tip...'}"</p>
              </div>
              
              <div className="pt-3 border-t border-slate-800">
-                <button 
-                    onClick={() => setShowSettings(true)}
-                    className="w-full flex items-center justify-center p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs font-bold mb-2 uppercase tracking-wide"
-                >
-                    <Settings size={14} className="mr-2"/> Settings
-                </button>
-                <div className="text-[10px] text-center text-slate-600">
-                    TradeMind.AI v1.0
-                </div>
+                <div className="text-[10px] text-center text-slate-600">TradeMind.AI v1.0</div>
              </div>
          </div>
       </nav>
 
-      {/* Main Content Area */}
       <main className="md:ml-64 p-4 md:p-8 pb-24 md:pb-8 min-h-screen">
         <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-indigo-500/10 mb-6 flex justify-between items-center shadow-lg transition-all">
            <h2 className="text-lg md:text-xl font-bold text-white tracking-tight flex items-center">
@@ -347,53 +363,45 @@ const App: React.FC = () => {
              {view === 'dashboard' && <LayoutDashboard size={18} className="mr-2 text-indigo-400"/>}
              {view === 'system' && <Target size={18} className="mr-2 text-indigo-400"/>}
              {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
+             {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
              {getPageTitle()}
            </h2>
-           <div className="flex items-center gap-3">
-              <div className="md:hidden text-sm font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent flex items-center gap-1">
-                 <BrainCircuit size={16} className="text-indigo-400"/> TradeMind.AI
-              </div>
-              <button 
-                onClick={() => setShowSettings(true)} 
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition"
-                title="Settings"
-              >
-                  <Settings size={18}/>
-              </button>
-           </div>
+           {/* SYNC STATUS INDICATOR IN HEADER */}
+           {userProfile && (
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-700">
+                {syncStatus === SyncStatus.SYNCING && <Loader2 size={14} className="text-blue-400 animate-spin"/>}
+                {syncStatus === SyncStatus.SYNCED && <CheckCircle2 size={14} className="text-emerald-400"/>}
+                {syncStatus === SyncStatus.OFFLINE && <Cloud size={14} className="text-slate-500"/>}
+                {syncStatus === SyncStatus.ERROR && <AlertCircle size={14} className="text-red-400"/>}
+                <span className="text-[10px] font-bold uppercase text-slate-400 hidden sm:block">
+                  {syncStatus === SyncStatus.SYNCING ? 'Syncing...' : syncStatus === SyncStatus.SYNCED ? 'Synced' : 'Offline'}
+                </span>
+             </div>
+           )}
         </header>
 
         <div className="max-w-7xl mx-auto animate-fade-in-up">
           {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
-          
-          {view === 'new' && (
-            <TradeForm 
-              onSave={handleSaveTrade} 
-              onCancel={() => { setEditingTrade(null); setView('dashboard'); }} 
-              initialData={editingTrade || undefined}
-              apiKey={apiKey}
-            />
-          )}
-
-          {view === 'journal' && (
-            <TradeList 
-              trades={trades} 
-              strategyProfile={strategyProfile}
-              apiKey={apiKey}
-              onEdit={handleEditTrade} 
-              onDelete={handleDeleteTrade} 
-              onAnalyze={handleAnalyzeTrade}
-              onImport={handleImportTrades}
-              analyzingTradeId={analyzingTradeId}
-            />
-          )}
-
-          {view === 'system' && (
-            <MySystem 
-              strategyProfile={strategyProfile} 
-              onImport={handleUpdateStrategy}
-              onUpdate={handleUpdateStrategy}
-            />
+          {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey}/>}
+          {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId}/>}
+          {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy}/>}
+          {view === 'account' && (
+              <AccountModal 
+                isOpen={true} 
+                onClose={() => {}} 
+                userProfile={userProfile}
+                syncStatus={syncStatus}
+                onConnect={handleConnectDrive}
+                onLogout={handleLogout}
+                apiKey={apiKey}
+                setApiKey={setApiKey}
+                googleClientId={googleClientId}
+                setGoogleClientId={setGoogleClientId}
+                onSaveSettings={handleSaveSettings}
+                onExportJSON={() => exportToJSON(trades, strategyProfile)}
+                onExportCSV={() => exportToCSV(trades)}
+                onImportClick={() => fileInputRef.current?.click()}
+              />
           )}
         </div>
       </main>
