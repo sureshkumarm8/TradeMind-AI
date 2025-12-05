@@ -30,12 +30,22 @@ export interface BackupData {
 
 export const initGoogleDrive = (clientId: string, onInitComplete: (success: boolean) => void) => {
   if (!clientId) {
+    console.warn('No OAuth Client ID provided');
     onInitComplete(false);
     return;
   }
   
-  // Debug Log for Origin
-  console.log("Initializing Google Drive Auth with Origin:", window.location.origin);
+  // Platform Detection
+  const isAndroid = navigator.userAgent.includes('Android');
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                (window.navigator as any).standalone === true ||
+                document.referrer.includes('android-app://');
+  
+  console.log("🔐 Initializing Google OAuth:");
+  console.log("  Platform:", isAndroid ? 'Android' : 'Desktop/Web');
+  console.log("  PWA Mode:", isPWA);
+  console.log("  Origin:", window.location.origin);
+  console.log("  Client ID:", clientId.substring(0, 12) + '...');
 
   // Initialize GAPI
   window.gapi.load('client', async () => {

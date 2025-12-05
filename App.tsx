@@ -49,6 +49,7 @@ const App: React.FC = () => {
   
   // Cloud Sync State
   const [googleClientId, setGoogleClientId] = useState<string>('');
+  const [androidClientId, setAndroidClientId] = useState<string>('');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(SyncStatus.OFFLINE);
   const [driveFileId, setDriveFileId] = useState<string | null>(null);
   const [isDriveInitialized, setIsDriveInitialized] = useState(false);
@@ -74,6 +75,7 @@ const App: React.FC = () => {
     const savedApiKey = localStorage.getItem('tradeMind_apiKey');
     const savedPreMarket = localStorage.getItem('tradeMind_preMarket');
     const savedClientId = localStorage.getItem('tradeMind_googleClientId');
+    const savedAndroidClientId = localStorage.getItem('tradeMind_androidClientId');
     const savedProfile = localStorage.getItem('tradeMind_userProfile');
     
     if (savedTrades) {
@@ -84,24 +86,49 @@ const App: React.FC = () => {
     }
     if (savedApiKey) setApiKey(savedApiKey);
     if (savedClientId) setGoogleClientId(savedClientId);
+    if (savedAndroidClientId) setAndroidClientId(savedAndroidClientId);
     if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
     if (savedProfile) try { setUserProfile(JSON.parse(savedProfile)); } catch(e) {};
     
   }, []);
 
+  // Helper function to detect platform and get correct client ID
+  const getClientIdForPlatform = (): string => {
+    // Check if running as PWA on Android
+    const isAndroidPWA = window.navigator.userAgent.includes('Android') && 
+                         (window.matchMedia('(display-mode: standalone)').matches || 
+                          window.navigator.standalone === true ||
+                          document.referrer.includes('android-app://'));
+    
+    // Check if running in TWA (Trusted Web Activity)
+    const isTWA = window.navigator.userAgent.includes('wv') && 
+                  window.navigator.userAgent.includes('Android');
+    
+    if (isAndroidPWA || isTWA) {
+      return androidClientId; // Use Android OAuth Client ID
+    }
+    
+    return googleClientId; // Use Web OAuth Client ID
+  };
+
   // Initialize Google Drive Client if ID exists
   useEffect(() => {
-     if (googleClientId && !isDriveInitialized) {
+     const clientId = getClientIdForPlatform();
+     if (clientId && !isDriveInitialized) {
+        console.log('Initializing OAuth for platform:', 
+          window.navigator.userAgent.includes('Android') ? 'Android PWA' : 'Web Browser',
+          'Client ID:', clientId.substring(0, 12) + '...');
+        
         setAuthError(null);
-        initGoogleDrive(googleClientId, (success) => {
+        initGoogleDrive(clientId, (success) => {
              if(success) {
                  setIsDriveInitialized(true);
              } else {
-                 setAuthError("Failed to initialize Google API. Check Client ID.");
+                 setAuthError("Failed to initialize Google API. Check Client ID for your platform.");
              }
         });
      }
-  }, [googleClientId]);
+  }, [googleClientId, androidClientId]);
 
   // Auto-Sync Logic (Debounced)
   useEffect(() => {
@@ -171,6 +198,7 @@ const App: React.FC = () => {
   const handleSaveSettings = () => {
       localStorage.setItem('tradeMind_apiKey', apiKey);
       localStorage.setItem('tradeMind_googleClientId', googleClientId);
+      localStorage.setItem('tradeMind_androidClientId', androidClientId);
       setAuthError(null);
       getDailyCoachTip(apiKey).then(setDailyTip);
       alert("Config Saved!");
@@ -178,10 +206,18 @@ const App: React.FC = () => {
 
   const handleConnectDrive = async () => {
       setAuthError(null);
+      const clientId = getClientIdForPlatform();
+      
+      if (!clientId) {
+          const platform = window.navigator.userAgent.includes('Android') ? 'Android' : 'Web';
+          setAuthError(`${platform} OAuth Client ID missing. Please configure it in Settings.`);
+          return;
+      }
+      
       if (!isDriveInitialized) {
           setAuthError("Google Client not ready. Please check your Client ID in the Config tab.");
-          // Attempt re-init?
-          initGoogleDrive(googleClientId, (s) => setIsDriveInitialized(s));
+          // Attempt re-init with correct client ID
+          initGoogleDrive(clientId, (s) => setIsDriveInitialized(s));
           return;
       }
       try {
@@ -411,6 +447,8 @@ const App: React.FC = () => {
                 setApiKey={setApiKey}
                 googleClientId={googleClientId}
                 setGoogleClientId={setGoogleClientId}
+                androidClientId={androidClientId}
+                setAndroidClientId={setAndroidClientId}
                 onSaveSettings={handleSaveSettings}
                 onExportJSON={() => exportToJSON(trades, strategyProfile)}
                 onExportCSV={() => exportToCSV(trades)}

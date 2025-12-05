@@ -15,6 +15,8 @@ interface AccountSettingsProps {
   setApiKey: (key: string) => void;
   googleClientId: string;
   setGoogleClientId: (id: string) => void;
+  androidClientId: string;
+  setAndroidClientId: (id: string) => void;
   onSaveSettings: () => void;
   onExportJSON: () => void;
   onExportCSV: () => void;
@@ -23,7 +25,8 @@ interface AccountSettingsProps {
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
   userProfile, syncStatus, authError, onConnect, onLogout,
-  apiKey, setApiKey, googleClientId, setGoogleClientId, onSaveSettings,
+  apiKey, setApiKey, googleClientId, setGoogleClientId, 
+  androidClientId, setAndroidClientId, onSaveSettings,
   onExportJSON, onExportCSV, onImportClick
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'config'>('profile');
@@ -206,11 +209,20 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 </button>
                             )}
 
-                            {!googleClientId && (
-                                <p className="text-xs text-amber-500 mt-4 font-bold bg-amber-900/10 p-2 rounded inline-block">
-                                    ⚠️ Config Missing: Please go to 'Configuration' tab first.
-                                </p>
-                            )}
+                            {(() => {
+                                const isAndroid = navigator.userAgent.includes('Android');
+                                const missingWebClient = !googleClientId;
+                                const missingAndroidClient = !androidClientId && isAndroid;
+                                
+                                if (missingWebClient || missingAndroidClient) {
+                                    return (
+                                        <p className="text-xs text-amber-500 mt-4 font-bold bg-amber-900/10 p-2 rounded inline-block">
+                                            ⚠️ Config Missing: {isAndroid ? 'Android' : 'Web'} OAuth Client ID required
+                                        </p>
+                                    );
+                                }
+                                return null;
+                            })()}
                         </div>
                     )}
 
@@ -251,38 +263,78 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                          <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-[10px] text-indigo-400 mt-1 inline-block hover:underline">Get API Key &rarr;</a>
                     </div>
                     
-                    {/* Client ID */}
+                    {/* Web Client ID */}
                     <div className="mb-6">
                         <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
-                            <Cloud size={16} className="text-blue-400"/> Google Client ID
+                            <Cloud size={16} className="text-blue-400"/> Google Client ID (Web)
                         </label>
                         <input 
                             type="text" 
                             value={googleClientId} 
                             onChange={(e) => setGoogleClientId(e.target.value)}
                             className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-blue-500 outline-none"
-                            placeholder="Required for Google Login"
+                            placeholder="For Chrome/Safari/Firefox browsers"
                         />
-                         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-[10px] text-blue-400 mt-1 inline-block hover:underline">Create OAuth Client ID &rarr;</a>
+                         <p className="text-[10px] text-blue-400/70 mt-1">Application type: <strong>Web application</strong></p>
+                    </div>
+
+                    {/* Android Client ID */}
+                    <div className="mb-6">
+                        <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
+                            <Cloud size={16} className="text-green-400"/> Android Client ID (PWA)
+                        </label>
+                        <input 
+                            type="text" 
+                            value={androidClientId} 
+                            onChange={(e) => setAndroidClientId(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-mono text-sm focus:border-green-500 outline-none"
+                            placeholder="For Android PWA/Chrome mobile apps"
+                        />
+                         <p className="text-[10px] text-green-400/70 mt-1">Application type: <strong>Android</strong> | Package: <code>com.android.chrome</code></p>
+                         <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-[10px] text-green-400 mt-1 inline-block hover:underline">Create Android OAuth Client &rarr;</a>
                     </div>
 
                     {/* Helper */}
                     <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 text-xs text-slate-400 mb-6">
-                        <p className="mb-2 font-bold text-slate-200">Google Auth Setup Checklist:</p>
-                        <ul className="list-disc list-inside space-y-1 mb-3">
-                            <li>Create <strong>OAuth 2.0 Client ID</strong> (Web App) in Google Console.</li>
-                            <li>Add the exact URL below to <strong>Authorized JavaScript Origins</strong>.</li>
-                            <li><strong>Important:</strong> Remove any trailing slash (e.g. <code>.app</code> not <code>.app/</code>).</li>
-                            <li>Add your email to <strong>Test Users</strong> in OAuth Consent Screen.</li>
-                            <li>Wait <strong>5-10 minutes</strong> for Google changes to propagate.</li>
-                        </ul>
-                        <div className="flex items-center gap-2">
-                             <code className="flex-1 bg-black/30 p-2 rounded text-emerald-400 font-mono select-all border border-slate-700 cursor-pointer hover:bg-black/50 transition" onClick={copyOrigin}>
-                                {currentOrigin}
-                            </code>
-                            <button onClick={copyOrigin} className="p-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition" title="Copy URL">
-                                <Copy size={16}/>
-                            </button>
+                        <p className="mb-3 font-bold text-slate-200">🔧 OAuth Setup Guide:</p>
+                        
+                        {/* Web OAuth Setup */}
+                        <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded">
+                            <p className="font-bold text-blue-300 mb-2">1️⃣ Web OAuth Client (Desktop/Laptop)</p>
+                            <ul className="list-disc list-inside space-y-1 mb-2">
+                                <li>Application type: <strong>Web application</strong></li>
+                                <li>Add URL below to <strong>Authorized JavaScript Origins</strong></li>
+                                <li>Remove trailing slashes (e.g., <code>.app</code> not <code>.app/</code>)</li>
+                            </ul>
+                            <div className="flex items-center gap-2 mt-2">
+                                <code className="flex-1 bg-black/30 p-2 rounded text-blue-400 font-mono select-all border border-slate-600 cursor-pointer hover:bg-black/50 transition text-[10px]" onClick={copyOrigin}>
+                                    {currentOrigin}
+                                </code>
+                                <button onClick={copyOrigin} className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded transition" title="Copy URL">
+                                    <Copy size={12}/>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Android OAuth Setup */}
+                        <div className="mb-4 p-3 bg-green-900/20 border border-green-500/30 rounded">
+                            <p className="font-bold text-green-300 mb-2">2️⃣ Android OAuth Client (PWA/Mobile)</p>
+                            <ul className="list-disc list-inside space-y-1">
+                                <li>Application type: <strong>Android</strong></li>
+                                <li>Package name: <code className="bg-black/30 px-1 rounded">com.android.chrome</code></li>
+                                <li>SHA-1: Use Chrome's debug certificate or leave blank for testing</li>
+                                <li><strong>Critical:</strong> This fixes "OAuth client not found" on Android PWA</li>
+                            </ul>
+                        </div>
+
+                        {/* Final Steps */}
+                        <div className="p-3 bg-amber-900/20 border border-amber-500/30 rounded">
+                            <p className="font-bold text-amber-300 mb-2">3️⃣ Final Steps</p>
+                            <ul className="list-disc list-inside space-y-1">
+                                <li>Add your email to <strong>Test Users</strong> in OAuth Consent Screen</li>
+                                <li>Wait <strong>5-10 minutes</strong> for changes to propagate</li>
+                                <li>Test on both desktop browser and Android PWA</li>
+                            </ul>
                         </div>
                     </div>
 
