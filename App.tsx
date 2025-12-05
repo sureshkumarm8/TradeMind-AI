@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile } from './types';
+import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
@@ -10,6 +10,7 @@ import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
 import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User } from 'lucide-react';
+import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
   name: "Intraday Trend System (Template)",
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); 
+  const [notification, setNotification] = useState<{message: string, type: NotificationType} | null>(null);
 
   // Track specific trade being analyzed instead of global boolean
   const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
@@ -89,28 +91,14 @@ const App: React.FC = () => {
     
   }, []);
 
-  // Helper function to detect platform and get correct client ID
-  const getClientIdForPlatform = (): string => {
-    // For PWAs, we always use the WEB OAuth Client ID
-    // PWAs run in the browser context, not as native Android apps
-    // The "Android OAuth Client" is only for actual Android APK apps
-    
-    console.log('🔍 Platform Detection:');
-    console.log('  User Agent:', navigator.userAgent);
-    console.log('  Standalone Mode:', window.matchMedia('(display-mode: standalone)').matches);
-    console.log('  Using Web OAuth Client ID for PWA');
-    
-    // Always use web client ID for PWAs since they run in browser context
-    return googleClientId;
+  const notify = (message: string, type: NotificationType = 'success') => {
+      setNotification({ message, type });
   };
 
   // Initialize Google Drive Client if ID exists
   useEffect(() => {
      if (googleClientId && !isDriveInitialized) {
-        console.log('🔐 Initializing Google OAuth for PWA');
-        console.log('  Platform:', window.navigator.userAgent.includes('Android') ? 'Android PWA' : 'Desktop Browser');
-        console.log('  Client ID:', googleClientId.substring(0, 12) + '...');
-        
+        console.log('🔐 Initializing Google OAuth');
         setAuthError(null);
         initGoogleDrive(googleClientId, (success) => {
              if(success) {
@@ -192,7 +180,7 @@ const App: React.FC = () => {
       localStorage.setItem('tradeMind_googleClientId', googleClientId);
       setAuthError(null);
       getDailyCoachTip(apiKey).then(setDailyTip);
-      alert("Config Saved!");
+      notify("Configuration Saved!", 'success');
   };
 
   const handleConnectDrive = async () => {
@@ -217,8 +205,6 @@ const App: React.FC = () => {
           setSyncStatus(SyncStatus.SYNCING);
           
           // SILENT SYNC LOGIC
-          // 1. Find or Create File
-          // 2. Decide if we pull (restore) or push (first save)
           const { data, fileId } = await performInitialSync(trades, strategyProfile, preMarketNotes);
           
           if (data && fileId) {
@@ -227,6 +213,7 @@ const App: React.FC = () => {
              if (data.strategy) setStrategyProfile(data.strategy);
              if (data.preMarketNotes) setPreMarketNotes(data.preMarketNotes);
              setSyncStatus(SyncStatus.SYNCED);
+             notify("Cloud Sync Activated", 'success');
           } else {
              setSyncStatus(SyncStatus.ERROR);
              setAuthError("Sync initialization failed. Could not create/read backup file.");
@@ -249,6 +236,7 @@ const App: React.FC = () => {
       setDriveFileId(null);
       setAuthError(null);
       localStorage.removeItem('tradeMind_userProfile');
+      notify("Signed Out", 'info');
   }
 
   const handleUpdatePreMarket = (notes: string) => {
@@ -258,8 +246,10 @@ const App: React.FC = () => {
   const handleSaveTrade = (trade: Trade) => {
     if (editingTrade) {
       setTrades(prev => prev.map(t => t.id === trade.id ? trade : t));
+      notify("Mission Log Updated", 'success');
     } else {
       setTrades(prev => [trade, ...prev]);
+      notify("Mission Log Saved", 'success');
     }
     setEditingTrade(null);
     setView('journal');
@@ -268,6 +258,7 @@ const App: React.FC = () => {
   const handleDeleteTrade = (id: string) => {
     if (window.confirm('Are you sure you want to delete this trade log?')) {
       setTrades(prev => prev.filter(t => t.id !== id));
+      notify("Trade Deleted", 'info');
     }
   };
 
@@ -292,10 +283,18 @@ const App: React.FC = () => {
   
   const handleImportTrades = (importedTrades: Trade[]) => {
       setTrades(prev => {
-          const existingIds = new Set(prev.map(t => t.id));
-          const newTrades = importedTrades.filter(t => !existingIds.has(t.id));
-          return [...newTrades, ...prev];
+          // Create a map of existing trades for easy lookup
+          const tradeMap = new Map(prev.map(t => [t.id, t]));
+          
+          // Upsert: Update if exists, Insert if new
+          importedTrades.forEach(t => {
+              tradeMap.set(t.id, t);
+          });
+          
+          // Convert map back to array
+          return Array.from(tradeMap.values());
       });
+      notify(`${importedTrades.length} Trades Merged`, 'success');
   };
 
   const handleGlobalFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -303,15 +302,16 @@ const App: React.FC = () => {
     if (!file) return;
     try {
       const { trades: importedTrades, strategy: importedStrategy } = await importData(file);
+      
       if (importedTrades && importedTrades.length > 0) {
-         if (confirm(`Found ${importedTrades.length} trades. Merge?`)) {
-             handleImportTrades(importedTrades);
-         }
+          handleImportTrades(importedTrades);
       }
-      if (importedStrategy && confirm("Found a strategy profile. Update your system?")) {
+      
+      if (importedStrategy) {
           setStrategyProfile(importedStrategy);
+          notify("Strategy Profile Updated", 'success');
       }
-      alert("Import Successful");
+      
     } catch (error) {
       alert("Import Failed: " + error);
     }
@@ -320,6 +320,7 @@ const App: React.FC = () => {
 
   const handleUpdateStrategy = (importedProfile: StrategyProfile) => {
     setStrategyProfile(importedProfile);
+    notify("System Updated", 'success');
   };
 
   const getPageTitle = () => {
@@ -336,6 +337,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 relative">
       
+      <Toast notification={notification} onClose={() => setNotification(null)} />
+
       {/* Hidden Global Input */}
       <input type="file" ref={fileInputRef} onChange={handleGlobalFileChange} className="hidden" accept=".json,.csv" />
 
@@ -420,9 +423,9 @@ const App: React.FC = () => {
 
         <div className="max-w-7xl mx-auto animate-fade-in-up">
           {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
-          {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey}/>}
+          {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey} notify={notify}/>}
           {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId}/>}
-          {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy}/>}
+          {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy} notify={notify}/>}
           {view === 'account' && (
               <AccountModal 
                 isOpen={true} 

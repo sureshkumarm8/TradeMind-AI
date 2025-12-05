@@ -32,6 +32,8 @@ export enum OpeningType {
   FLAT = 'FLAT'
 }
 
+export type NotificationType = 'success' | 'error' | 'info';
+
 export interface SystemChecks {
   analyzedPreMarket: boolean; // Prev day/month graph, S/R zones
   waitedForOpen: boolean; // 5-15 mins wait

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType } from '../types';
+import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType } from '../types';
 import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
@@ -10,6 +10,7 @@ interface TradeFormProps {
   onCancel: () => void;
   initialData?: Trade;
   apiKey?: string;
+  notify?: (message: string, type?: NotificationType) => void;
 }
 
 const COMMON_CONFLUENCES = [
@@ -42,7 +43,7 @@ const COMMON_SETUPS = [
   "Fakeout / Trap"
 ];
 
-const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey }) => {
+const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
   const [showMistakes, setShowMistakes] = useState(false);
@@ -209,7 +210,8 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
           setFormData(prev => ({ ...prev, [field]: compressed }));
       } catch (err) {
           console.error("Image upload failed", err);
-          alert("Failed to process image. Try a smaller file.");
+          if (notify) notify("Failed to process image", "error");
+          else alert("Failed to process image. Try a smaller file.");
       }
   };
 
@@ -241,7 +243,8 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
   // --- Voice Log Logic (MediaRecorder) ---
   const startRecording = async () => {
     if (!apiKey && !process.env.API_KEY) {
-       alert("Please add your Gemini API Key in Settings to use Voice Log.");
+       if (notify) notify("API Key Required for Voice Log", "error");
+       else alert("Please add your Gemini API Key in Settings to use Voice Log.");
        return;
     }
 
@@ -269,9 +272,11 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
              try {
                 const parsed = await parseVoiceCommand(base64String, apiKey);
                 setFormData(prev => ({ ...prev, ...parsed }));
+                if (notify) notify("Voice Log Processed", "success");
              } catch(e) {
                 console.error(e);
-                alert("Failed to analyze voice note.");
+                if (notify) notify("Failed to analyze voice", "error");
+                else alert("Failed to analyze voice note.");
              } finally {
                 setIsProcessingVoice(false);
              }
@@ -286,7 +291,8 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
 
     } catch (e) {
        console.error("Mic Error:", e);
-       alert("Microphone access denied or not supported.");
+       if (notify) notify("Mic Access Denied", "error");
+       else alert("Microphone access denied or not supported.");
     }
   };
 

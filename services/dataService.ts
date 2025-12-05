@@ -1,3 +1,4 @@
+
 import { Trade, TradeDirection, TradeOutcome, OptionType, StrategyProfile } from '../types';
 
 export const exportToJSON = (trades: Trade[], strategy?: StrategyProfile) => {
@@ -160,6 +161,13 @@ const parseCSV = (csvText: string): Trade[] => {
       const values = parseRow(lines[i]);
       if(values.length < 5) continue; // Basic validation
       
+      // Helper to parse numbers safely (returns 0 if empty or invalid, or undefined if explicit)
+      const num = (val: string, def?: number) => {
+          if (!val || val.trim() === '') return def;
+          const n = Number(val);
+          return isNaN(n) ? def : n;
+      };
+
       // Map based on export columns order
       // ID, Date, EntryTime, ExitTime, Instrument, OptionType, Strike, NiftySpotEntry, NiftySpotExit...
       const t: any = {
@@ -169,17 +177,17 @@ const parseCSV = (csvText: string): Trade[] => {
          exitTime: values[3],
          instrument: values[4],
          optionType: values[5] as OptionType,
-         strikePrice: values[6] ? Number(values[6]) : undefined,
-         niftyEntryPrice: values[7] ? Number(values[7]) : undefined,
-         niftyExitPrice: values[8] ? Number(values[8]) : undefined,
+         strikePrice: num(values[6]),
+         niftyEntryPrice: num(values[7]),
+         niftyExitPrice: num(values[8]),
          direction: values[9] as TradeDirection,
-         quantity: Number(values[10]),
-         entryPrice: Number(values[11]),
-         exitPrice: values[12] ? Number(values[12]) : undefined,
-         pnl: values[13] ? Number(values[13]) : undefined,
+         quantity: num(values[10], 75), // Default to 75
+         entryPrice: num(values[11], 0),
+         exitPrice: num(values[12]),
+         pnl: num(values[13]),
          outcome: values[14] as TradeOutcome,
-         spotPointsCaptured: values[15] ? Number(values[15]) : 0,
-         tradeDurationMins: values[16] ? Number(values[16]) : 0,
+         spotPointsCaptured: num(values[15], 0),
+         tradeDurationMins: num(values[16], 0),
          
          systemChecks: {
             analyzedPreMarket: values[17] === 'TRUE',
@@ -191,8 +199,8 @@ const parseCSV = (csvText: string): Trade[] => {
          setupName: values[21],
          entryReason: values[22],
          exitReason: values[23],
-         confluences: values[24] ? values[24].split(' | ') : [],
-         mistakes: values[25] ? values[25].split(' | ') : [],
+         confluences: values[24] ? values[24].split(' | ').filter(Boolean) : [],
+         mistakes: values[25] ? values[25].split(' | ').filter(Boolean) : [],
          aiFeedback: values[26]
       };
       

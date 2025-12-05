@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus } from 'lucide-react';
+import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw } from 'lucide-react';
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -58,6 +58,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       }
   };
 
+  const forceReInit = () => {
+     window.location.reload();
+  }
+
   const copyOrigin = () => {
       navigator.clipboard.writeText(currentOrigin);
       alert("URL copied! Paste into 'Authorized JavaScript Origins' in Google Cloud Console.");
@@ -69,6 +73,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       }
       if (err.includes('access_denied') || err.includes('not_authorized') || err.includes('403')) {
           return "TEST USER REQUIRED. Your app is in 'Testing' mode. You MUST add your email to the 'Test Users' list in Google Cloud Console.";
+      }
+      if (err.includes('popup_closed')) {
+          return "Popup Closed. Please allow popups for this site (Xiaomi/Mi Browser often blocks them).";
       }
       return err;
   }
@@ -188,22 +195,38 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                     <AlertTriangle size={20} className="mr-2" /> Login Disabled in Preview
                                 </button>
                             ) : (
-                                <button 
-                                    onClick={handleConnectClick} 
-                                    disabled={!isGapiReady || isConnecting}
-                                    className={`px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-lg font-bold flex items-center justify-center transition shadow-2xl shadow-blue-900/40 mx-auto hover:-translate-y-1 w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed`}
-                                >
-                                    {isConnecting ? (
-                                        <><Loader2 className="animate-spin mr-3" size={24}/> Connecting...</>
-                                    ) : !isGapiReady ? (
-                                        <><Loader2 className="animate-spin mr-3" size={24}/> Loading Scripts...</>
-                                    ) : (
-                                        <>
-                                            <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6 mr-3 bg-white rounded-full p-0.5" alt="G"/> 
-                                            Sign in with Google
-                                        </>
+                                <div className="space-y-4">
+                                    <button 
+                                        onClick={handleConnectClick} 
+                                        disabled={!isGapiReady || isConnecting}
+                                        className={`px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-lg font-bold flex items-center justify-center transition shadow-2xl shadow-blue-900/40 mx-auto hover:-translate-y-1 w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                        {isConnecting ? (
+                                            <><Loader2 className="animate-spin mr-3" size={24}/> Connecting...</>
+                                        ) : !isGapiReady ? (
+                                            <><Loader2 className="animate-spin mr-3" size={24}/> Loading Scripts...</>
+                                        ) : (
+                                            <>
+                                                <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6 mr-3 bg-white rounded-full p-0.5" alt="G"/> 
+                                                Sign in with Google
+                                            </>
+                                        )}
+                                    </button>
+                                    
+                                    {!isGapiReady && (
+                                        <div className="text-center">
+                                            <button onClick={forceReInit} className="text-xs text-slate-500 underline hover:text-white flex items-center justify-center mx-auto">
+                                                <RefreshCw size={10} className="mr-1"/> Scripts stuck? Force Reload
+                                            </button>
+                                        </div>
                                     )}
-                                </button>
+                                </div>
+                            )}
+                            
+                            {!isGapiReady && (
+                                <div className="mt-4 p-2 bg-slate-800/50 rounded text-[10px] text-slate-500 font-mono">
+                                    Current Origin: {currentOrigin}
+                                </div>
                             )}
 
                             {!googleClientId && (

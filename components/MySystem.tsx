@@ -1,15 +1,17 @@
+
 import React, { useRef, useState } from 'react';
 import { Target, Activity, AlertTriangle, ExternalLink, ShieldCheck, CheckSquare, Zap, MoreVertical, Edit, Save, Plus, Trash2, Download, Upload, MonitorPlay, BrainCircuit, PlayCircle, Lock } from 'lucide-react';
-import { StrategyProfile, StrategyStep, StrategyRule, StrategyLink } from '../types';
+import { StrategyProfile, StrategyStep, StrategyRule, StrategyLink, NotificationType } from '../types';
 import { exportSystemProfile } from '../services/dataService';
 
 interface MySystemProps {
   strategyProfile: StrategyProfile;
   onImport: (profile: StrategyProfile) => void;
   onUpdate: (profile: StrategyProfile) => void;
+  notify?: (message: string, type?: NotificationType) => void;
 }
 
-const MySystem: React.FC<MySystemProps> = ({ strategyProfile, onImport, onUpdate }) => {
+const MySystem: React.FC<MySystemProps> = ({ strategyProfile, onImport, onUpdate, notify }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -51,12 +53,15 @@ const MySystem: React.FC<MySystemProps> = ({ strategyProfile, onImport, onUpdate
         const profile = JSON.parse(content);
         if (profile.name && profile.steps && profile.rules) {
             onImport(profile);
-            alert("System updated successfully!");
+            if (notify) notify("System imported successfully", "success");
+            else alert("System updated successfully!");
         } else {
-            alert("Invalid Strategy Profile JSON.");
+            if (notify) notify("Invalid Strategy Profile JSON", "error");
+            else alert("Invalid Strategy Profile JSON.");
         }
       } catch (err) {
-        alert("Failed to parse file.");
+        if (notify) notify("Failed to parse file", "error");
+        else alert("Failed to parse file.");
       }
     };
     reader.readAsText(file);
