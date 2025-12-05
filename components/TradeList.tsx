@@ -1,6 +1,7 @@
+
 import React, { useState, useRef } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit } from 'lucide-react';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON } from '../services/dataService';
 
@@ -541,6 +542,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                             <div className="flex items-center gap-2 mt-1">
                                  {trade.timeframe && <span className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10}/> {trade.timeframe}</span>}
                                  {trade.spotPointsCaptured ? <span className="text-[10px] text-indigo-400 font-medium flex items-center gap-1"><Target size={10}/> {trade.spotPointsCaptured} pts</span> : null}
+                                 {(trade.chartImage || trade.oiImage) && <ImageIcon size={12} className="text-indigo-400 ml-1" />}
                             </div>
                           </div>
                         </div>
@@ -604,6 +606,24 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                 </div>
                              </div>
                           </div>
+                          
+                          {/* Evidence Locker Visuals */}
+                          {(trade.chartImage || trade.oiImage) && (
+                            <div className="mb-6 grid grid-cols-2 gap-4">
+                                {trade.chartImage && (
+                                    <div className="bg-slate-800 rounded-lg p-2 border border-slate-700">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nifty Chart</span>
+                                        <img src={trade.chartImage} alt="Chart Evidence" className="w-full rounded h-32 object-cover hover:h-auto hover:object-contain transition-all cursor-zoom-in" />
+                                    </div>
+                                )}
+                                {trade.oiImage && (
+                                    <div className="bg-slate-800 rounded-lg p-2 border border-slate-700">
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">OI Evidence</span>
+                                        <img src={trade.oiImage} alt="OI Evidence" className="w-full rounded h-32 object-cover hover:h-auto hover:object-contain transition-all cursor-zoom-in" />
+                                    </div>
+                                )}
+                            </div>
+                          )}
 
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             {/* Details Column */}

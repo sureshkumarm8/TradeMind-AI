@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { Trade, StrategyProfile, ParsedVoiceCommand } from "../types";
 
@@ -42,15 +43,16 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
     const strategyContext = formatStrategyForAI(strategyProfile);
     
     // Construct a prompt specifically for Nifty/Index traders
-    const prompt = `
+    const promptText = `
       You are a strict Quantitative Trading Mentor.
       The user follows a specific system.
       ${strategyContext}
       
       TASK:
       1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} between ${trade.entryTime || 'market open'} and ${trade.exitTime || 'market close'}.
-      2. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
-      3. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
+      2. If a chart image is provided, analyze the visual price structure (Candles, Patterns) to verify the entry.
+      3. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
+      4. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
       
       User's Logged Trade:
       - Date: ${trade.date}
@@ -64,6 +66,21 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       Output strict JSON. Do not output markdown code blocks.
     `;
     
+    const parts: any[] = [{ text: promptText }];
+    
+    // Add Chart Image if exists (base64)
+    if (trade.chartImage) {
+        // Strip prefix "data:image/jpeg;base64," if present
+        const base64Data = trade.chartImage.split(',')[1];
+        parts.push({
+            inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Data
+            }
+        });
+        parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
+    }
+
     // Define strict schema for UI consistency
     const responseSchema = {
       type: Type.OBJECT,
@@ -86,7 +103,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
-      contents: prompt,
+      contents: { parts },
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
         systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search. Return strictly valid JSON.",

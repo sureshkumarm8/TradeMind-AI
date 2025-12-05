@@ -1,11 +1,10 @@
 const CACHE_NAME = 'trademind-app-v4';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/favicon.svg',
-  '/icons/icon-192x192.svg',
-  '/icons/icon-512x512.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -38,10 +37,10 @@ self.addEventListener('fetch', event => {
           const networkResp = await fetch(req);
           // keep cached index.html updated
           const cache = await caches.open(CACHE_NAME);
-          cache.put('/index.html', networkResp.clone()).catch(() => {});
+          cache.put('./index.html', networkResp.clone()).catch(() => {});
           return networkResp;
         } catch (err) {
-          const cached = await caches.match('/index.html');
+          const cached = await caches.match('./index.html');
           return cached || Response.error();
         }
       })());
@@ -59,7 +58,7 @@ self.addEventListener('fetch', event => {
           }
           return networkResp;
         }).catch(() => null);
-        return cached || (await networkPromise) || (await caches.match('/index.html'));
+        return cached || (await networkPromise) || (await caches.match('./index.html'));
       })());
       return;
     }

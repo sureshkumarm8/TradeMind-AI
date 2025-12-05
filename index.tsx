@@ -1,4 +1,3 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -17,12 +16,12 @@ root.render(
 
 // PWA Service Worker Registration
 if ('serviceWorker' in navigator) {
-  // Register immediately to ensure PWA installability criteria are met as soon as possible
-  navigator.serviceWorker.register('/service-worker.js')
+  // Use relative path './' to ensure it resolves to the correct origin even in sub-paths or preview environments
+  navigator.serviceWorker.register('./service-worker.js')
     .then((registration) => {
-      console.log('SW registered: ', registration);
+      console.log('SW registered with scope:', registration.scope);
     })
     .catch((registrationError) => {
-      console.log('SW registration failed: ', registrationError);
+      console.warn('SW registration failed (this is common in preview environments):', registrationError);
     });
 }

@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle } from 'lucide-react';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
+import { compressImage } from '../services/imageService';
 
 interface TradeFormProps {
   onSave: (trade: Trade) => void;
@@ -25,6 +27,21 @@ const COMMON_MISTAKES = [
   "Distracted / Bored", "Trading P&L Not Chart", "Poor Risk/Reward", "News Impulse"
 ];
 
+const COMMON_SETUPS = [
+  "VWAP Rejection",
+  "Day High Breakout", 
+  "Day Low Breakdown",
+  "CPR Reversal",
+  "Support Bounce",
+  "Resistance Rejection", 
+  "Gap Fill",
+  "Trendline Breakout",
+  "Fibonacci Retracement",
+  "Opening Range Breakout (ORB)",
+  "Pullback Entry",
+  "Fakeout / Trap"
+];
+
 const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
@@ -41,10 +58,14 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
 
   // Safe initialization logic
   const [formData, setFormData] = useState<Partial<Trade>>(() => {
+    // Current time for Entry Time default
+    const now = new Date();
+    const currentTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
     const defaults = {
         date: new Date().toISOString().split('T')[0],
-        entryTime: '09:15', // Default to Market Open (AM)
-        exitTime: '09:30',  // Default to 15m later (AM)
+        entryTime: currentTime, 
+        exitTime: '',
         instrument: 'NIFTY 50',
         optionType: OptionType.CE,
         timeframe: Timeframe.M5,
@@ -66,6 +87,8 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         openingType: OpeningType.FLAT,
         spotPointsCaptured: 0,
         tradeDurationMins: 0,
+        chartImage: '',
+        oiImage: '',
         systemChecks: {
             analyzedPreMarket: false,
             waitedForOpen: false,
@@ -172,6 +195,18 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     }));
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'chartImage' | 'oiImage') => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+          const compressed = await compressImage(file);
+          setFormData(prev => ({ ...prev, [field]: compressed }));
+      } catch (err) {
+          console.error("Image upload failed", err);
+          alert("Failed to process image. Try a smaller file.");
+      }
+  };
+
   const setField = (field: keyof Trade, value: any) => {
       setFormData(prev => ({ ...prev, [field]: value }));
   }
@@ -265,6 +300,9 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     };
     onSave(trade);
   };
+
+  // Determine if Exit Time can be entered
+  const isExitLocked = !formData.niftyExitPrice || !formData.exitPrice;
 
   return (
     <div className="max-w-6xl mx-auto pb-12 animate-fade-in-up">
@@ -397,15 +435,51 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                   <Calculator size={14} className="mr-2"/> Trade Telemetry
                </h3>
 
+               {/* Prices Grid */}
+               <div className="grid grid-cols-2 md:grid-cols-12 gap-4 mb-6">
+                  {/* Nifty Spot */}
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Nifty Entry</label>
+                      <input type="number" step="0.05" name="niftyEntryPrice" value={formData.niftyEntryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 outline-none" placeholder="21500" />
+                  </div>
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Nifty Exit</label>
+                      <input type="number" step="0.05" name="niftyExitPrice" value={formData.niftyExitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 outline-none" placeholder="21530" />
+                  </div>
+
+                  {/* Premium */}
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Entry Price ₹</label>
+                      <input type="number" step="0.05" name="entryPrice" required value={formData.entryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
+                  </div>
+                  <div className="col-span-1 md:col-span-3">
+                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Exit Price ₹</label>
+                      <input type="number" step="0.05" name="exitPrice" value={formData.exitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
+                  </div>
+                  
+                  {/* Quantity */}
+                  <div className="col-span-2 md:col-span-12 mt-2">
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
+                       <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-lg font-mono font-bold text-white focus:border-indigo-500 outline-none" />
+                  </div>
+               </div>
+
                {/* Time & Duration */}
-               <div className="grid grid-cols-3 gap-4 mb-6">
+               <div className="grid grid-cols-3 gap-4 border-t border-slate-700/50 pt-4">
                    <div>
                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Entry Time</label>
                        <input type="time" name="entryTime" value={formData.entryTime} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none" />
                    </div>
                    <div>
                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Exit Time</label>
-                       <input type="time" name="exitTime" value={formData.exitTime} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none" />
+                       <input 
+                         type="time" 
+                         name="exitTime" 
+                         value={formData.exitTime} 
+                         onChange={handleChange} 
+                         disabled={isExitLocked}
+                         className={`w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none ${isExitLocked ? 'opacity-50 cursor-not-allowed bg-slate-950' : ''}`} 
+                        />
                    </div>
                    <div>
                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Duration</label>
@@ -414,52 +488,75 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                        </div>
                    </div>
                </div>
-
-               {/* Prices Grid */}
-               <div className="grid grid-cols-2 md:grid-cols-12 gap-4">
-                  {/* Nifty Spot */}
-                  <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Spot Entry</label>
-                      <input type="number" step="0.05" name="niftyEntryPrice" value={formData.niftyEntryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 outline-none" placeholder="21500" />
-                  </div>
-                  <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1">Spot Exit</label>
-                      <input type="number" step="0.05" name="niftyExitPrice" value={formData.niftyExitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-emerald-500 outline-none" placeholder="21530" />
-                  </div>
-
-                  {/* Premium */}
-                  <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Prem Entry ₹</label>
-                      <input type="number" step="0.05" name="entryPrice" required value={formData.entryPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
-                  </div>
-                  <div className="col-span-1 md:col-span-3">
-                      <label className="block text-[10px] font-bold text-blue-400 uppercase mb-1">Prem Exit ₹</label>
-                      <input type="number" step="0.05" name="exitPrice" value={formData.exitPrice || ''} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-blue-500 outline-none" />
-                  </div>
-                  
-                  {/* Quantity - Full Width on Mobile */}
-                  <div className="col-span-2 md:col-span-12 mt-2">
-                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
-                       <div className="flex items-center gap-4">
-                           <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-lg font-mono font-bold text-white focus:border-indigo-500 outline-none" />
-                           <div className="flex gap-2">
-                               {[50, 75, 100, 150].map(q => (
-                                   <button key={q} type="button" onClick={() => setField('quantity', q)} className="px-3 py-2 bg-slate-800 border border-slate-600 rounded text-xs font-bold text-slate-400 hover:text-white hover:border-slate-400 transition">{q}</button>
-                               ))}
-                           </div>
-                       </div>
-                  </div>
-               </div>
+            </div>
+            
+            {/* 3. Evidence Locker (Images) - NEW SECTION */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                 <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
+                    <ImageIcon size={14} className="mr-2 text-indigo-400"/> Evidence Locker
+                 </h3>
+                 <p className="text-xs text-slate-500 mb-4">Optional: Upload screenshots if you have them. Can be added later.</p>
+                 
+                 <div className="grid grid-cols-2 gap-4">
+                     {/* Chart Upload */}
+                     <div>
+                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">Nifty Chart</label>
+                         <div className="relative border-2 border-dashed border-slate-700 rounded-lg p-2 hover:border-indigo-500 transition group h-24 flex items-center justify-center bg-slate-900/30">
+                             {formData.chartImage ? (
+                                 <div className="relative w-full h-full">
+                                     <img src={formData.chartImage} alt="Chart" className="w-full h-full object-cover rounded" />
+                                     <button type="button" onClick={() => setField('chartImage', '')} className="absolute -top-1 -right-1 bg-red-600 rounded-full p-0.5"><X size={10} className="text-white"/></button>
+                                 </div>
+                             ) : (
+                                 <div className="text-center">
+                                     <UploadCloud size={20} className="mx-auto text-slate-500 group-hover:text-indigo-400 mb-1"/>
+                                     <span className="text-[9px] text-slate-500">Upload Chart</span>
+                                 </div>
+                             )}
+                             <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'chartImage')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                         </div>
+                     </div>
+                     
+                     {/* OI Upload */}
+                     <div>
+                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">OI Data</label>
+                         <div className="relative border-2 border-dashed border-slate-700 rounded-lg p-2 hover:border-orange-500 transition group h-24 flex items-center justify-center bg-slate-900/30">
+                             {formData.oiImage ? (
+                                 <div className="relative w-full h-full">
+                                     <img src={formData.oiImage} alt="OI" className="w-full h-full object-cover rounded" />
+                                     <button type="button" onClick={() => setField('oiImage', '')} className="absolute -top-1 -right-1 bg-red-600 rounded-full p-0.5"><X size={10} className="text-white"/></button>
+                                 </div>
+                             ) : (
+                                 <div className="text-center">
+                                     <UploadCloud size={20} className="mx-auto text-slate-500 group-hover:text-orange-400 mb-1"/>
+                                     <span className="text-[9px] text-slate-500">Upload OI</span>
+                                 </div>
+                             )}
+                             <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'oiImage')} className="absolute inset-0 opacity-0 cursor-pointer" />
+                         </div>
+                     </div>
+                 </div>
             </div>
 
-            {/* 3. Narrative & Context */}
+            {/* 4. Narrative & Context */}
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
                  <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
                     <Activity size={14} className="mr-2"/> Trade Narrative
                  </h3>
                  <div className="space-y-4">
                     <div>
-                        <input type="text" name="setupName" value={formData.setupName} onChange={handleChange} placeholder="Setup Name (e.g. 5m VWAP Rejection)" className="w-full bg-slate-900 border-b border-slate-700 px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none transition" />
+                        <input 
+                            list="setup-options"
+                            type="text" 
+                            name="setupName" 
+                            value={formData.setupName} 
+                            onChange={handleChange} 
+                            placeholder="Setup Name (e.g. 5m VWAP Rejection)" 
+                            className="w-full bg-slate-900 border-b border-slate-700 px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none transition" 
+                        />
+                        <datalist id="setup-options">
+                            {COMMON_SETUPS.map(s => <option key={s} value={s} />)}
+                        </datalist>
                     </div>
                     <div>
                         <textarea name="marketContext" rows={2} value={formData.marketContext} onChange={handleChange} placeholder="Market Context (Gap Up, Trending, Rangebound...)" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-xs focus:border-indigo-500 outline-none resize-none" />

@@ -11,16 +11,10 @@
     <meta name="description" content="TradeMind.AI - Professional Nifty 50 Trading Journal">
     <link rel="manifest" href="/manifest.json">
 
-    <!-- Favicon and icons -->
-    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
-    <link rel="icon" sizes="192x192" href="/icons/icon-192x192.svg">
-    <link rel="icon" sizes="512x512" href="/icons/icon-512x512.svg">
-    <link rel="apple-touch-icon" href="/icons/icon-192x192.svg">
-    
-    <!-- PWA meta tags -->
-    <meta name="application-name" content="TradeMind">
-    <meta name="msapplication-TileColor" content="#0f172a">
-    <meta name="msapplication-config" content="none">
+    <!-- Explicit icons so Android/iOS can find usable assets immediately -->
+    <link rel="icon" sizes="192x192" href="/icons/icon-192x192.png">
+    <link rel="icon" sizes="512x512" href="/icons/icon-512x512.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 
     <title>TradeMind.AI - Professional Trading Journal</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -46,6 +40,33 @@
       ::-webkit-scrollbar-track { background: #1e293b; }
       ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
       ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+      
+      @keyframes steady-breath {
+        0%, 100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.05); opacity: 1; }
+      }
+      .animate-steady-breath {
+        animation: steady-breath 4s ease-in-out infinite;
+      }
+      
+      @keyframes float-slow {
+        0% { transform: translate(0, 0); opacity: 0; }
+        25% { opacity: 1; }
+        100% { transform: translate(-10px, -20px); opacity: 0; }
+      }
+      .animate-float-slow {
+        animation: float-slow 3s ease-out infinite;
+      }
+      
+      .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+      .animate-fade-in-up { animation: fadeInUp 0.5s ease-out forwards; }
+      
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 2px; }
     </style>
 
     <script type="importmap">
@@ -65,26 +86,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-
-    <!-- Service Worker registration -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => {
-              console.log('ServiceWorker registered with scope:', reg.scope);
-              reg.addEventListener('updatefound', () => {
-                const newWorker = reg.installing;
-                newWorker.addEventListener('statechange', () => {
-                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    console.log('New service worker installed — update available');
-                  }
-                });
-              });
-            })
-            .catch(err => console.error('ServiceWorker registration failed:', err));
-        });
-      }
-    </script>
   </body>
 </html>

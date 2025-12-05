@@ -1,10 +1,11 @@
 {
   "short_name": "TradeMind",
-  "name": "TradeMind.AI - Trading Journal",
-  "start_url": "/",
-  "scope": "/",
+  "name": "TradeMind.AI",
+  "id": "trademind-ai-app",
+  "start_url": "./?source=pwa",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "portrait",
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
   "description": "Professional Nifty 50 Trading Journal & AI Coach",
@@ -13,33 +14,29 @@
   "lang": "en-US",
   "icons": [
     {
-      "src": "/icons/icon-192x192.svg",
+      "src": "/icons/icon-192x192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192x192.svg",
-      "sizes": "192x192", 
-      "type": "image/svg+xml",
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512x512.svg",
+      "src": "/icons/icon-512x512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icons/icon-512x512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml", 
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
-  "prefer_related_applications": false,
-  "id": "/",
-  "launch_handler": {
-    "client_mode": "navigate-new"
-  }
+  "prefer_related_applications": false
 }

@@ -1,3 +1,4 @@
+
 export enum TradeDirection {
   LONG = 'LONG',
   SHORT = 'SHORT'
@@ -90,6 +91,10 @@ export interface Trade {
   marketContext: string; 
   entryReason: string;
   exitReason?: string;
+  
+  // Visual Evidence (Base64 Strings)
+  chartImage?: string;
+  oiImage?: string;
   
   // Enhanced Tracking
   confluences: string[]; // e.g. ["VWAP", "CPR", "20 EMA"]
