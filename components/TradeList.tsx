@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
 import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload, X, FlaskConical, CircleDollarSign, Lightbulb, GraduationCap } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
@@ -21,16 +22,17 @@ interface TradeListProps {
   highlightedTradeId?: string | null; // New prop for Deep Linking
 }
 
-// Helper: Image Modal (Reused)
+// Helper: Image Modal (Reused) - Portal Version
 const ImageModal = ({ src, onClose }: { src: string | null, onClose: () => void }) => {
     if (!src) return null;
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
             <button onClick={onClose} className="absolute top-4 right-4 p-3 bg-slate-800 rounded-full text-white hover:bg-slate-700 transition border border-slate-700">
                 <X size={24} />
             </button>
             <img src={src} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border border-slate-700 object-contain" onClick={(e) => e.stopPropagation()} />
-        </div>
+        </div>,
+        document.body
     );
 };
 

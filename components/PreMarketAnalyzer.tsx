@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2 } from 'lucide-react';
 import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection } from '../types';
 import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine } from '../services/geminiService';
@@ -70,16 +71,17 @@ const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange, onClick }: a
     </div>
 );
 
-// Helper: Image Modal
+// Helper: Image Modal - Portal Version
 const ImageModal = ({ src, onClose }: { src: string | null, onClose: () => void }) => {
     if (!src) return null;
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
             <button onClick={onClose} className="absolute top-4 right-4 p-3 bg-slate-800 rounded-full text-white hover:bg-slate-700 transition border border-slate-700">
                 <X size={24} />
             </button>
             <img src={src} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border border-slate-700 object-contain" onClick={(e) => e.stopPropagation()} />
-        </div>
+        </div>,
+        document.body
     );
 };
 
