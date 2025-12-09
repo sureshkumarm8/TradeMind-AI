@@ -7,9 +7,9 @@ import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
 import AccountModal from './components/AccountModal'; // Now acts as AccountPage
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
-import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile } from './services/googleDriveService';
+import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile, loadBackupData } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw } from 'lucide-react';
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
@@ -233,6 +233,30 @@ const App: React.FC = () => {
           console.error("Drive Connect Error", e);
           setSyncStatus(SyncStatus.ERROR);
           setAuthError(e.message || JSON.stringify(e));
+      }
+  };
+
+  const handleManualSync = async () => {
+      if (!driveFileId || syncStatus === SyncStatus.OFFLINE) return;
+      
+      setSyncStatus(SyncStatus.SYNCING);
+      try {
+          const cloudData = await loadBackupData(driveFileId);
+          if (cloudData) {
+              // We trust cloud data on pull
+              if (cloudData.trades) setTrades(cloudData.trades);
+              if (cloudData.strategy) setStrategyProfile(cloudData.strategy);
+              if (cloudData.preMarketNotes) setPreMarketNotes(cloudData.preMarketNotes);
+              notify("Synced from Cloud", 'success');
+              setSyncStatus(SyncStatus.SYNCED);
+          } else {
+              setSyncStatus(SyncStatus.ERROR);
+              notify("Empty Cloud Data", 'error');
+          }
+      } catch (e) {
+          console.error(e);
+          setSyncStatus(SyncStatus.ERROR);
+          notify("Sync Failed", 'error');
       }
   };
 
@@ -472,6 +496,12 @@ const App: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-slate-400 hidden sm:block">
                   {syncStatus === SyncStatus.SYNCING ? 'Syncing...' : syncStatus === SyncStatus.SYNCED ? 'Synced' : 'Offline'}
                 </span>
+                {/* Manual Refresh Button */}
+                {syncStatus === SyncStatus.SYNCED && (
+                    <button onClick={handleManualSync} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition" title="Pull from Cloud">
+                        <RefreshCw size={12} />
+                    </button>
+                )}
              </div>
            )}
         </header>

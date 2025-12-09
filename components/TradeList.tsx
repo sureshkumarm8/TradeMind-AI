@@ -104,6 +104,17 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
       return null;
   };
 
+  const getRoiPercentage = (t: Trade) => {
+    if (!t.entryPrice || !t.exitPrice) return null;
+    let diff;
+    if (t.direction === TradeDirection.LONG) {
+      diff = t.exitPrice - t.entryPrice;
+    } else {
+      diff = t.entryPrice - t.exitPrice;
+    }
+    return (diff / t.entryPrice) * 100;
+  };
+
   // --- Calendar/Week Navigation ---
   const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
@@ -476,6 +487,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                    const isExpanded = expandedId === trade.id;
                    const aiGrade = getAiGrade(trade.aiFeedback);
                    const isAnalyzing = analyzingTradeId === trade.id;
+                   const roi = getRoiPercentage(trade);
                    
                    // "Outcome Strip" Color
                    const stripColor = isOpen ? 'bg-slate-600' : isWin ? 'bg-emerald-500' : trade.outcome === TradeOutcome.BREAK_EVEN ? 'bg-amber-500' : 'bg-red-500';
@@ -508,6 +520,14 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                        <div className="flex items-center gap-3 mt-1 text-slate-400 text-xs font-mono">
                                            <span className="flex items-center"><Clock size={12} className="mr-1"/> {trade.entryTime}</span>
                                            <span>|</span>
+                                           {roi !== null && (
+                                              <>
+                                                <span className={`${roi > 0 ? 'text-emerald-400' : roi < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                                    {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
+                                                </span>
+                                                <span>|</span>
+                                              </>
+                                           )}
                                            <span>{trade.quantity} Qty</span>
                                            <span>|</span>
                                            <span className={trade.pnl && trade.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}>
@@ -535,8 +555,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                        {/* Expanded Details */}
                        {isExpanded && (
                            <div className="bg-slate-900/50 border-t border-slate-800 p-5 space-y-6 animate-fade-in">
-                               {/* ... (Existing Content) ... */}
-                               {/* Only keeping relevant parts for brevity in this response, actual implementation contains full details */}
+                               
                                {/* Images */}
                                {(trade.chartImage || trade.oiImage) && (
                                    <div className="flex gap-4 overflow-x-auto pb-2">

@@ -202,6 +202,11 @@ const loadFromDrive = async (fileId: string): Promise<BackupData | null> => {
     }
 };
 
+// Exported wrapper for Manual Sync
+export const loadBackupData = async (fileId: string): Promise<BackupData | null> => {
+    return loadFromDrive(fileId);
+};
+
 export const saveToDrive = async (data: any, existingFileId?: string | null): Promise<string> => {
     const fileContent = JSON.stringify({
         ...data,

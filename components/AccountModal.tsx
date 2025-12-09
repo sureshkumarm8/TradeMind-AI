@@ -1,8 +1,7 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, Save, ExternalLink, Mail, Code, Upload, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, Info, LogOut, ChevronRight, Shield, Database, Layout, AlertTriangle, ChevronDown, ChevronUp, UserPlus, RefreshCw, Trash2, Share2, Eye, EyeOff } from 'lucide-react';
-import { shareBackupData, getBackupObject, exportToJSON } from '../services/dataService'; // Import shareBackupData
+import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw } from 'lucide-react';
+import { shareBackupData } from '../services/dataService'; // Import shareBackupData
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -34,6 +33,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [scriptTimeout, setScriptTimeout] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  
+  // Local ref for config import
+  const configFileInputRef = useRef<HTMLInputElement>(null);
   
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   // Check if running in a Sandbox/Preview environment
@@ -135,6 +137,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               const data = JSON.parse(text);
               if (data.k) setApiKey(data.k);
               if (data.c) setGoogleClientId(data.c);
+              if (data.apiKey) setApiKey(data.apiKey);
+              if (data.googleClientId) setGoogleClientId(data.googleClientId);
               alert("Configuration pasted successfully!");
           } catch {
               // Fallback for direct string paste
@@ -149,17 +153,33 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       }
   };
 
+  const handleImportConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+          try {
+              const content = ev.target?.result as string;
+              const data = JSON.parse(content);
+              
+              let imported = false;
+              if (data.k) { setApiKey(data.k); imported = true; }
+              if (data.c) { setGoogleClientId(data.c); imported = true; }
+              if (data.apiKey) { setApiKey(data.apiKey); imported = true; }
+              if (data.googleClientId) { setGoogleClientId(data.googleClientId); imported = true; }
+
+              if(imported) alert("Configuration imported successfully! Don't forget to Save.");
+              else alert("No valid configuration found in file.");
+          } catch (err) {
+              alert("Failed to parse configuration file.");
+          }
+      };
+      reader.readAsText(file);
+      if(configFileInputRef.current) configFileInputRef.current.value = '';
+  };
+
   const handleShareData = async () => {
-    // We need trades and strategy from local storage or props, but AccountModal 
-    // doesn't have trades/strategy prop. 
-    // However, onExportJSON uses `exportToJSON(trades, strategyProfile)` passed as prop.
-    // So we need a similar prop `onShareData` or reuse `onExportJSON` if we refactor App.tsx.
-    // Given the props, we can't directly access trades here.
-    // We should probably rely on onExportJSON to be the trigger, but AccountModal UI
-    // needs a specific Share button.
-    // For now, let's assume we can fetch from localStorage as a fallback since App.tsx
-    // syncs to localStorage.
-    
     setIsSharing(true);
     try {
         const trades = JSON.parse(localStorage.getItem('tradeMind_trades') || '[]');
@@ -231,7 +251,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             {isAccessDenied && (
                                 <div className="ml-8 bg-slate-900/50 border border-red-500/30 p-3 rounded-lg">
                                     <h6 className="text-xs font-bold text-red-300 uppercase mb-2 flex items-center">
-                                        <UserPlus size={14} className="mr-2"/> How to Fix:
+                                        <ExternalLink size={14} className="mr-2"/> How to Fix:
                                     </h6>
                                     <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1">
                                         <li>Go to <strong>Google Cloud Console</strong> &gt; <strong>OAuth Consent Screen</strong>.</li>
@@ -350,7 +370,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         <div className="mt-8 pt-6 border-t border-red-900/30">
                             <h5 className="text-xs font-bold text-red-500 uppercase mb-3 flex items-center"><AlertTriangle size={14} className="mr-2"/> Danger Zone</h5>
                             <button onClick={onReset} className="w-full bg-red-950/20 hover:bg-red-900/40 text-red-400 text-xs font-bold py-3 rounded border border-red-900/50 flex items-center justify-center transition">
-                                <Trash2 size={14} className="mr-2"/> Factory Reset (Clear All Data)
+                                <LogOut size={14} className="mr-2"/> Factory Reset (Clear All Data)
                             </button>
                         </div>
                     </div>
@@ -360,9 +380,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
             {/* --- TAB: CONFIGURATION (Technical) --- */}
             {activeTab === 'config' && (
                 <div className="bg-slate-900 rounded-2xl border border-slate-700 p-8 shadow-xl animate-fade-in">
+                    
+                    {/* Hidden input for config import */}
+                    <input 
+                        type="file" 
+                        ref={configFileInputRef} 
+                        onChange={handleImportConfig} 
+                        className="hidden" 
+                        accept=".json" 
+                    />
+
                     <div className="flex justify-between items-center mb-6">
                         <h4 className="text-xl font-bold text-white">Developer Settings</h4>
                         <div className="flex gap-2">
+                             <button onClick={() => configFileInputRef.current?.click()} className="text-xs bg-slate-800 text-slate-300 border border-slate-700 px-3 py-1.5 rounded flex items-center hover:bg-slate-700 transition">
+                                <Upload size={14} className="mr-2"/> Import Config
+                            </button>
                             <button onClick={handleShareConfig} className="text-xs bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-3 py-1.5 rounded flex items-center hover:bg-indigo-600/40 transition">
                                 <Share2 size={14} className="mr-2"/> Share Config
                             </button>
@@ -375,7 +408,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                     <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-lg mb-6">
                         <p className="text-xs text-blue-300 mb-2">
                             <strong>Syncing with Mobile?</strong> Use "Share Config" on your desktop to send your keys to your phone. 
-                            Then "Paste" them here to ensure they match exactly.
+                            Then "Paste" or "Import" them here.
                         </p>
                     </div>
 
