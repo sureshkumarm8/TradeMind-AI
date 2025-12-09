@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database } from 'lucide-react';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON, shareBackupData } from '../services/dataService';
 import { shareElementAsImage } from '../services/shareService';
@@ -17,9 +17,11 @@ interface TradeListProps {
   onImport: (trades: Trade[]) => void;
   analyzingTradeId: string | null;
   readOnly?: boolean;
+  onSyncPush?: () => void;
+  isSyncing?: boolean;
 }
 
-const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onDeleteAiAnalysis, onImport, analyzingTradeId, readOnly = false }) => {
+const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onDeleteAiAnalysis, onImport, analyzingTradeId, readOnly = false, onSyncPush, isSyncing }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dailyAnalysis, setDailyAnalysis] = useState<Record<string, string>>({});
   const [analyzingDay, setAnalyzingDay] = useState<string | null>(null);
@@ -436,6 +438,12 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
            </div>
            
            <div className="flex gap-2">
+               {onSyncPush && (
+                   <button onClick={onSyncPush} disabled={isSyncing} className="p-2 text-indigo-400 hover:text-white bg-indigo-900/20 hover:bg-indigo-900/40 rounded-lg border border-indigo-500/20 hover:border-indigo-500/50 transition disabled:opacity-50 flex items-center gap-1" title="Save to Cloud">
+                       {isSyncing ? <Loader2 size={18} className="animate-spin"/> : <CloudUpload size={18}/>}
+                       <span className="text-[10px] font-bold uppercase hidden sm:block">{isSyncing ? 'Saving' : 'Save'}</span>
+                   </button>
+               )}
                <button onClick={handleShareImage} disabled={isSharing} className="p-2 text-slate-400 hover:text-indigo-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-indigo-500/30 transition disabled:opacity-50" title="Share Snapshot">
                    {isSharing ? <Loader2 size={18} className="animate-spin"/> : <Share2 size={18}/>}
                </button>

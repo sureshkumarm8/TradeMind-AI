@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote } from '../types';
 import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
@@ -127,6 +127,20 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
 
     return defaults;
   });
+
+  // Calculate ROI % in Realtime
+  const pnlPercentage = useMemo(() => {
+    const entry = Number(formData.entryPrice);
+    const exit = Number(formData.exitPrice);
+    
+    if (!entry || !exit) return null;
+    
+    const diff = formData.direction === TradeDirection.LONG 
+        ? (exit - entry) 
+        : (entry - exit);
+        
+    return (diff / entry) * 100;
+  }, [formData.entryPrice, formData.exitPrice, formData.direction]);
   
   // Auto-expand sections if editing and they have data
   useEffect(() => {
@@ -529,7 +543,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                </div>
 
                {/* Time & Duration */}
-               <div className="grid grid-cols-3 gap-4 border-t border-slate-700/50 pt-4">
+               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-t border-slate-700/50 pt-4">
                    <div>
                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Entry Time</label>
                        <input type="time" name="entryTime" value={formData.entryTime} onChange={handleChange} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none" />
@@ -549,6 +563,13 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Duration</label>
                        <div className="bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 font-mono text-sm flex items-center">
                            <Clock size={12} className="mr-2 text-slate-500"/> {formData.tradeDurationMins}m
+                       </div>
+                   </div>
+                   <div>
+                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">ROI %</label>
+                       <div className={`bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm flex items-center ${pnlPercentage && pnlPercentage > 0 ? 'text-emerald-400' : pnlPercentage && pnlPercentage < 0 ? 'text-red-400' : 'text-slate-300'}`}>
+                           <Activity size={12} className="mr-2 text-slate-500"/> 
+                           {pnlPercentage !== null ? `${pnlPercentage > 0 ? '+' : ''}${pnlPercentage.toFixed(2)}%` : '-'}
                        </div>
                    </div>
                </div>

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw } from 'lucide-react';
+import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload } from 'lucide-react';
 import { shareBackupData } from '../services/dataService'; // Import shareBackupData
 
 interface AccountSettingsProps {
@@ -20,12 +21,14 @@ interface AccountSettingsProps {
   onExportCSV: () => void;
   onImportClick: () => void;
   onReset: () => void;
+  onForceSave: () => void;
+  onForceLoad: () => void;
 }
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({
   userProfile, syncStatus, authError, onConnect, onLogout,
   apiKey, setApiKey, googleClientId, setGoogleClientId, onSaveSettings,
-  onExportJSON, onExportCSV, onImportClick, onReset
+  onExportJSON, onExportCSV, onImportClick, onReset, onForceSave, onForceLoad
 }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'config'>('profile');
   const [isGapiReady, setIsGapiReady] = useState(false);
@@ -344,6 +347,29 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                     )}
                                 </div>
                             )}
+                        </div>
+                    )}
+                    
+                    {/* Manual Sync Controls */}
+                    {userProfile && (
+                        <div className="mt-8 pt-8 border-t border-slate-800 relative z-10">
+                            <h5 className="text-xs font-bold text-blue-400 uppercase mb-4 flex items-center"><RefreshCw size={14} className="mr-2"/> Cloud Sync Operations</h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <button onClick={onForceSave} disabled={syncStatus === SyncStatus.SYNCING} className="flex items-center justify-center gap-2 p-3 bg-slate-800 hover:bg-indigo-900/40 border border-slate-700 hover:border-indigo-500/50 rounded-xl transition disabled:opacity-50">
+                                    <CloudUpload size={18} className="text-indigo-400"/>
+                                    <div className="text-left">
+                                        <span className="block text-xs font-bold text-white">Force Upload</span>
+                                        <span className="block text-[10px] text-slate-500">Save local data to Cloud</span>
+                                    </div>
+                                </button>
+                                <button onClick={onForceLoad} disabled={syncStatus === SyncStatus.SYNCING} className="flex items-center justify-center gap-2 p-3 bg-slate-800 hover:bg-emerald-900/40 border border-slate-700 hover:border-emerald-500/50 rounded-xl transition disabled:opacity-50">
+                                    <CloudDownload size={18} className="text-emerald-400"/>
+                                    <div className="text-left">
+                                        <span className="block text-xs font-bold text-white">Force Download</span>
+                                        <span className="block text-[10px] text-slate-500">Pull latest data from Cloud</span>
+                                    </div>
+                                </button>
+                            </div>
                         </div>
                     )}
 

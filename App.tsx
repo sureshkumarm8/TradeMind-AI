@@ -260,6 +260,23 @@ const App: React.FC = () => {
       }
   };
 
+  const handleForceSave = async () => {
+      if (syncStatus === SyncStatus.OFFLINE || !driveFileId) {
+          notify("Not connected to Cloud", 'error');
+          return;
+      }
+      setSyncStatus(SyncStatus.SYNCING);
+      try {
+          await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
+          setSyncStatus(SyncStatus.SYNCED);
+          notify("Manual Save Successful", 'success');
+      } catch(e) {
+          console.error(e);
+          setSyncStatus(SyncStatus.ERROR);
+          notify("Save Failed", 'error');
+      }
+  }
+
   const handleLogout = () => {
       setUserProfile(null);
       setSyncStatus(SyncStatus.OFFLINE);
@@ -509,7 +526,7 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto animate-fade-in-up">
           {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
           {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey} notify={notify} onDelete={(id) => { handleDeleteTrade(id); setView('journal'); }}/>}
-          {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId}/>}
+          {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId} onSyncPush={handleForceSave} isSyncing={syncStatus === SyncStatus.SYNCING}/>}
           {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy} notify={notify}/>}
           {view === 'account' && (
               <AccountModal 
@@ -529,6 +546,8 @@ const App: React.FC = () => {
                 onExportCSV={() => exportToCSV(trades)}
                 onImportClick={() => fileInputRef.current?.click()}
                 onReset={handleResetApp}
+                onForceSave={handleForceSave}
+                onForceLoad={handleManualSync}
               />
           )}
         </div>
