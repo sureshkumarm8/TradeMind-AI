@@ -12,6 +12,7 @@ interface TradeFormProps {
   apiKey?: string;
   notify?: (message: string, type?: NotificationType) => void;
   onDelete?: (id: string) => void;
+  preMarketDone?: boolean; // Prop to indicate if analysis exists for today
 }
 
 const COMMON_CONFLUENCES = [
@@ -53,7 +54,7 @@ const QUICK_THOUGHTS = [
     { label: "Adding Qty", type: 'logic' }
 ];
 
-const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete }) => {
+const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete, preMarketDone }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
   const [showMistakes, setShowMistakes] = useState(false);
@@ -106,7 +107,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         chartImage: '',
         oiImage: '',
         systemChecks: {
-            analyzedPreMarket: false,
+            analyzedPreMarket: preMarketDone || false, // Auto-check if preMarketDone is true
             waitedForOpen: false,
             checkedSensibullOI: false,
             exitTimeLimit: false

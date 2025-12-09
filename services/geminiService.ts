@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { Trade, StrategyProfile, ParsedVoiceCommand } from "../types";
+import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
@@ -289,5 +289,235 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
     } catch (e) {
         console.error("Voice parse error", e);
         return { note: "Error processing voice note." }; 
+    }
+}
+
+// PRE-MARKET ANALYZER ROUTINE
+export const analyzePreMarketRoutine = async (
+    images: { market: string; intraday: string; oi: string; multiStrike: string },
+    apiKey?: string
+): Promise<PreMarketAnalysis> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required for Pre-Market Analysis");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+
+    // Prepare prompt parts
+    const parts: any[] = [];
+    
+    // Add Images with labels in text
+    if (images.market) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.market.split(',')[1] } });
+        parts.push({ text: "Image 1: Market Overview Graph" });
+    }
+    if (images.intraday) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.intraday.split(',')[1] } });
+        parts.push({ text: "Image 2: Intraday Chart (5min)" });
+    }
+    if (images.oi) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.oi.split(',')[1] } });
+        parts.push({ text: "Image 3: Total Open Interest (OI)" });
+    }
+    if (images.multiStrike) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.multiStrike.split(',')[1] } });
+        parts.push({ text: "Image 4: Multi-Strike OI Changes" });
+    }
+
+    // Strict Schema Definition
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            marketBias: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral', 'Volatile'] },
+            confidenceScore: { type: Type.NUMBER, description: "1 to 10" },
+            keyLevels: {
+                type: Type.OBJECT,
+                properties: {
+                    resistance: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                    support: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                }
+            },
+            coreThesis: { type: Type.STRING, description: "1-2 sentence central trading hypothesis" },
+            firstHourPlan: {
+                type: Type.OBJECT,
+                properties: {
+                    action: { type: Type.STRING, description: "Tactical plan STRICTLY for the 09:25 AM to 09:45 AM window." },
+                    potentialTrade: {
+                        type: Type.OBJECT,
+                        properties: {
+                            direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                            entryZone: { type: Type.STRING },
+                            stopLoss: { type: Type.STRING, description: "Must be 'Exactly 30 pts'" },
+                            target: { type: Type.STRING, description: "Must be 'Exactly 35 pts'" }
+                        }
+                    }
+                }
+            },
+            tradeSetups: {
+                type: Type.OBJECT,
+                properties: {
+                    primary: {
+                        type: Type.OBJECT,
+                        properties: {
+                            direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                            trigger: { type: Type.STRING },
+                            target: { type: Type.NUMBER },
+                            stopLoss: { type: Type.NUMBER }
+                        }
+                    },
+                    alternate: {
+                         type: Type.OBJECT,
+                        properties: {
+                            direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                            trigger: { type: Type.STRING },
+                            target: { type: Type.NUMBER },
+                            stopLoss: { type: Type.NUMBER }
+                        }
+                    }
+                }
+            },
+            openingScenarios: {
+                type: Type.OBJECT,
+                properties: {
+                    gapUp: { type: Type.STRING },
+                    gapDown: { type: Type.STRING }
+                }
+            },
+            chartSummaries: {
+                type: Type.OBJECT,
+                properties: {
+                    marketGraph: { type: Type.STRING },
+                    intraday: { type: Type.STRING },
+                    oiData: { type: Type.STRING },
+                    multiStrike: { type: Type.STRING }
+                }
+            }
+        }
+    };
+
+    // System Instruction
+    const promptText = `
+        You are an expert Nifty 50 intraday trading strategist.
+        Analyze the provided 4 images holistically.
+        
+        CRITICAL TIME CONSTRAINTS:
+        - The trader DOES NOT trade immediately at 9:15 AM.
+        - They wait for 10 minutes (9:15 - 9:25) to let the dust settle.
+        - The 'firstHourPlan' MUST focus strictly on the entry window: 09:25 AM to 09:45 AM.
+        - All advice must be for acting within this specific 20-minute slot.
+        
+        CRITICAL RISK CONSTRAINTS:
+        - For any trade recommended, the Stop Loss MUST be exactly 30 points from entry.
+        - The Target MUST be exactly 35 points from entry.
+        
+        Generate a detailed Battle Plan in JSON format based on the schema.
+        1. Identify the directional bias.
+        2. Extract key Support & Resistance levels.
+        3. Formulate a core thesis.
+        4. Create a specific tactical plan for the 9:25 AM - 9:45 AM window.
+        5. Define Primary and Alternate trade setups.
+        6. Provide specific advice for Gap Up and Gap Down openings.
+        7. Summarize key signals from each chart.
+    `;
+    
+    parts.push({ text: promptText });
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash', 
+            contents: { parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a disciplined trading coach. Be objective. Do not hallucinate data not present in charts.",
+                temperature: 0.2
+            }
+        });
+
+        return JSON.parse(response.text || "{}");
+
+    } catch (e) {
+        console.error("Pre-Market Analysis Error", e);
+        throw new Error("Failed to generate Pre-Market Plan. Check API Key and Images.");
+    }
+}
+
+// LIVE MARKET CHECK ROUTINE (9:20 AM)
+export const analyzeLiveMarketRoutine = async (
+    images: { liveChart: string; liveOi: string },
+    preMarketPlan: PreMarketAnalysis,
+    apiKey?: string
+): Promise<LiveMarketAnalysis> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required for Live Check");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const parts: any[] = [];
+
+    // Context: Pre-Market Plan
+    const contextStr = JSON.stringify(preMarketPlan, null, 2);
+    parts.push({ text: `PRE-MARKET PLAN (Context): ${contextStr}` });
+
+    // Live Images
+    if (images.liveChart) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.liveChart.split(',')[1] } });
+        parts.push({ text: "LIVE CHART (9:20 AM)" });
+    }
+    if (images.liveOi) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.liveOi.split(',')[1] } });
+        parts.push({ text: "LIVE OI DATA (9:20 AM)" });
+    }
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            status: { type: Type.STRING, enum: ['CONFIRMED', 'INVALIDATED', 'CAUTION'] },
+            updatedBias: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral'] },
+            realityCheck: { type: Type.STRING, description: "Compare Pre-Market Thesis vs Live Price Action. Is the gap fill happening? Is support holding?" },
+            immediateAction: { type: Type.STRING, description: "Specific instruction for the 9:25 AM - 9:45 AM window." },
+            tradeUpdate: {
+                type: Type.OBJECT,
+                properties: {
+                    direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                    entryPrice: { type: Type.STRING },
+                    stopLoss: { type: Type.STRING, description: "Exactly 30 pts" },
+                    target: { type: Type.STRING, description: "Exactly 35 pts" }
+                }
+            }
+        }
+    };
+
+    const promptText = `
+        You are the Nifty 50 Commander. It is now 9:20 AM (5 mins after open).
+        
+        TASK:
+        1. Compare the LIVE charts against the PRE-MARKET PLAN context provided.
+        2. Did the market open as expected (Gap Up/Down)?
+        3. Is the Core Thesis still valid?
+        
+        DECISION FOR 9:25 AM - 9:45 AM WINDOW:
+        - Should we enter as planned? Or abort?
+        - If entering, confirm the levels.
+        - Constraints: Stop Loss = 30 pts, Target = 35 pts.
+        
+        Output valid JSON.
+    `;
+    
+    parts.push({ text: promptText });
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a real-time trading assistant. Be sharp and decisive.",
+                temperature: 0.2
+            }
+        });
+        return JSON.parse(response.text || "{}");
+    } catch (e) {
+        console.error("Live Check Error", e);
+        throw new Error("Failed Live Check.");
     }
 }

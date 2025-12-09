@@ -55,6 +55,64 @@ export interface AiAnalysisResponse {
   sources?: string[]; // Grounding links
 }
 
+// --- PRE-MARKET ANALYSIS TYPES ---
+export interface PreMarketAnalysis {
+  marketBias: 'Bullish' | 'Bearish' | 'Neutral' | 'Volatile';
+  confidenceScore: number; // 1-10
+  keyLevels: {
+    resistance: number[];
+    support: number[];
+  };
+  coreThesis: string;
+  firstHourPlan: {
+    action: string; // Tactical advice for 9:25-9:45
+    potentialTrade?: {
+      direction: TradeDirection;
+      entryZone: string;
+      stopLoss: string; // "Exactly 30 pts"
+      target: string;   // "Exactly 35 pts"
+    }
+  };
+  tradeSetups: {
+    primary: {
+      direction: TradeDirection;
+      trigger: string;
+      target: number;
+      stopLoss: number;
+    };
+    alternate: {
+      direction: TradeDirection;
+      trigger: string;
+      target: number;
+      stopLoss: number;
+    };
+  };
+  openingScenarios: {
+    gapUp: string;
+    gapDown: string;
+  };
+  chartSummaries: {
+    marketGraph: string;
+    intraday: string;
+    oiData: string;
+    multiStrike: string;
+  }
+}
+
+// --- LIVE MARKET CHECK TYPES ---
+export interface LiveMarketAnalysis {
+    status: 'CONFIRMED' | 'INVALIDATED' | 'CAUTION';
+    updatedBias: 'Bullish' | 'Bearish' | 'Neutral';
+    realityCheck: string; // Comparison of Pre-Market vs Live Action
+    immediateAction: string; // Specific instruction for 9:25-9:45
+    tradeUpdate?: {
+        direction: TradeDirection;
+        entryPrice: string;
+        stopLoss: string;
+        target: string;
+    }
+}
+
 export interface TradeNote {
     id: string;
     timestamp: string; // HH:mm:ss

@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType } from './types';
+import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
-import AccountModal from './components/AccountModal'; // Now acts as AccountPage
+import AccountModal from './components/AccountModal'; 
+import PreMarketAnalyzer from './components/PreMarketAnalyzer'; // Import the new component
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile, loadBackupData } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap } from 'lucide-react';
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
@@ -42,11 +43,17 @@ const DEFAULT_STRATEGY: StrategyProfile = {
 };
 
 const App: React.FC = () => {
-  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account'>('dashboard');
+  // Added 'premarket' to view state type
+  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [apiKey, setApiKey] = useState<string>('');
   const [preMarketNotes, setPreMarketNotes] = useState<{date: string, notes: string} | undefined>(undefined);
+  
+  // New: AI Pre-Market Analysis State
+  const [preMarketAnalysis, setPreMarketAnalysis] = useState<{date: string, data: PreMarketAnalysis} | undefined>(undefined);
+  // New: AI Live Market Analysis State
+  const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, data: LiveMarketAnalysis} | undefined>(undefined);
   
   // Cloud Sync State
   const [googleClientId, setGoogleClientId] = useState<string>('');
@@ -54,14 +61,13 @@ const App: React.FC = () => {
   const [driveFileId, setDriveFileId] = useState<string | null>(null);
   const [isDriveInitialized, setIsDriveInitialized] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null); 
-  const [authError, setAuthError] = useState<string | null>(null); // New state for login errors
+  const [authError, setAuthError] = useState<string | null>(null); 
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null); 
   const [notification, setNotification] = useState<{message: string, type: NotificationType} | null>(null);
 
-  // Track specific trade being analyzed instead of global boolean
   const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
   const [dailyTip, setDailyTip] = useState<string>("");
 
@@ -75,6 +81,8 @@ const App: React.FC = () => {
     const savedStrategy = localStorage.getItem('tradeMind_strategy');
     const savedApiKey = localStorage.getItem('tradeMind_apiKey');
     const savedPreMarket = localStorage.getItem('tradeMind_preMarket');
+    const savedPreMarketAnalysis = localStorage.getItem('tradeMind_preMarketAnalysis');
+    const savedLiveMarketAnalysis = localStorage.getItem('tradeMind_liveMarketAnalysis');
     const savedClientId = localStorage.getItem('tradeMind_googleClientId');
     const savedProfile = localStorage.getItem('tradeMind_userProfile');
     
@@ -87,6 +95,8 @@ const App: React.FC = () => {
     if (savedApiKey) setApiKey(savedApiKey);
     if (savedClientId) setGoogleClientId(savedClientId);
     if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
+    if (savedPreMarketAnalysis) try { setPreMarketAnalysis(JSON.parse(savedPreMarketAnalysis)); } catch(e) {};
+    if (savedLiveMarketAnalysis) try { setLiveMarketAnalysis(JSON.parse(savedLiveMarketAnalysis)); } catch(e) {};
     if (savedProfile) try { setUserProfile(JSON.parse(savedProfile)); } catch(e) {};
     
   }, []);
@@ -95,7 +105,6 @@ const App: React.FC = () => {
       setNotification({ message, type });
   };
 
-  // Initialize Google Drive Client if ID exists
   useEffect(() => {
      if (googleClientId && !isDriveInitialized) {
         console.log('🔐 Initializing Google OAuth');
@@ -110,7 +119,6 @@ const App: React.FC = () => {
      }
   }, [googleClientId]);
 
-  // Auto-Sync Logic (Debounced)
   useEffect(() => {
      if (syncStatus !== SyncStatus.OFFLINE && driveFileId) {
          setSyncStatus(SyncStatus.SYNCING);
@@ -124,12 +132,11 @@ const App: React.FC = () => {
                  console.error("Auto Sync Failed", e);
                  setSyncStatus(SyncStatus.ERROR);
              }
-         }, 5000); // 5 seconds debounce
+         }, 5000); 
      }
      return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
   }, [trades, strategyProfile, preMarketNotes]);
 
-  // Check for Tilt Logic whenever trades update
   useEffect(() => {
      const closedTrades = trades
         .filter(t => t.outcome !== TradeOutcome.OPEN)
@@ -169,10 +176,11 @@ const App: React.FC = () => {
      getDailyCoachTip(apiKey).then(setDailyTip);
   }, [apiKey]);
 
-  // Persistence Effects (Local)
   useEffect(() => { localStorage.setItem('tradeMind_trades', JSON.stringify(trades)); }, [trades]);
   useEffect(() => { localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile)); }, [strategyProfile]);
   useEffect(() => { if (preMarketNotes) localStorage.setItem('tradeMind_preMarket', JSON.stringify(preMarketNotes)); }, [preMarketNotes]);
+  useEffect(() => { if (preMarketAnalysis) localStorage.setItem('tradeMind_preMarketAnalysis', JSON.stringify(preMarketAnalysis)); }, [preMarketAnalysis]);
+  useEffect(() => { if (liveMarketAnalysis) localStorage.setItem('tradeMind_liveMarketAnalysis', JSON.stringify(liveMarketAnalysis)); }, [liveMarketAnalysis]);
   useEffect(() => { if (userProfile) localStorage.setItem('tradeMind_userProfile', JSON.stringify(userProfile)); }, [userProfile]);
 
   const handleSaveSettings = () => {
@@ -193,7 +201,6 @@ const App: React.FC = () => {
       
       if (!isDriveInitialized) {
           setAuthError("Google Client not ready. Please check your Client ID in the Config tab.");
-          // Attempt re-init
           initGoogleDrive(googleClientId, (s) => setIsDriveInitialized(s));
           return;
       }
@@ -204,7 +211,6 @@ const App: React.FC = () => {
 
           setSyncStatus(SyncStatus.SYNCING);
           
-          // SILENT SYNC LOGIC
           const { data, fileId } = await performInitialSync(trades, strategyProfile, preMarketNotes);
           
           if (data && fileId) {
@@ -243,7 +249,6 @@ const App: React.FC = () => {
       try {
           const cloudData = await loadBackupData(driveFileId);
           if (cloudData) {
-              // We trust cloud data on pull
               if (cloudData.trades) setTrades(cloudData.trades);
               if (cloudData.strategy) setStrategyProfile(cloudData.strategy);
               if (cloudData.preMarketNotes) setPreMarketNotes(cloudData.preMarketNotes);
@@ -290,6 +295,16 @@ const App: React.FC = () => {
       setPreMarketNotes({ date: new Date().toISOString().split('T')[0], notes });
   }
 
+  // Update AI Pre-Market Analysis
+  const handleUpdatePreMarketAnalysis = (data: PreMarketAnalysis) => {
+      setPreMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+  };
+
+  // Update AI Live Analysis
+  const handleUpdateLiveMarketAnalysis = (data: LiveMarketAnalysis) => {
+      setLiveMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+  }
+
   const handleSaveTrade = (trade: Trade) => {
     if (editingTrade) {
       setTrades(prev => prev.map(t => t.id === trade.id ? trade : t));
@@ -330,15 +345,10 @@ const App: React.FC = () => {
   
   const handleImportTrades = (importedTrades: Trade[]) => {
       setTrades(prev => {
-          // Create a map of existing trades for easy lookup
           const tradeMap = new Map(prev.map(t => [t.id, t]));
-          
-          // Upsert: Update if exists, Insert if new
           importedTrades.forEach(t => {
               tradeMap.set(t.id, t);
           });
-          
-          // Convert map back to array
           return Array.from(tradeMap.values());
       });
       notify(`${importedTrades.length} Trades Merged`, 'success');
@@ -379,18 +389,32 @@ const App: React.FC = () => {
           setApiKey('');
           setGoogleClientId('');
           setPreMarketNotes(undefined);
+          setPreMarketAnalysis(undefined);
+          setLiveMarketAnalysis(undefined);
           setUserProfile(null);
           setSyncStatus(SyncStatus.OFFLINE);
           setAuthError(null);
           notify("App Reset Successfully", 'info');
-          // Reload to ensure clean state
           setTimeout(() => window.location.reload(), 1000);
       }
   };
 
+  // Helper to save plan from PreMarket to Dashboard PreMarket notes (Legacy text support + AI data)
+  const handleSavePlan = (notes: string) => {
+      handleUpdatePreMarket(notes);
+      notify("Battle Plan Saved to Dashboard", 'success');
+      setView('dashboard');
+  };
+
+  // Navigate to Pre-Market Center
+  const handleNavigateToPreMarket = () => {
+      setView('premarket');
+  }
+
   const getPageTitle = () => {
      switch(view) {
         case 'dashboard': return 'Dashboard';
+        case 'premarket': return 'Pre-Market Center'; // Title for new view
         case 'journal': return 'Trade Journal';
         case 'system': return 'My System';
         case 'new': return editingTrade ? 'Edit Trade' : 'Log Trade';
@@ -399,15 +423,16 @@ const App: React.FC = () => {
      }
   }
 
+  // Check if Pre-Market Analysis exists for TODAY
+  const hasPreMarketAnalysisToday = preMarketAnalysis?.date === new Date().toISOString().split('T')[0];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 relative">
       
       <Toast notification={notification} onClose={() => setNotification(null)} />
 
-      {/* Hidden Global Input */}
       <input type="file" ref={fileInputRef} onChange={handleGlobalFileChange} className="hidden" accept=".json,.csv" />
 
-      {/* Tilt Overlay */}
       {isTiltLocked && (
           <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
               <div className="mb-8 relative">
@@ -436,6 +461,10 @@ const App: React.FC = () => {
             <button onClick={() => setView('dashboard')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <LayoutDashboard size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Dashboard</span>
             </button>
+             {/* NEW BUTTON FOR PRE-MARKET */}
+             <button onClick={() => setView('premarket')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'premarket' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <Zap size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Pre-Market</span>
+            </button>
             <button onClick={() => setView('journal')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'journal' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <BookOpen size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Journal</span>
             </button>
@@ -457,7 +486,6 @@ const App: React.FC = () => {
                  <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
                  
                  <div className="relative p-5 bg-slate-950 rounded-xl border border-slate-800 shadow-xl">
-                    {/* Header */}
                     <div className="flex items-center gap-2 mb-3">
                         <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20">
                             <Sparkles size={12} className="group-hover:animate-spin-slow" />
@@ -465,7 +493,6 @@ const App: React.FC = () => {
                         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-indigo-300 transition-colors">Daily Wisdom</span>
                     </div>
 
-                    {/* The Quote */}
                     <blockquote className="relative mb-2">
                         <span className="absolute -top-3 -left-1 text-4xl text-slate-800 font-serif leading-none select-none opacity-50">“</span>
                         <p className="text-xs font-medium text-slate-300 leading-relaxed italic pl-2 relative z-10">
@@ -473,7 +500,6 @@ const App: React.FC = () => {
                         </p>
                     </blockquote>
 
-                    {/* Mini Footer */}
                     <div className="pt-3 border-t border-slate-900 flex justify-between items-center">
                         <span className="text-[9px] text-slate-600 font-mono">AI Coach v1.0</span>
                         <div className="flex space-x-0.5">
@@ -498,12 +524,12 @@ const App: React.FC = () => {
            <h2 className="text-lg md:text-xl font-bold text-white tracking-tight flex items-center">
              {view === 'new' && <PlusCircle size={18} className="mr-2 text-indigo-400"/>}
              {view === 'dashboard' && <LayoutDashboard size={18} className="mr-2 text-indigo-400"/>}
+             {view === 'premarket' && <Zap size={18} className="mr-2 text-indigo-400"/>}
              {view === 'system' && <Target size={18} className="mr-2 text-indigo-400"/>}
              {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
              {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
              {getPageTitle()}
            </h2>
-           {/* SYNC STATUS INDICATOR IN HEADER */}
            {userProfile && (
              <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-700">
                 {syncStatus === SyncStatus.SYNCING && <Loader2 size={14} className="text-blue-400 animate-spin"/>}
@@ -513,7 +539,6 @@ const App: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-slate-400 hidden sm:block">
                   {syncStatus === SyncStatus.SYNCING ? 'Syncing...' : syncStatus === SyncStatus.SYNCED ? 'Synced' : 'Offline'}
                 </span>
-                {/* Manual Refresh Button */}
                 {syncStatus === SyncStatus.SYNCED && (
                     <button onClick={handleManualSync} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition" title="Pull from Cloud">
                         <RefreshCw size={12} />
@@ -524,10 +549,41 @@ const App: React.FC = () => {
         </header>
 
         <div className="max-w-7xl mx-auto animate-fade-in-up">
-          {view === 'dashboard' && <Dashboard trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} preMarketNotes={preMarketNotes} onUpdatePreMarket={handleUpdatePreMarket} />}
-          {view === 'new' && <TradeForm onSave={handleSaveTrade} onCancel={() => { setEditingTrade(null); setView('dashboard'); }} initialData={editingTrade || undefined} apiKey={apiKey} notify={notify} onDelete={(id) => { handleDeleteTrade(id); setView('journal'); }}/>}
+          {view === 'dashboard' && 
+             <Dashboard 
+                trades={trades} 
+                strategyProfile={strategyProfile} 
+                apiKey={apiKey} 
+                preMarketNotes={preMarketNotes} 
+                preMarketAnalysis={preMarketAnalysis} // Pass Analysis
+                onUpdatePreMarket={handleUpdatePreMarket} 
+                onNavigateToPreMarket={handleNavigateToPreMarket} // Pass Nav
+             />
+          }
+          {view === 'new' && 
+            <TradeForm 
+              onSave={handleSaveTrade} 
+              onCancel={() => { setEditingTrade(null); setView('dashboard'); }} 
+              initialData={editingTrade || undefined} 
+              apiKey={apiKey} 
+              notify={notify} 
+              onDelete={(id) => { handleDeleteTrade(id); setView('journal'); }}
+              preMarketDone={hasPreMarketAnalysisToday} // Pass Today's Pre-Market Status
+            />
+          }
           {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId} onSyncPush={handleForceSave} isSyncing={syncStatus === SyncStatus.SYNCING}/>}
           {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy} notify={notify}/>}
+          {/* NEW PRE-MARKET ANALYZER VIEW */}
+          {view === 'premarket' && 
+            <PreMarketAnalyzer 
+                apiKey={apiKey} 
+                initialData={preMarketAnalysis?.data} // Pass existing data
+                liveData={liveMarketAnalysis?.data} // Pass Live data
+                onAnalysisUpdate={handleUpdatePreMarketAnalysis} // Sync up
+                onLiveAnalysisUpdate={handleUpdateLiveMarketAnalysis} // Sync up live
+                onSavePlan={handleSavePlan} 
+            />
+          }
           {view === 'account' && (
               <AccountModal 
                 isOpen={true} 

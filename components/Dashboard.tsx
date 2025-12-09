@@ -1,7 +1,8 @@
+
 import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle } from 'lucide-react';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis } from '../types';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -9,7 +10,9 @@ interface DashboardProps {
   strategyProfile: StrategyProfile;
   apiKey?: string;
   preMarketNotes?: { date: string, notes: string };
+  preMarketAnalysis?: { date: string, data: PreMarketAnalysis }; // Add AI Data Prop
   onUpdatePreMarket: (notes: string) => void;
+  onNavigateToPreMarket?: () => void; // Add Navigation Prop
 }
 
 // Custom Tooltip for Recharts to match Glassmorphism theme
@@ -29,7 +32,7 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, preMarketNotes, onUpdatePreMarket }) => {
+const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, preMarketNotes, preMarketAnalysis, onUpdatePreMarket, onNavigateToPreMarket }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'playbook' | 'simulator'>('overview');
   
   const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
@@ -288,6 +291,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
   // --- Pre Market Logic ---
   const today = new Date().toISOString().split('T')[0];
   const hasPreMarketToday = preMarketNotes?.date === today;
+  // Check if we have valid AI Analysis for today
+  const hasAiAnalysisToday = preMarketAnalysis && preMarketAnalysis.date === today;
   const isMorning = new Date().getHours() < 10;
   
   const savePreMarket = () => {
@@ -393,20 +398,55 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
          </div>
       </div>
 
-      {/* 🛡️ PRE-MARKET BATTLE PLAN (Shows in morning or if set) */}
-      {(isMorning || hasPreMarketToday) && (
-          <div className="bg-slate-800/80 rounded-xl border border-slate-700 overflow-hidden shadow-lg animate-fade-in-up">
+      {/* 🛡️ PRE-MARKET BATTLE PLAN */}
+      {/* Show if morning OR if we have data for today */}
+      {(isMorning || hasPreMarketToday || hasAiAnalysisToday) && (
+          <div 
+            onClick={() => onNavigateToPreMarket?.()} // Navigate on click
+            className="bg-slate-800/80 rounded-xl border border-slate-700 overflow-hidden shadow-lg animate-fade-in-up cursor-pointer hover:border-indigo-500 transition-colors group relative"
+          >
               <div className="bg-slate-900/50 p-3 px-4 border-b border-slate-700 flex justify-between items-center">
                   <h3 className="text-amber-400 font-bold text-xs uppercase tracking-widest flex items-center">
                       <Sword size={14} className="mr-2"/> Pre-Market Battle Plan <span className="text-slate-500 ml-2 normal-case opacity-70">({today})</span>
                   </h3>
-                  <button onClick={() => { setIsEditingPreMarket(!isEditingPreMarket); setTempPreMarket(preMarketNotes?.notes || ''); }} className="text-[10px] bg-slate-800 text-slate-400 hover:text-white px-2 py-1 rounded border border-slate-700 transition">
-                      {isEditingPreMarket ? 'Cancel' : 'Edit Plan'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                       {/* Indicator if AI Analysis is present */}
+                       {hasAiAnalysisToday && (
+                           <span className="flex items-center text-[10px] font-bold text-indigo-400 bg-indigo-900/30 px-2 py-0.5 rounded border border-indigo-500/30 animate-pulse">
+                               <Zap size={10} className="mr-1"/> AI Active
+                           </span>
+                       )}
+                       <ArrowRight size={14} className="text-slate-500 group-hover:text-white transition-colors"/>
+                  </div>
               </div>
               
-              {isEditingPreMarket ? (
-                  <div className="p-4">
+              {/* CONTENT AREA: Prioritize AI Analysis */}
+              {hasAiAnalysisToday && preMarketAnalysis ? (
+                   <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                       {/* Bias Badge */}
+                       <div className="flex flex-col justify-center items-center p-2 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                           <span className="text-[10px] text-slate-500 uppercase font-bold mb-1">Market Bias</span>
+                           <div className={`text-lg font-black uppercase ${preMarketAnalysis.data.marketBias === 'Bullish' ? 'text-emerald-400' : preMarketAnalysis.data.marketBias === 'Bearish' ? 'text-red-400' : 'text-slate-300'}`}>
+                               {preMarketAnalysis.data.marketBias}
+                           </div>
+                           <div className="text-[10px] text-slate-500">Conf: {preMarketAnalysis.data.confidenceScore}/10</div>
+                       </div>
+                       
+                       {/* Thesis */}
+                       <div className="md:col-span-2">
+                           <span className="text-[10px] text-indigo-400 uppercase font-bold mb-1 block">Core Thesis</span>
+                           <p className="text-sm text-slate-300 italic line-clamp-2 leading-relaxed">
+                               "{preMarketAnalysis.data.coreThesis}"
+                           </p>
+                           <div className="mt-2 text-[10px] text-slate-500 font-bold flex gap-2">
+                               <span className="text-emerald-500">Sup: {preMarketAnalysis.data.keyLevels.support.join(', ')}</span>
+                               <span>|</span>
+                               <span className="text-red-500">Res: {preMarketAnalysis.data.keyLevels.resistance.join(', ')}</span>
+                           </div>
+                       </div>
+                   </div>
+              ) : isEditingPreMarket ? (
+                  <div className="p-4" onClick={(e) => e.stopPropagation()}>
                       <textarea 
                           value={tempPreMarket}
                           onChange={(e) => setTempPreMarket(e.target.value)}
@@ -414,14 +454,27 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                           rows={3}
                           placeholder="e.g. If Nifty opens Gap Up above 21800, wait for 15m pullback. Support at 21750."
                       />
-                      <button onClick={savePreMarket} className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded">Save Battle Plan</button>
+                      <div className="flex gap-2">
+                          <button onClick={savePreMarket} className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-4 py-2 rounded">Save Battle Plan</button>
+                          <button onClick={() => setIsEditingPreMarket(false)} className="bg-slate-700 text-white text-xs font-bold px-4 py-2 rounded">Cancel</button>
+                      </div>
                   </div>
               ) : (
-                  <div className="p-4 text-sm text-slate-300 italic font-medium">
-                      {preMarketNotes?.date === today ? (
-                          `"${preMarketNotes.notes}"`
-                      ) : (
-                          <span className="text-slate-500">No plan set for today. Prepare your mind before the market opens.</span>
+                  <div className="p-4 flex justify-between items-center">
+                      <div className="text-sm text-slate-300 italic font-medium truncate">
+                          {preMarketNotes?.date === today ? (
+                              `"${preMarketNotes.notes}"`
+                          ) : (
+                              <span className="text-slate-500">No plan set for today. Prepare your mind before the market opens.</span>
+                          )}
+                      </div>
+                      {!hasAiAnalysisToday && (
+                         <button 
+                            onClick={(e) => { e.stopPropagation(); setIsEditingPreMarket(!isEditingPreMarket); setTempPreMarket(preMarketNotes?.notes || ''); }} 
+                            className="text-[10px] bg-slate-800 text-slate-400 hover:text-white px-2 py-1 rounded border border-slate-700 transition ml-4 shrink-0"
+                         >
+                            Edit Note
+                         </button>
                       )}
                   </div>
               )}
