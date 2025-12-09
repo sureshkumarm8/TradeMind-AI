@@ -1,7 +1,6 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload } from 'lucide-react';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload, X, FlaskConical, CircleDollarSign, Lightbulb, GraduationCap } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON, shareBackupData } from '../services/dataService';
 import { shareElementAsImage } from '../services/shareService';
@@ -19,19 +18,148 @@ interface TradeListProps {
   readOnly?: boolean;
   onSyncPush?: () => void;
   isSyncing?: boolean;
+  highlightedTradeId?: string | null; // New prop for Deep Linking
 }
 
-const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onDeleteAiAnalysis, onImport, analyzingTradeId, readOnly = false, onSyncPush, isSyncing }) => {
+// Helper: Image Modal (Reused)
+const ImageModal = ({ src, onClose }: { src: string | null, onClose: () => void }) => {
+    if (!src) return null;
+    return (
+        <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
+            <button onClick={onClose} className="absolute top-4 right-4 p-3 bg-slate-800 rounded-full text-white hover:bg-slate-700 transition border border-slate-700">
+                <X size={24} />
+            </button>
+            <img src={src} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border border-slate-700 object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+    );
+};
+
+// --- NEW COMPONENT: Beautiful AI Report Renderer ---
+const AiCoachReport = ({ report, title }: { report: string, title: string }) => {
+    if (!report) return null;
+
+    // Rudimentary Markdown Parser for the specific structure returned by Gemini
+    // Expects: ### Header \n Content
+    const sections = report.split('###').filter(s => s.trim().length > 0);
+
+    return (
+        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 rounded-2xl border border-indigo-500/30 overflow-hidden shadow-2xl mb-8 animate-fade-in-up">
+            {/* Header */}
+            <div className="bg-slate-950/50 p-5 border-b border-indigo-500/20 flex justify-between items-center backdrop-blur-sm">
+                <div className="flex items-center gap-3">
+                    <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400 border border-indigo-500/30">
+                        <BrainCircuit size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-white font-bold text-base uppercase tracking-wide">{title}</h3>
+                        <p className="text-[10px] text-indigo-300 font-medium">AI Intelligence Briefing</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                     <div className="flex space-x-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/20"></div>
+                     </div>
+                </div>
+            </div>
+
+            {/* Content Grid */}
+            <div className="p-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {sections.map((section, idx) => {
+                    const lines = section.trim().split('\n');
+                    const rawTitle = lines[0].trim();
+                    const content = lines.slice(1).join('\n').trim();
+                    
+                    // Determine Styling based on content content
+                    let icon = <Activity size={18} />;
+                    let containerStyle = "bg-slate-800/50 border-slate-700/50";
+                    let titleColor = "text-slate-300";
+
+                    if (rawTitle.includes('Market Sync') || rawTitle.includes('Sync')) {
+                        icon = <Target size={18} className="text-blue-400"/>;
+                        containerStyle = "bg-blue-900/10 border-blue-500/20";
+                        titleColor = "text-blue-300";
+                    } else if (rawTitle.includes('Execution Grade') || rawTitle.includes('Grade')) {
+                        icon = <GraduationCap size={18} className="text-emerald-400"/>;
+                        containerStyle = "bg-emerald-900/10 border-emerald-500/20";
+                        titleColor = "text-emerald-300";
+                    } else if (rawTitle.includes('Pro Tip') || rawTitle.includes('Tip')) {
+                        icon = <Lightbulb size={18} className="text-amber-400"/>;
+                        containerStyle = "bg-amber-900/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]";
+                        titleColor = "text-amber-300";
+                    }
+
+                    return (
+                        <div key={idx} className={`p-5 rounded-xl border ${containerStyle} flex flex-col relative group hover:bg-slate-800/80 transition-colors ${idx === sections.length - 1 && sections.length % 3 !== 0 ? 'md:col-span-2 lg:col-span-1' : ''}`}>
+                            <div className="flex items-center gap-2 mb-3">
+                                {icon}
+                                <h4 className={`font-bold text-sm uppercase tracking-wider ${titleColor}`}>{rawTitle.replace(/[\u{1F300}-\u{1F6FF}]/gu, '')}</h4> {/* Strip emojis from title if present */}
+                            </div>
+                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">
+                                {content}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            
+            {/* Footer */}
+            <div className="bg-slate-950/30 p-3 border-t border-indigo-500/10 text-center">
+                 <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Confidential Performance Audit</p>
+            </div>
+        </div>
+    );
+};
+
+const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, onEdit, onDelete, onAnalyze, onDeleteAiAnalysis, onImport, analyzingTradeId, readOnly = false, onSyncPush, isSyncing, highlightedTradeId }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  // Daily Analysis Cache
   const [dailyAnalysis, setDailyAnalysis] = useState<Record<string, string>>({});
   const [analyzingDay, setAnalyzingDay] = useState<string | null>(null);
+
+  // Period Analysis Cache (Week/Month) with Persistence
+  const [periodReports, setPeriodReports] = useState<Record<string, string>>(() => {
+      try {
+          return JSON.parse(localStorage.getItem('tradeMind_periodReports') || '{}');
+      } catch { return {}; }
+  });
+  const [isAnalyzingPeriod, setIsAnalyzingPeriod] = useState(false);
+
   const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'week'>('list');
   const [currentDate, setCurrentDate] = useState(new Date()); // For Calendar/Week navigation
   
   const [isSharing, setIsSharing] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // Track folded/collapsed AI Analysis sections
   const [collapsedAi, setCollapsedAi] = useState<Set<string>>(new Set());
+
+  // Deep Linking Effect: Scroll to and expand trade when highlightedTradeId changes
+  useEffect(() => {
+      if (highlightedTradeId) {
+          // 1. Force List View
+          setViewMode('list');
+          // 2. Expand the trade
+          setExpandedId(highlightedTradeId);
+          // 3. Scroll into view after a brief delay to allow render
+          setTimeout(() => {
+              const el = document.getElementById(`trade-${highlightedTradeId}`);
+              if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  // Add a flash effect (optional, via CSS class manipulation or just strict focus)
+                  el.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2', 'ring-offset-slate-950');
+                  setTimeout(() => el.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-2', 'ring-offset-slate-950'), 2000);
+              }
+          }, 100);
+      }
+  }, [highlightedTradeId]);
+
+  // Persist Period Reports
+  useEffect(() => {
+      localStorage.setItem('tradeMind_periodReports', JSON.stringify(periodReports));
+  }, [periodReports]);
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -63,6 +191,14 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     setDailyAnalysis(prev => ({ ...prev, [dateStr]: result }));
     setAnalyzingDay(null);
   };
+
+  // Generic function to analyze a batch of trades for a period (Week/Month)
+  const handleAnalyzePeriod = async (periodKey: string, periodTitle: string, periodTrades: Trade[]) => {
+      setIsAnalyzingPeriod(true);
+      const result = await analyzeBatch(periodTrades, periodTitle, strategyProfile, apiKey);
+      setPeriodReports(prev => ({ ...prev, [periodKey]: result }));
+      setIsAnalyzingPeriod(false);
+  }
   
   const handleExportCSV = () => exportToCSV(trades);
   const handleExportJSON = () => exportToJSON(trades, strategyProfile);
@@ -293,21 +429,47 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   const renderWeeklyView = () => {
       const startOfWeek = getStartOfWeek(currentDate);
       const weekDays = [];
+      const weekTrades: Trade[] = [];
+      
       for (let i = 0; i < 5; i++) { // Mon-Fri
           const d = new Date(startOfWeek);
           d.setDate(startOfWeek.getDate() + i);
           weekDays.push(d);
+          // Aggregate trades for whole week logic
+          const dateStr = d.toISOString().split('T')[0];
+          weekTrades.push(...trades.filter(t => t.date === dateStr));
       }
 
+      // Unique Key for this week's analysis
+      const weekKey = `week_${startOfWeek.toISOString().split('T')[0]}`;
+      const weeklyReport = periodReports[weekKey];
+
       return (
-          <div className="animate-fade-in">
-              <div className="flex justify-between items-center mb-6 bg-slate-800 p-3 rounded-xl border border-slate-700" data-html2canvas-ignore>
+          <div className="animate-fade-in space-y-4">
+              <div className="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700" data-html2canvas-ignore>
                   <button onClick={prevWeek} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20}/></button>
-                  <h3 className="text-white font-bold text-lg">
-                      {startOfWeek.toLocaleDateString(undefined, {month:'short', day:'numeric'})} - {weekDays[4].toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})}
-                  </h3>
+                  <div className="text-center">
+                    <h3 className="text-white font-bold text-lg">
+                        {startOfWeek.toLocaleDateString(undefined, {month:'short', day:'numeric'})} - {weekDays[4].toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})}
+                    </h3>
+                    <div className="flex justify-center mt-1">
+                        {!weeklyReport && weekTrades.length > 0 && (
+                                <button onClick={() => handleAnalyzePeriod(weekKey, "Weekly Performance Review", weekTrades)} disabled={isAnalyzingPeriod} className="text-[10px] text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded bg-indigo-900/10 hover:bg-indigo-900/20 transition flex items-center">
+                                    {isAnalyzingPeriod ? <Loader2 size={10} className="animate-spin mr-1"/> : <Bot size={10} className="mr-1"/>}
+                                    Analyze Week
+                                </button>
+                        )}
+                        {weeklyReport && (
+                             <span className="text-[10px] text-emerald-500 font-bold flex items-center"><CheckCircle size={10} className="mr-1"/> Analysis Ready</span>
+                        )}
+                    </div>
+                  </div>
                   <button onClick={nextWeek} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronRight size={20}/></button>
               </div>
+
+              {weeklyReport && (
+                  <AiCoachReport report={weeklyReport} title="Weekly Coach's Report" />
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   {weekDays.map((day, idx) => {
@@ -366,17 +528,44 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
     
+    // Period Analysis Key for Month
+    const monthKey = `month_${year}_${month}`;
+    const monthlyReport = periodReports[monthKey];
+    
+    // Get all trades for this month
+    const monthTrades = trades.filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === month && d.getFullYear() === year;
+    });
+
     const days = [];
     for (let i = 0; i < firstDay; i++) days.push(null);
     for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
 
     return (
-        <div className="animate-fade-in">
-             <div className="flex justify-between items-center mb-6 bg-slate-800 p-3 rounded-xl border border-slate-700" data-html2canvas-ignore>
+        <div className="animate-fade-in space-y-4">
+             <div className="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700" data-html2canvas-ignore>
                   <button onClick={prevMonth} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20}/></button>
-                  <h3 className="text-white font-bold text-lg">{monthName}</h3>
+                  <div className="text-center">
+                    <h3 className="text-white font-bold text-lg">{monthName}</h3>
+                    <div className="flex justify-center mt-1">
+                        {!monthlyReport && monthTrades.length > 0 && (
+                                <button onClick={() => handleAnalyzePeriod(monthKey, "Monthly Performance Review", monthTrades)} disabled={isAnalyzingPeriod} className="text-[10px] text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded bg-indigo-900/10 hover:bg-indigo-900/20 transition flex items-center">
+                                    {isAnalyzingPeriod ? <Loader2 size={10} className="animate-spin mr-1"/> : <Bot size={10} className="mr-1"/>}
+                                    Analyze Month
+                                </button>
+                        )}
+                        {monthlyReport && (
+                             <span className="text-[10px] text-emerald-500 font-bold flex items-center"><CheckCircle size={10} className="mr-1"/> Analysis Ready</span>
+                        )}
+                    </div>
+                  </div>
                   <button onClick={nextMonth} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronRight size={20}/></button>
              </div>
+             
+             {monthlyReport && (
+                 <AiCoachReport report={monthlyReport} title="Monthly Coach's Report" />
+             )}
 
              <div className="bg-slate-800 p-2 md:p-6 rounded-xl border border-slate-700 shadow-lg">
                 <div className="grid grid-cols-7 gap-1 md:gap-4 text-center mb-4">
@@ -442,6 +631,8 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   return (
     <div className="space-y-6 pb-20 animate-fade-in">
        
+       <ImageModal src={previewImage} onClose={() => setPreviewImage(null)} />
+
        {/* Toolbar - Redesigned for Mobile Wrapping */}
        <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-14 md:top-20 z-20 flex flex-wrap gap-2 justify-between items-center shadow-lg" data-html2canvas-ignore>
            <div className="flex bg-slate-800/50 p-1 rounded-lg">
@@ -516,12 +707,13 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                    const aiGrade = getAiGrade(trade.aiFeedback);
                    const isAnalyzing = analyzingTradeId === trade.id;
                    const roi = getRoiPercentage(trade);
+                   const isRealMoney = trade.executionType === 'REAL';
                    
                    // "Outcome Strip" Color
                    const stripColor = isOpen ? 'bg-slate-600' : isWin ? 'bg-emerald-500' : trade.outcome === TradeOutcome.BREAK_EVEN ? 'bg-amber-500' : 'bg-red-500';
 
                    return (
-                     <div key={trade.id} className={`bg-slate-800 rounded-xl border ${isExpanded ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-slate-700'} overflow-hidden transition-all duration-300 hover:shadow-xl relative pl-2 group`}>
+                     <div id={`trade-${trade.id}`} key={trade.id} className={`bg-slate-800 rounded-xl border ${isExpanded ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-slate-700'} overflow-hidden transition-all duration-300 hover:shadow-xl relative pl-2 group`}>
                        
                        {/* Colored Strip */}
                        <div className={`absolute top-0 bottom-0 left-0 w-2 ${stripColor} transition-all`}></div>
@@ -542,6 +734,18 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${trade.optionType === OptionType.CE ? 'bg-green-900 text-green-300' : trade.optionType === OptionType.PE ? 'bg-red-900 text-red-300' : 'bg-indigo-900 text-indigo-300'}`}>
                                                {trade.optionType}
                                            </span>
+                                           
+                                           {/* Execution Type Badge */}
+                                           {isRealMoney ? (
+                                                <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                                    <CircleDollarSign size={10} /> Real
+                                                </span>
+                                           ) : (
+                                                <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-slate-700 text-slate-400 border border-slate-600">
+                                                    <FlaskConical size={10} /> Paper
+                                                </span>
+                                           )}
+
                                            {aiGrade && !isExpanded && (
                                                 <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>
                                                     Grade: {aiGrade.grade}{typeof aiGrade.grade === 'number' ? '%' : ''}
@@ -591,15 +795,15 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                {(trade.chartImage || trade.oiImage) && (
                                    <div className="flex gap-4 overflow-x-auto pb-2">
                                        {trade.chartImage && (
-                                           <div className="relative group shrink-0">
+                                           <div className="relative group shrink-0 cursor-pointer" onClick={() => setPreviewImage(trade.chartImage!)}>
                                                <p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">Chart</p>
-                                               <img src={trade.chartImage} alt="Chart" className="h-24 rounded border border-slate-700 cursor-zoom-in transition hover:scale-105" onClick={() => {const w = window.open(""); w?.document.write(`<img src="${trade.chartImage}" style="max-width:100%"/>`)}}/>
+                                               <img src={trade.chartImage} alt="Chart" className="h-24 rounded border border-slate-700 transition hover:scale-105" />
                                            </div>
                                        )}
                                        {trade.oiImage && (
-                                           <div className="relative group shrink-0">
+                                           <div className="relative group shrink-0 cursor-pointer" onClick={() => setPreviewImage(trade.oiImage!)}>
                                                <p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">OI Data</p>
-                                               <img src={trade.oiImage} alt="OI" className="h-24 rounded border border-slate-700 cursor-zoom-in transition hover:scale-105" onClick={() => {const w = window.open(""); w?.document.write(`<img src="${trade.oiImage}" style="max-width:100%"/>`)}}/>
+                                               <img src={trade.oiImage} alt="OI" className="h-24 rounded border border-slate-700 transition hover:scale-105" />
                                            </div>
                                        )}
                                    </div>

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus } from 'lucide-react';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus, FlaskConical, CircleDollarSign } from 'lucide-react';
 import { parseVoiceCommand } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
 
@@ -83,6 +82,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         entryTime: currentTime, 
         exitTime: '',
         instrument: 'NIFTY 50',
+        executionType: 'PAPER', // Default to Paper Trading
         optionType: OptionType.CE,
         timeframe: Timeframe.M5,
         direction: TradeDirection.LONG,
@@ -118,6 +118,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         return {
             ...defaults,
             ...initialData,
+            executionType: initialData.executionType || 'PAPER', // Fallback for old data
             notes: initialData.notes || [],
             systemChecks: {
                 ...defaults.systemChecks,
@@ -126,7 +127,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         };
     }
 
-    return defaults;
+    return defaults as Partial<Trade>;
   });
 
   // Calculate ROI % in Realtime
@@ -433,6 +434,26 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                   </button>
                </h3>
 
+               {/* EXECUTION TYPE TOGGLE */}
+               <div className="mb-6 flex justify-center">
+                    <div className="bg-slate-900 p-1 rounded-xl border border-slate-700 inline-flex">
+                        <button
+                            type="button"
+                            onClick={() => setField('executionType', 'PAPER')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase flex items-center gap-2 transition-all ${formData.executionType === 'PAPER' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <FlaskConical size={14} /> Paper Sim
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setField('executionType', 'REAL')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase flex items-center gap-2 transition-all ${formData.executionType === 'REAL' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <CircleDollarSign size={14} /> Real Money
+                        </button>
+                    </div>
+               </div>
+
                <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
                    {/* Direction Toggle (Big Segmented Control) */}
                    <div className="col-span-2">
@@ -732,7 +753,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                         )}
                      </div>
 
-                     {/* Mistakes */}
+                     {/* Mistakes (Reconstructing) */}
                      <div className="border border-slate-700 rounded-xl overflow-hidden">
                         <button type="button" onClick={() => setShowMistakes(!showMistakes)} className="w-full flex items-center justify-between p-3 bg-slate-900/50 hover:bg-slate-900 transition">
                             <span className="text-xs font-bold text-red-400 uppercase flex items-center"><AlertTriangle size={14} className="mr-2"/> Mistakes {formData.mistakes && formData.mistakes.length > 0 && `(${formData.mistakes.length})`}</span>
@@ -740,96 +761,30 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                         </button>
                         {showMistakes && (
                             <div className="p-3 bg-slate-900 border-t border-slate-800 flex flex-wrap gap-2 animate-fade-in">
-                                {COMMON_MISTAKES.map(c => (
-                                    <button key={c} type="button" onClick={() => toggleArrayItem('mistakes', c)} className={`text-[10px] px-2 py-1 rounded border transition ${formData.mistakes?.includes(c) ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}>
-                                        {c}
+                                {COMMON_MISTAKES.map(m => (
+                                    <button key={m} type="button" onClick={() => toggleArrayItem('mistakes', m)} className={`text-[10px] px-2 py-1 rounded border transition ${formData.mistakes?.includes(m) ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'}`}>
+                                        {m}
                                     </button>
                                 ))}
                             </div>
                         )}
                      </div>
+
                  </div>
-            </div>
-        </div>
-
-
-        {/* ---------------- RIGHT COLUMN: HUD & ACTIONS ---------------- */}
-        <div className="lg:col-span-1 space-y-6">
-            
-            {/* 🛑 Live PnL HUD (Sticky) */}
-            <div className={`bg-slate-900 p-6 rounded-2xl border-2 shadow-2xl transition-colors duration-500 ${livePnL && livePnL > 0 ? 'border-emerald-500 shadow-emerald-500/20' : livePnL && livePnL < 0 ? 'border-red-500 shadow-red-500/20' : 'border-slate-700'}`}>
-                <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2 text-center">Estimated Outcome</h4>
-                <div className="text-center">
-                    <span className={`text-4xl font-black font-mono tracking-tight ${livePnL && livePnL > 0 ? 'text-emerald-400' : livePnL && livePnL < 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                        {livePnL ? (livePnL > 0 ? '+' : '') : ''}₹{livePnL ? livePnL.toFixed(2) : '0.00'}
-                    </span>
-                    <div className="flex justify-center gap-4 mt-4 text-[10px] font-bold uppercase text-slate-500">
-                        <span className="flex items-center"><Target size={12} className="mr-1"/> {formData.spotPointsCaptured || 0} pts</span>
-                        <span>•</span>
-                        <span className="flex items-center"><Clock size={12} className="mr-1"/> {formData.tradeDurationMins || 0}m</span>
-                    </div>
-                </div>
-
-                {/* Outcome Toggle */}
-                <div className="mt-6 p-1 bg-slate-950 rounded-xl border border-slate-800 flex">
-                     {[TradeOutcome.WIN, TradeOutcome.LOSS, TradeOutcome.BREAK_EVEN].map(o => (
-                         <button
-                            key={o} type="button"
-                            onClick={() => setField('outcome', o)}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase transition ${formData.outcome === o ? (o === TradeOutcome.WIN ? 'bg-emerald-600 text-white' : o === TradeOutcome.LOSS ? 'bg-red-600 text-white' : 'bg-slate-600 text-white') : 'text-slate-500 hover:text-white'}`}
-                         >
-                            {o}
-                         </button>
-                     ))}
-                </div>
-            </div>
-
-            {/* 🚦 System Pre-Flight Checks */}
-            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
-                <h3 className="text-amber-400 text-xs font-black uppercase tracking-widest mb-4 flex items-center">
-                   <Zap size={14} className="mr-2"/> System Protocol
-                </h3>
-                <div className="space-y-3">
-                     {[
-                        { key: 'analyzedPreMarket', label: 'Pre-Market Analysis' },
-                        { key: 'waitedForOpen', label: 'Waited 15m Open' },
-                        { key: 'checkedSensibullOI', label: 'Verified OI Data' },
-                        { key: 'exitTimeLimit', label: 'Exit Rule (15-30m)' },
-                     ].map((check) => (
-                        <div key={check.key} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-800">
-                             <span className="text-xs font-bold text-slate-300">{check.label}</span>
-                             <button
-                                type="button"
-                                onClick={() => handleSystemCheckChange(check.key)}
-                                className={`w-10 h-6 rounded-full p-1 transition-colors duration-300 ease-in-out ${formData.systemChecks?.[check.key as keyof typeof formData.systemChecks] ? 'bg-indigo-500' : 'bg-slate-700'}`}
-                             >
-                                <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${formData.systemChecks?.[check.key as keyof typeof formData.systemChecks] ? 'translate-x-4' : ''}`}></div>
-                             </button>
-                        </div>
-                     ))}
-                </div>
-            </div>
-            
-            {/* Discipline Rating Removed (Auto-Calculated by AI now) */}
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-dashed border-slate-700">
-                <p className="text-[10px] text-slate-500 text-center italic">
-                    Discipline Rating will be automatically calculated by AI after you save and analyze this trade.
-                </p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="pt-4 flex gap-3">
-               <button type="submit" className="flex-1 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-black uppercase tracking-widest rounded-xl shadow-xl shadow-indigo-900/50 transition transform hover:scale-[1.02] flex items-center justify-center">
-                  <Save size={18} className="mr-2"/> Save Mission Log
-               </button>
-               {initialData && onDelete && (
-                 <button type="button" onClick={() => onDelete(initialData.id)} className="px-6 py-4 bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-600/20 rounded-xl hover:text-red-300 transition flex items-center justify-center shadow-lg hover:shadow-red-900/30">
-                    <Trash2 size={20}/>
-                 </button>
-               )}
-            </div>
+             </div>
 
         </div>
+
+        {/* Footer Actions */}
+        <div className="lg:col-span-3 flex justify-end gap-4 mt-6 pt-6 border-t border-slate-800">
+            <button type="button" onClick={onCancel} className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                Cancel
+            </button>
+            <button type="submit" className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-900/20 flex items-center transition transform hover:-translate-y-1">
+                <Save size={18} className="mr-2"/> Save Mission Log
+            </button>
+        </div>
+
       </form>
     </div>
   );

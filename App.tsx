@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis } from './types';
 import Dashboard from './components/Dashboard';
@@ -56,7 +55,12 @@ const App: React.FC = () => {
   const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, data: LiveMarketAnalysis} | undefined>(undefined);
   // New: Post-Market Analysis State
   const [postMarketAnalysis, setPostMarketAnalysis] = useState<{date: string, data: PostMarketAnalysis} | undefined>(undefined);
-  
+  // New: Pre-Market Images Persistence
+  const [preMarketImages, setPreMarketImages] = useState<any>(undefined);
+
+  // New: Deep Linking State
+  const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
+
   // Cloud Sync State
   const [googleClientId, setGoogleClientId] = useState<string>('');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(SyncStatus.OFFLINE);
@@ -86,6 +90,7 @@ const App: React.FC = () => {
     const savedPreMarketAnalysis = localStorage.getItem('tradeMind_preMarketAnalysis');
     const savedLiveMarketAnalysis = localStorage.getItem('tradeMind_liveMarketAnalysis');
     const savedPostMarketAnalysis = localStorage.getItem('tradeMind_postMarketAnalysis');
+    const savedPreMarketImages = localStorage.getItem('tradeMind_preMarketImages');
     const savedClientId = localStorage.getItem('tradeMind_googleClientId');
     const savedProfile = localStorage.getItem('tradeMind_userProfile');
     
@@ -101,6 +106,7 @@ const App: React.FC = () => {
     if (savedPreMarketAnalysis) try { setPreMarketAnalysis(JSON.parse(savedPreMarketAnalysis)); } catch(e) {};
     if (savedLiveMarketAnalysis) try { setLiveMarketAnalysis(JSON.parse(savedLiveMarketAnalysis)); } catch(e) {};
     if (savedPostMarketAnalysis) try { setPostMarketAnalysis(JSON.parse(savedPostMarketAnalysis)); } catch(e) {};
+    if (savedPreMarketImages) try { setPreMarketImages(JSON.parse(savedPreMarketImages)); } catch(e) {};
     if (savedProfile) try { setUserProfile(JSON.parse(savedProfile)); } catch(e) {};
     
   }, []);
@@ -186,6 +192,7 @@ const App: React.FC = () => {
   useEffect(() => { if (preMarketAnalysis) localStorage.setItem('tradeMind_preMarketAnalysis', JSON.stringify(preMarketAnalysis)); }, [preMarketAnalysis]);
   useEffect(() => { if (liveMarketAnalysis) localStorage.setItem('tradeMind_liveMarketAnalysis', JSON.stringify(liveMarketAnalysis)); }, [liveMarketAnalysis]);
   useEffect(() => { if (postMarketAnalysis) localStorage.setItem('tradeMind_postMarketAnalysis', JSON.stringify(postMarketAnalysis)); }, [postMarketAnalysis]);
+  useEffect(() => { if (preMarketImages) localStorage.setItem('tradeMind_preMarketImages', JSON.stringify(preMarketImages)); }, [preMarketImages]);
   useEffect(() => { if (userProfile) localStorage.setItem('tradeMind_userProfile', JSON.stringify(userProfile)); }, [userProfile]);
 
   const handleSaveSettings = () => {
@@ -315,6 +322,11 @@ const App: React.FC = () => {
       setPostMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
   }
 
+  // Update Pre-Market Images
+  const handleUpdatePreMarketImages = (images: any) => {
+     setPreMarketImages(images);
+  };
+
   const handleSaveTrade = (trade: Trade) => {
     if (editingTrade) {
       setTrades(prev => prev.map(t => t.id === trade.id ? trade : t));
@@ -337,6 +349,12 @@ const App: React.FC = () => {
   const handleEditTrade = (trade: Trade) => {
     setEditingTrade(trade);
     setView('new');
+  };
+
+  // Navigate to journal and highlight a specific trade
+  const handleViewTrade = (tradeId: string) => {
+    setHighlightedTradeId(tradeId);
+    setView('journal');
   };
 
   const handleAnalyzeTrade = async (trade: Trade) => {
@@ -421,6 +439,7 @@ const App: React.FC = () => {
           setPreMarketAnalysis(undefined);
           setLiveMarketAnalysis(undefined);
           setPostMarketAnalysis(undefined);
+          setPreMarketImages(undefined);
           setUserProfile(null);
           setSyncStatus(SyncStatus.OFFLINE);
           setAuthError(null);
@@ -588,6 +607,7 @@ const App: React.FC = () => {
                 preMarketAnalysis={preMarketAnalysis} // Pass Analysis
                 onUpdatePreMarket={handleUpdatePreMarket} 
                 onNavigateToPreMarket={handleNavigateToPreMarket} // Pass Nav
+                onViewTrade={handleViewTrade} // Pass Nav logic
              />
           }
           {view === 'new' && 
@@ -601,18 +621,35 @@ const App: React.FC = () => {
               preMarketDone={hasPreMarketAnalysisToday} // Pass Today's Pre-Market Status
             />
           }
-          {view === 'journal' && <TradeList trades={trades} strategyProfile={strategyProfile} apiKey={apiKey} onEdit={handleEditTrade} onDelete={handleDeleteTrade} onAnalyze={handleAnalyzeTrade} onDeleteAiAnalysis={handleDeleteAiAnalysis} onImport={handleImportTrades} analyzingTradeId={analyzingTradeId} onSyncPush={handleForceSave} isSyncing={syncStatus === SyncStatus.SYNCING}/>}
+          {view === 'journal' && 
+            <TradeList 
+              trades={trades} 
+              strategyProfile={strategyProfile} 
+              apiKey={apiKey} 
+              onEdit={handleEditTrade} 
+              onDelete={handleDeleteTrade} 
+              onAnalyze={handleAnalyzeTrade} 
+              onDeleteAiAnalysis={handleDeleteAiAnalysis} 
+              onImport={handleImportTrades} 
+              analyzingTradeId={analyzingTradeId} 
+              onSyncPush={handleForceSave} 
+              isSyncing={syncStatus === SyncStatus.SYNCING}
+              highlightedTradeId={highlightedTradeId} // For deep linking
+            />
+          }
           {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy} notify={notify}/>}
           {/* NEW PRE-MARKET ANALYZER VIEW */}
           {view === 'premarket' && 
             <PreMarketAnalyzer 
                 apiKey={apiKey} 
                 initialData={preMarketAnalysis?.data} // Pass existing data
+                initialImages={preMarketImages} // Pass persisted images
                 liveData={liveMarketAnalysis?.data} // Pass Live data
                 postData={postMarketAnalysis?.data} // Pass Post data
                 onAnalysisUpdate={handleUpdatePreMarketAnalysis} // Sync up
                 onLiveAnalysisUpdate={handleUpdateLiveMarketAnalysis} // Sync up live
                 onPostAnalysisUpdate={handleUpdatePostMarketAnalysis} // Sync up post
+                onImagesUpdate={handleUpdatePreMarketImages} // Sync images up
                 onSavePlan={handleSavePlan} 
             />
           }

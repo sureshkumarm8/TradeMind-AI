@@ -143,7 +143,8 @@ export interface Trade {
   exitTime?: string; // HH:mm
   
   instrument: string; // Defaults to NIFTY 50
-  
+  executionType: 'PAPER' | 'REAL'; // New Flag for Real vs Paper
+
   // Derivative Details
   optionType?: OptionType;
   strikePrice?: number;

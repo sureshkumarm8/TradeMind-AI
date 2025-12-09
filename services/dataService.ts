@@ -68,7 +68,7 @@ export const exportToCSV = (trades: Trade[]) => {
     'Check_PreMarket', 'Check_Wait15m', 'Check_Sensibull', 'Check_ExitLimit', 
     'Setup', 'EntryReason', 'ExitReason', 
     'Confluences', 'Mistakes', 'AI_Analysis',
-    'OpeningType', 'DisciplineRating', 'FollowedSystem', 'EmotionalState',
+    'OpeningType', 'DisciplineRating', 'FollowedSystem', 'EmotionalState', 'Execution',
     'Timeline_Notes'
   ];
 
@@ -121,6 +121,7 @@ export const exportToCSV = (trades: Trade[]) => {
       trade.disciplineRating || '',
       trade.followedSystem ? 'TRUE' : 'FALSE',
       q(trade.emotionalState),
+      trade.executionType || 'PAPER', // Export Execution Type
       q(timelineStr)
     ];
     csvRows.push(row.join(','));
@@ -257,6 +258,7 @@ const parseCSV = (csvText: string): Trade[] => {
          disciplineRating: num(values[28], 5),
          followedSystem: bool(values[29]),
          emotionalState: values[30] || 'Neutral',
+         executionType: (values[31] === 'REAL' ? 'REAL' : 'PAPER') as 'PAPER' | 'REAL', // Import Execution Type
          // Note: Importing timeline from CSV string is complex, so we leave empty or simple restore
          notes: [] 
       };

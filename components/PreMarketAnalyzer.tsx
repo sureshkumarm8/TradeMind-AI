@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit } from 'lucide-react';
+import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2 } from 'lucide-react';
 import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection } from '../types';
 import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
@@ -7,41 +7,81 @@ import { compressImage } from '../services/imageService';
 interface PreMarketAnalyzerProps {
     apiKey: string;
     initialData?: PreMarketAnalysis;
+    initialImages?: any;
     liveData?: LiveMarketAnalysis;
     postData?: PostMarketAnalysis;
     onAnalysisUpdate?: (data: PreMarketAnalysis) => void;
     onLiveAnalysisUpdate?: (data: LiveMarketAnalysis) => void;
     onPostAnalysisUpdate?: (data: PostMarketAnalysis) => void;
+    onImagesUpdate?: (images: any) => void;
     onClose?: () => void;
     onSavePlan?: (notes: string) => void;
 }
 
+// Calculate KB size from base64 string
+const getImageSizeKB = (base64String: string) => {
+    if (!base64String) return 0;
+    const stringLength = base64String.length - 'data:image/jpeg;base64,'.length;
+    const sizeInBytes = 4 * Math.ceil(stringLength / 3) * 0.5624896334383812;
+    return (sizeInBytes / 1024).toFixed(1);
+}
+
 // Helper: Compact Upload Card
-const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange }: any) => (
+const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange, onClick }: any) => (
     <div className={`relative flex flex-col items-center justify-center p-2 rounded-lg border-2 border-dashed transition-all h-24 group overflow-hidden ${imageSrc ? 'border-indigo-500/50' : 'border-slate-700 hover:border-indigo-500/30 bg-slate-800'}`}>
         {imageSrc && (
-            <div className="absolute inset-0 z-0">
+            <div className="absolute inset-0 z-0 cursor-pointer" onClick={onClick}>
                 <img src={imageSrc} alt={label} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
             </div>
         )}
-        <div className="relative z-10 flex flex-col items-center">
+        <div className="relative z-10 flex flex-col items-center pointer-events-none">
             <div className="flex items-center gap-1.5 mb-1">
                 <Icon size={12} className={imageSrc ? "text-indigo-300 shadow-black drop-shadow-md" : "text-slate-500"} />
                 <span className={`text-[10px] font-bold uppercase shadow-black drop-shadow-md ${imageSrc ? "text-white" : "text-slate-500"}`}>{label}</span>
             </div>
             {imageSrc ? (
-                <div className="flex items-center gap-1 bg-emerald-900/80 px-2 py-0.5 rounded-full border border-emerald-500/30 backdrop-blur-sm mt-1">
-                    <CheckCircle size={10} className="text-emerald-400" />
-                    <span className="text-[9px] text-emerald-100 font-bold">Ready</span>
+                <div className="flex flex-col items-center mt-1">
+                     <div className="flex items-center gap-1 bg-emerald-900/80 px-2 py-0.5 rounded-full border border-emerald-500/30 backdrop-blur-sm">
+                        <CheckCircle size={10} className="text-emerald-400" />
+                        <span className="text-[9px] text-emerald-100 font-bold">Ready</span>
+                    </div>
+                    <span className="text-[8px] text-slate-400 mt-1">{getImageSizeKB(imageSrc)} KB</span>
                 </div>
             ) : (
                 <UploadCloud size={16} className="text-slate-600 mt-1" />
             )}
         </div>
-        <input type="file" accept="image/*" onChange={onChange} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
+        {!imageSrc && (
+             <input type="file" accept="image/*" onChange={onChange} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
+        )}
+        {imageSrc && (
+             <button onClick={onClick} className="absolute bottom-1 right-1 p-1 bg-slate-900/50 rounded hover:bg-slate-700 text-white opacity-0 group-hover:opacity-100 transition-opacity z-20" title="Preview">
+                 <Maximize2 size={12}/>
+             </button>
+        )}
+        {imageSrc && (
+             <div className="absolute top-0 right-0 w-full h-full z-10">
+                 {/* Invisible overlay to allow clicking the image for preview, but allowing a small 'change' button could be added later */}
+                 {/* For now, clicking the card opens preview. To change image, we might need a clear button or overlay input */}
+                 <input type="file" accept="image/*" onChange={onChange} className="absolute top-0 right-0 w-6 h-6 opacity-0 cursor-pointer" title="Change Image"/> 
+             </div>
+        )}
     </div>
 );
+
+// Helper: Image Modal
+const ImageModal = ({ src, onClose }: { src: string | null, onClose: () => void }) => {
+    if (!src) return null;
+    return (
+        <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={onClose}>
+            <button onClick={onClose} className="absolute top-4 right-4 p-3 bg-slate-800 rounded-full text-white hover:bg-slate-700 transition border border-slate-700">
+                <X size={24} />
+            </button>
+            <img src={src} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border border-slate-700 object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+    );
+};
 
 // Helper: Direction Badge
 const DirectionBadge = ({ dir }: { dir: string }) => {
@@ -51,14 +91,14 @@ const DirectionBadge = ({ dir }: { dir: string }) => {
     return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${color}`}>{dir}</span>;
 };
 
-const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialData, liveData, postData, onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onClose, onSavePlan }) => {
+const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialData, initialImages, liveData, postData, onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onImagesUpdate, onClose, onSavePlan }) => {
     // Phase 1 Images
     const [images, setImages] = useState<{
         market: string;
         intraday: string;
         oi: string;
         multiStrike: string;
-    }>({ market: '', intraday: '', oi: '', multiStrike: '' });
+    }>(initialImages || { market: '', intraday: '', oi: '', multiStrike: '' });
     
     // Phase 2 Images
     const [liveImages, setLiveImages] = useState<{
@@ -82,9 +122,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
     const [liveAnalysis, setLiveAnalysis] = useState<LiveMarketAnalysis | null>(liveData || null);
     const [postAnalysis, setPostAnalysis] = useState<PostMarketAnalysis | null>(postData || null);
     
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+
     // Tab State
     const [activeView, setActiveView] = useState<'phase1' | 'phase2' | 'phase3'>('phase1');
-    const [isIntelFolded, setIsIntelFolded] = useState(true);
+    const [isIntelFolded, setIsIntelFolded] = useState(!!initialData);
 
     // Pre-Flight Checklist State
     const [checklist, setChecklist] = useState({
@@ -107,6 +149,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         localStorage.setItem('tradeMind_preFlightChecklist', JSON.stringify(checklist));
     }, [checklist]);
 
+    // Sync state updates with parent
+    useEffect(() => {
+        if (onImagesUpdate) onImagesUpdate(images);
+    }, [images, onImagesUpdate]);
+
     const toggleCheck = (key: keyof typeof checklist) => {
         setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
     };
@@ -116,7 +163,8 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         if (initialData) setAnalysis(initialData);
         if (liveData) setLiveAnalysis(liveData);
         if (postData) setPostAnalysis(postData);
-    }, [initialData, liveData, postData]);
+        if (initialImages) setImages(initialImages);
+    }, [initialData, liveData, postData, initialImages]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof images) => {
         const file = e.target.files?.[0];
@@ -211,8 +259,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
     };
 
     return (
-        <div className="bg-slate-900 min-h-screen md:min-h-0 md:h-full w-full flex flex-col pb-20 md:pb-0 animate-fade-in">
+        <div className="bg-slate-900 min-h-screen md:min-h-0 md:h-full w-full flex flex-col pb-20 md:pb-0 animate-fade-in relative">
             
+            {/* Lightbox */}
+            <ImageModal src={previewImage} onClose={() => setPreviewImage(null)} />
+
             {/* TABS NAVIGATION */}
             <div className="px-4 pt-4 sticky top-0 bg-slate-900 z-20">
                 <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-md border border-slate-700 overflow-x-auto">
@@ -283,10 +334,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                             </div>
                             
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                <CompactUploadCard label="Market Graph" icon={Activity} imageSrc={images.market} onChange={(e: any) => handleUpload(e, 'market')} />
-                                <CompactUploadCard label="5m Chart" icon={TrendingUp} imageSrc={images.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} />
-                                <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={images.oi} onChange={(e: any) => handleUpload(e, 'oi')} />
-                                <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={images.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} />
+                                <CompactUploadCard label="Market Graph" icon={Activity} imageSrc={images.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(images.market)} />
+                                <CompactUploadCard label="5m Chart" icon={TrendingUp} imageSrc={images.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(images.intraday)} />
+                                <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={images.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(images.oi)} />
+                                <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={images.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(images.multiStrike)} />
                             </div>
 
                             {/* Error Banner */}
@@ -412,9 +463,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     {!isIntelFolded && (
                                         <div className="p-4 bg-slate-900 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
                                             {Object.entries(images).map(([key, src]) => src && (
-                                                <div key={key} className="relative group">
+                                                <div key={key} className="relative group cursor-pointer" onClick={() => setPreviewImage(src)}>
                                                     <img src={src} className="w-full h-24 object-cover rounded border border-slate-700" alt={key} />
                                                     <div className="absolute bottom-0 left-0 bg-black/60 text-white text-[9px] uppercase font-bold px-1 rounded-tr">{key}</div>
+                                                    <div className="absolute top-1 right-1 bg-black/60 text-white text-[8px] px-1 rounded">{getImageSizeKB(src)} KB</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -465,8 +517,8 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <CompactUploadCard label="Live Chart (9:20)" icon={TrendingUp} imageSrc={liveImages.liveChart} onChange={(e: any) => handleLiveUpload(e, 'liveChart')} />
-                                        <CompactUploadCard label="Live OI Data" icon={BarChart2} imageSrc={liveImages.liveOi} onChange={(e: any) => handleLiveUpload(e, 'liveOi')} />
+                                        <CompactUploadCard label="Live Chart (9:20)" icon={TrendingUp} imageSrc={liveImages.liveChart} onChange={(e: any) => handleLiveUpload(e, 'liveChart')} onClick={() => setPreviewImage(liveImages.liveChart)} />
+                                        <CompactUploadCard label="Live OI Data" icon={BarChart2} imageSrc={liveImages.liveOi} onChange={(e: any) => handleLiveUpload(e, 'liveOi')} onClick={() => setPreviewImage(liveImages.liveOi)} />
                                     </div>
 
                                     {/* Error Banner */}
@@ -567,9 +619,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                             </div>
                             
                             <div className="grid grid-cols-3 gap-3 mb-6">
-                                <CompactUploadCard label="Daily Candle" icon={Activity} imageSrc={postImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} />
-                                <CompactUploadCard label="EOD 5m Chart" icon={TrendingUp} imageSrc={postImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} />
-                                <CompactUploadCard label="EOD OI Data" icon={BarChart2} imageSrc={postImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} />
+                                <CompactUploadCard label="Daily Candle" icon={Activity} imageSrc={postImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(postImages.dailyChart)} />
+                                <CompactUploadCard label="EOD 5m Chart" icon={TrendingUp} imageSrc={postImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(postImages.eodChart)} />
+                                <CompactUploadCard label="EOD OI Data" icon={BarChart2} imageSrc={postImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(postImages.eodOi)} />
                             </div>
 
                             {error && (
