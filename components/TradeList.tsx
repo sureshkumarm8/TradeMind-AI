@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
 import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload } from 'lucide-react';
@@ -298,7 +297,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                       const isToday = new Date().toISOString().split('T')[0] === dateStr;
 
                       return (
-                          <div key={idx} className={`bg-slate-800 rounded-xl border ${isToday ? 'border-indigo-500 shadow-indigo-500/20 shadow-lg' : 'border-slate-700'} flex flex-col h-full min-h-[300px]`}>
+                          <div key={idx} className={`bg-slate-800 rounded-xl border ${isToday ? 'border-indigo-500 shadow-indigo-500/20 shadow-lg' : 'border-slate-700'} flex flex-col h-auto min-h-[120px] md:min-h-[300px]`}>
                               <div className={`p-3 border-b ${isToday ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-slate-900/50 border-slate-700'} rounded-t-xl`}>
                                   <div className="flex justify-between items-center mb-1">
                                       <span className={`text-sm font-bold ${isToday ? 'text-indigo-400' : 'text-slate-400'}`}>
@@ -313,7 +312,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                               
                               <div className="p-2 flex-1 space-y-2 overflow-y-auto custom-scrollbar">
                                   {dayTrades.length === 0 ? (
-                                      <div className="h-full flex items-center justify-center text-slate-600 text-xs italic">No Trades</div>
+                                      <div className="h-full flex items-center justify-center text-slate-600 text-xs italic min-h-[50px]">No Trades</div>
                                   ) : (
                                       dayTrades.map(t => (
                                           <div key={t.id} onClick={() => onEdit(t)} className="bg-slate-900 p-2 rounded border border-slate-700 hover:border-slate-500 cursor-pointer group transition">
@@ -359,13 +358,13 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                   <button onClick={nextMonth} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronRight size={20}/></button>
              </div>
 
-             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <div className="grid grid-cols-7 gap-4 text-center mb-4">
+             <div className="bg-slate-800 p-2 md:p-6 rounded-xl border border-slate-700 shadow-lg">
+                <div className="grid grid-cols-7 gap-1 md:gap-4 text-center mb-4">
                         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                            <div key={d} className="text-sm text-slate-400 font-bold uppercase tracking-wider">{d}</div>
+                            <div key={d} className="text-xs md:text-sm text-slate-400 font-bold uppercase tracking-wider">{d}</div>
                         ))}
                 </div>
-                <div className="grid grid-cols-7 gap-4">
+                <div className="grid grid-cols-7 gap-1 md:gap-4">
                     {days.map((d, idx) => {
                         if (!d) return <div key={idx} className="bg-transparent aspect-square"></div>;
                         
@@ -386,10 +385,10 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                         if (isToday) bgClass += " ring-1 ring-indigo-500";
 
                         return (
-                            <div key={idx} className={`aspect-square rounded-xl border flex flex-col items-center justify-center p-1 relative transition cursor-default ${bgClass}`}>
-                                <span className={`text-sm ${hasTrades ? 'text-white font-bold' : 'text-slate-600'} ${isToday ? 'text-indigo-400' : ''}`}>{d.getDate()}</span>
+                            <div key={idx} className={`aspect-square rounded-md md:rounded-xl border flex flex-col items-center justify-center p-0.5 md:p-1 relative transition cursor-default ${bgClass}`}>
+                                <span className={`text-xs md:text-sm ${hasTrades ? 'text-white font-bold' : 'text-slate-600'} ${isToday ? 'text-indigo-400' : ''}`}>{d.getDate()}</span>
                                 {hasTrades && (
-                                    <span className={`text-xs font-mono font-medium mt-1 ${dayPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    <span className={`text-[9px] md:text-xs font-mono font-medium mt-0.5 md:mt-1 leading-none ${dayPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                         {dayPnL >= 0 ? '+' : ''}{Math.abs(dayPnL) >= 1000 ? (dayPnL/1000).toFixed(1) + 'k' : dayPnL.toFixed(0)}
                                     </span>
                                 )}
@@ -423,38 +422,38 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   return (
     <div className="space-y-6 pb-20 animate-fade-in">
        
-       {/* Toolbar */}
-       <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-20 z-20 flex justify-between items-center shadow-lg" data-html2canvas-ignore>
+       {/* Toolbar - Redesigned for Mobile Wrapping */}
+       <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-14 md:top-20 z-20 flex flex-wrap gap-2 justify-between items-center shadow-lg" data-html2canvas-ignore>
            <div className="flex bg-slate-800/50 p-1 rounded-lg">
-               <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
-                   <List size={14} className="mr-2"/> List
+               <button onClick={() => setViewMode('list')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                   <List size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">List</span>
                </button>
-               <button onClick={() => setViewMode('week')} className={`px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
-                   <Grid size={14} className="mr-2"/> Week
+               <button onClick={() => setViewMode('week')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                   <Grid size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Week</span>
                </button>
-               <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
-                   <CalendarDays size={14} className="mr-2"/> Month
+               <button onClick={() => setViewMode('calendar')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                   <CalendarDays size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Month</span>
                </button>
            </div>
            
-           <div className="flex gap-2">
+           <div className="flex gap-1 md:gap-2">
                {onSyncPush && (
                    <button onClick={onSyncPush} disabled={isSyncing} className="p-2 text-indigo-400 hover:text-white bg-indigo-900/20 hover:bg-indigo-900/40 rounded-lg border border-indigo-500/20 hover:border-indigo-500/50 transition disabled:opacity-50 flex items-center gap-1" title="Save to Cloud">
-                       {isSyncing ? <Loader2 size={18} className="animate-spin"/> : <CloudUpload size={18}/>}
+                       {isSyncing ? <Loader2 size={16} className="animate-spin"/> : <CloudUpload size={16}/>}
                        <span className="text-[10px] font-bold uppercase hidden sm:block">{isSyncing ? 'Saving' : 'Save'}</span>
                    </button>
                )}
                <button onClick={handleShareImage} disabled={isSharing} className="p-2 text-slate-400 hover:text-indigo-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-indigo-500/30 transition disabled:opacity-50" title="Share Snapshot">
-                   {isSharing ? <Loader2 size={18} className="animate-spin"/> : <Share2 size={18}/>}
+                   {isSharing ? <Loader2 size={16} className="animate-spin"/> : <Share2 size={16}/>}
                </button>
                <button onClick={handleShareData} disabled={isSharing} className="p-2 text-slate-400 hover:text-purple-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-purple-500/30 transition disabled:opacity-50" title="Share Data File">
-                   <Database size={18}/>
+                   <Database size={16}/>
                </button>
                <button onClick={handleExportCSV} className="p-2 text-slate-400 hover:text-emerald-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-emerald-500/30 transition" title="Backup (CSV)">
-                   <FileSpreadsheet size={18}/>
+                   <FileSpreadsheet size={16}/>
                </button>
                <button onClick={handleExportJSON} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-blue-500/30 transition" title="Backup (JSON)">
-                   <FileJson size={18}/>
+                   <FileJson size={16}/>
                </button>
            </div>
        </div>
@@ -467,10 +466,11 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
            {/* List View */}
            {viewMode === 'list' && (Object.entries(tradesByDate) as [string, Trade[]][]).map(([dateStr, dayTrades]) => (
              <div key={dateStr} className="space-y-4 mb-4">
-                 <div className="flex items-center justify-between sticky top-[5.5rem] z-10 bg-slate-950/90 backdrop-blur py-2 border-b border-indigo-500/20" data-html2canvas-ignore>
+                 {/* Adjusted sticky header to sit below new wrapped toolbar */}
+                 <div className="flex items-center justify-between sticky top-[6.5rem] md:top-[5.5rem] z-10 bg-slate-950/90 backdrop-blur py-2 border-b border-indigo-500/20" data-html2canvas-ignore>
                      <div className="flex items-center gap-3">
                          <div className="w-2 h-8 bg-indigo-500 rounded-r-lg"></div>
-                         <h3 className="text-white font-bold text-sm uppercase tracking-wide">{dateStr}</h3>
+                         <h3 className="text-white font-bold text-sm uppercase tracking-wide truncate max-w-[150px] md:max-w-none">{dateStr}</h3>
                          <span className="text-xs text-slate-500 font-mono">({dayTrades.length})</span>
                      </div>
                      
@@ -514,30 +514,30 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                        {trade.direction === TradeDirection.LONG ? <ArrowUpRight size={20}/> : <ArrowDownRight size={20}/>}
                                    </div>
                                    <div>
-                                       <div className="flex items-center gap-2">
+                                       <div className="flex items-center gap-2 flex-wrap">
                                            <h4 className="text-white font-bold text-base">{trade.instrument}</h4>
                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${trade.optionType === OptionType.CE ? 'bg-green-900 text-green-300' : trade.optionType === OptionType.PE ? 'bg-red-900 text-red-300' : 'bg-indigo-900 text-indigo-300'}`}>
                                                {trade.optionType}
                                            </span>
                                            {aiGrade && !isExpanded && (
-                                                <span className={`ml-2 text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>
+                                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>
                                                     Grade: {aiGrade.grade}
                                                 </span>
                                            )}
                                        </div>
-                                       <div className="flex items-center gap-3 mt-1 text-slate-400 text-xs font-mono">
+                                       <div className="flex items-center gap-2 md:gap-3 mt-1 text-slate-400 text-xs font-mono flex-wrap">
                                            <span className="flex items-center"><Clock size={12} className="mr-1"/> {trade.entryTime}</span>
-                                           <span>|</span>
+                                           <span className="hidden md:inline">|</span>
                                            {roi !== null && (
                                               <>
                                                 <span className={`${roi > 0 ? 'text-emerald-400' : roi < 0 ? 'text-red-400' : 'text-slate-400'}`}>
                                                     {roi > 0 ? '+' : ''}{roi.toFixed(1)}%
                                                 </span>
-                                                <span>|</span>
+                                                <span className="hidden md:inline">|</span>
                                               </>
                                            )}
                                            <span>{trade.quantity} Qty</span>
-                                           <span>|</span>
+                                           <span className="hidden md:inline">|</span>
                                            <span className={trade.pnl && trade.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}>
                                                {isOpen ? 'HOLDING' : `₹${trade.pnl?.toFixed(2)}`}
                                            </span>
@@ -548,11 +548,11 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                    {isAnalyzing ? (
                                        <div className="flex items-center gap-2 bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-500/30 animate-pulse">
                                            <BrainCircuit size={14} className="text-indigo-400 animate-spin"/>
-                                           <span className="text-[10px] font-bold text-indigo-300 uppercase">Syncing...</span>
+                                           <span className="text-[10px] font-bold text-indigo-300 uppercase hidden md:inline">Syncing...</span>
                                        </div>
                                    ) : (
                                        <div className="flex items-center gap-2">
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{trade.setupName || 'No Setup'}</div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">{trade.setupName || 'No Setup'}</div>
                                             {isExpanded ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
                                        </div>
                                    )}
