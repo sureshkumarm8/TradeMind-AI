@@ -29,7 +29,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
   const key = apiKey || process.env.API_KEY;
   if (!key) {
     return JSON.stringify({
-      grade: "N/A",
+      grade: 0,
       gradeColor: "gray",
       marketTrend: "Unknown",
       realityCheck: "API Key is missing. Please add your Gemini API Key in Settings.",
@@ -75,8 +75,8 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       
       Expected JSON Structure:
       {
-        "grade": "Letter grade A, B, C, D, F based on timing and trend alignment",
-        "gradeColor": "green, yellow, or red",
+        "grade": "Integer between 0 and 100 representing execution score. 100 is Perfect Discipline.",
+        "gradeColor": "green (80-100), yellow (50-79), or red (0-49)",
         "marketTrend": "Short phrase describing Nifty action during trade window (e.g. 'Strong Bullish Trend', 'Choppy Range')",
         "realityCheck": "Direct comparison of User Entry vs Actual Market Price Action found via Search",
         "strategyAudit": {
@@ -125,7 +125,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
     } catch(e) {
         console.error("JSON Parse Error", e, jsonResult);
         return JSON.stringify({
-            grade: "?", 
+            grade: 0, 
             gradeColor: "gray",
             marketTrend: "Analysis Error", 
             realityCheck: "AI returned invalid format. Please try again.", 
@@ -150,7 +150,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
   } catch (error) {
     console.error("Error analyzing trade:", error);
     return JSON.stringify({
-      grade: "Err",
+      grade: 0,
       gradeColor: "red",
       marketTrend: "API Error",
       realityCheck: "Failed to connect to AI service.",

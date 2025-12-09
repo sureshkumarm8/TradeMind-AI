@@ -88,7 +88,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         direction: TradeDirection.LONG,
         quantity: 75,
         followedSystem: true,
-        disciplineRating: 5,
+        disciplineRating: 0, // Default to 0, will be updated by AI
         outcome: TradeOutcome.OPEN,
         emotionalState: 'Neutral',
         setupName: '',
@@ -810,20 +810,11 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                 </div>
             </div>
             
-            {/* Discipline Rating */}
-            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-lg">
-                <h3 className="text-blue-400 text-xs font-black uppercase tracking-widest mb-4">Discipline Rating</h3>
-                <div className="flex justify-between items-center bg-slate-900/50 p-2 rounded-xl">
-                    {[1, 2, 3, 4, 5].map(star => (
-                        <button
-                          key={star} type="button"
-                          onClick={() => setField('disciplineRating', star)}
-                          className={`p-2 rounded-lg transition hover:scale-110 ${formData.disciplineRating && formData.disciplineRating >= star ? 'text-yellow-400' : 'text-slate-700'}`}
-                        >
-                           <Zap size={20} fill={formData.disciplineRating && formData.disciplineRating >= star ? "currentColor" : "none"} />
-                        </button>
-                    ))}
-                </div>
+            {/* Discipline Rating Removed (Auto-Calculated by AI now) */}
+            <div className="bg-slate-800/50 p-4 rounded-xl border border-dashed border-slate-700">
+                <p className="text-[10px] text-slate-500 text-center italic">
+                    Discipline Rating will be automatically calculated by AI after you save and analyze this trade.
+                </p>
             </div>
 
             {/* Action Buttons */}

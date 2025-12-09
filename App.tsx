@@ -342,14 +342,33 @@ const App: React.FC = () => {
   const handleAnalyzeTrade = async (trade: Trade) => {
     setAnalyzingTradeId(trade.id);
     const feedback = await analyzeTradeWithAI(trade, strategyProfile, apiKey);
-    const updatedTrade = { ...trade, aiFeedback: feedback };
+    
+    // Auto-Calculate Discipline Rating from Execution Grade (0-100)
+    let calculatedRating = trade.disciplineRating || 0;
+    try {
+        const feedbackData = JSON.parse(feedback);
+        if (typeof feedbackData.grade === 'number') {
+            // Map 0-100 to 1-5 scale
+            // 80-100 = 5, 60-79 = 4, 40-59 = 3, 20-39 = 2, 0-19 = 1
+            calculatedRating = Math.ceil(feedbackData.grade / 20);
+            if (calculatedRating === 0) calculatedRating = 1;
+        }
+    } catch(e) { console.error("Error parsing grade for auto-rating"); }
+
+    const updatedTrade = { 
+        ...trade, 
+        aiFeedback: feedback,
+        disciplineRating: calculatedRating 
+    };
+
     setTrades(prev => prev.map(t => t.id === trade.id ? updatedTrade : t));
     setAnalyzingTradeId(null);
+    notify("Reality Check Complete", 'success');
   };
 
   const handleDeleteAiAnalysis = (tradeId: string) => {
      if (window.confirm("Remove AI feedback for this trade?")) {
-         setTrades(prev => prev.map(t => t.id === tradeId ? { ...t, aiFeedback: undefined } : t));
+         setTrades(prev => prev.map(t => t.id === tradeId ? { ...t, aiFeedback: undefined, disciplineRating: 0 } : t));
      }
   };
   

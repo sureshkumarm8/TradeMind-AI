@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
 import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload } from 'lucide-react';
@@ -91,15 +92,26 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   }
 
   // --- Helper to parse Grade for Badges ---
-  const getAiGrade = (feedbackString?: string): { grade: string, color: string } | null => {
+  const getAiGrade = (feedbackString?: string): { grade: number | string, color: string } | null => {
       if (!feedbackString) return null;
       try {
           const data = JSON.parse(feedbackString) as AiAnalysisResponse;
-          if (data.grade) {
-               if (['A', 'A+', 'A-'].includes(data.grade)) return { grade: data.grade, color: 'text-emerald-400 border-emerald-500 bg-emerald-500/20' };
-               if (['B', 'B+', 'B-'].includes(data.grade)) return { grade: data.grade, color: 'text-blue-400 border-blue-500 bg-blue-500/20' };
-               if (['C', 'C+'].includes(data.grade)) return { grade: data.grade, color: 'text-amber-400 border-amber-500 bg-amber-500/20' };
-               return { grade: data.grade, color: 'text-red-500 border-red-500 bg-red-500/20' };
+          const grade = data.grade;
+          
+          // Handle numeric grade
+          if (typeof grade === 'number') {
+              if (grade >= 90) return { grade, color: 'text-emerald-400 border-emerald-500 bg-emerald-500/20' };
+              if (grade >= 75) return { grade, color: 'text-blue-400 border-blue-500 bg-blue-500/20' };
+              if (grade >= 50) return { grade, color: 'text-amber-400 border-amber-500 bg-amber-500/20' };
+              return { grade, color: 'text-red-500 border-red-500 bg-red-500/20' };
+          }
+          
+          // Fallback for old string grades
+          if (typeof grade === 'string') {
+               if (['A', 'A+', 'A-'].includes(grade)) return { grade, color: 'text-emerald-400 border-emerald-500 bg-emerald-500/20' };
+               if (['B', 'B+', 'B-'].includes(grade)) return { grade, color: 'text-blue-400 border-blue-500 bg-blue-500/20' };
+               if (['C', 'C+'].includes(grade)) return { grade, color: 'text-amber-400 border-amber-500 bg-amber-500/20' };
+               return { grade, color: 'text-red-500 border-red-500 bg-red-500/20' };
           }
       } catch (e) { return null; }
       return null;
@@ -154,10 +166,17 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     }
 
     // Determine Grade Color
-    const getGradeColor = (g: string) => {
-       if (['A', 'A+', 'A-'].includes(g)) return 'text-emerald-400 border-emerald-500 bg-emerald-500/10';
-       if (['B', 'B+', 'B-'].includes(g)) return 'text-blue-400 border-blue-500 bg-blue-500/10';
-       if (['C', 'C+'].includes(g)) return 'text-yellow-400 border-yellow-500 bg-yellow-500/10';
+    const getGradeColor = (g: number | string) => {
+        if (typeof g === 'number') {
+            if (g >= 90) return 'text-emerald-400 border-emerald-500 bg-emerald-500/10';
+            if (g >= 70) return 'text-blue-400 border-blue-500 bg-blue-500/10';
+            if (g >= 50) return 'text-amber-400 border-amber-500 bg-amber-500/10';
+            return 'text-red-500 border-red-500 bg-red-500/10';
+        }
+       // Fallback for strings
+       if (['A', 'A+', 'A-'].includes(g as string)) return 'text-emerald-400 border-emerald-500 bg-emerald-500/10';
+       if (['B', 'B+', 'B-'].includes(g as string)) return 'text-blue-400 border-blue-500 bg-blue-500/10';
+       if (['C', 'C+'].includes(g as string)) return 'text-amber-400 border-amber-500 bg-amber-500/10';
        return 'text-red-500 border-red-500 bg-red-500/10';
     };
     
@@ -168,7 +187,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
             <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                      <span className={`text-xs font-black uppercase px-2 py-0.5 rounded border ${gradeStyle}`}>
-                        Grade: {data.grade}
+                        Grade: {data.grade}{typeof data.grade === 'number' ? '%' : ''}
                      </span>
                      <span className="text-xs text-slate-400 font-medium truncate max-w-[200px] md:max-w-md">
                         {data.marketTrend} • {data.strategyAudit.rulesFollowed ? 'Rules OK' : 'Rules Broken'}
@@ -199,9 +218,10 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                
                {/* Left: Grade */}
                <div className="lg:col-span-3 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800 pb-6 lg:pb-0 lg:pr-6">
-                   <span className="text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Execution Grade</span>
-                   <div className={`w-24 h-24 rounded-full flex items-center justify-center border-4 text-5xl font-black ${gradeStyle} shadow-lg mb-2`}>
-                      {data.grade}
+                   <span className="text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Execution Score</span>
+                   <div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 ${gradeStyle} shadow-lg mb-2 relative`}>
+                      <span className="text-4xl font-black">{data.grade}</span>
+                      {typeof data.grade === 'number' && <span className="text-xs font-bold opacity-70">%</span>}
                    </div>
                    <div className="flex gap-2 text-[10px] font-bold uppercase mt-2">
                        <span className={`px-2 py-0.5 rounded ${data.strategyAudit.rulesFollowed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
@@ -515,13 +535,16 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                    </div>
                                    <div>
                                        <div className="flex items-center gap-2 flex-wrap">
-                                           <h4 className="text-white font-bold text-base">{trade.instrument}</h4>
+                                           {/* Display Strike Price + Option Type if available, else Instrument */}
+                                           <h4 className="text-white font-bold text-base">
+                                               {trade.strikePrice ? `${trade.strikePrice} ${trade.optionType}` : trade.instrument}
+                                           </h4>
                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${trade.optionType === OptionType.CE ? 'bg-green-900 text-green-300' : trade.optionType === OptionType.PE ? 'bg-red-900 text-red-300' : 'bg-indigo-900 text-indigo-300'}`}>
                                                {trade.optionType}
                                            </span>
                                            {aiGrade && !isExpanded && (
                                                 <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>
-                                                    Grade: {aiGrade.grade}
+                                                    Grade: {aiGrade.grade}{typeof aiGrade.grade === 'number' ? '%' : ''}
                                                 </span>
                                            )}
                                        </div>

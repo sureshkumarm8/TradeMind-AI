@@ -42,7 +42,7 @@ export interface SystemChecks {
 }
 
 export interface AiAnalysisResponse {
-  grade: string; // A, B, C, D, F
+  grade: number; // Changed to number (0-100)
   gradeColor: string; // hex or tailwind class hint
   marketTrend: string; // "Strong Bullish", "Choppy", "Bearish Reversal"
   realityCheck: string; // The comparison text
