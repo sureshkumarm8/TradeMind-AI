@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis } from "../types";
+import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
@@ -519,5 +519,95 @@ export const analyzeLiveMarketRoutine = async (
     } catch (e) {
         console.error("Live Check Error", e);
         throw new Error("Failed Live Check.");
+    }
+}
+
+// POST-MARKET DEBRIEF ROUTINE (End of Day)
+export const analyzePostMarketRoutine = async (
+    images: { dailyChart: string; eodChart: string; eodOi: string },
+    preMarketPlan: PreMarketAnalysis | null,
+    apiKey?: string
+): Promise<PostMarketAnalysis> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required for Post-Market Analysis");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const parts: any[] = [];
+
+    // Context: Morning Plan
+    if (preMarketPlan) {
+        const contextStr = JSON.stringify(preMarketPlan, null, 2);
+        parts.push({ text: `MORNING PLAN (For Reference): ${contextStr}` });
+    } else {
+        parts.push({ text: "NO MORNING PLAN WAS CREATED. Analyze purely on EOD data." });
+    }
+
+    // EOD Images
+    if (images.dailyChart) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.dailyChart.split(',')[1] } });
+        parts.push({ text: "Image 1: Daily Timeframe Chart (High Level)" });
+    }
+    if (images.eodChart) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.eodChart.split(',')[1] } });
+        parts.push({ text: "Image 2: Intraday 5m Chart (Full Day Action)" });
+    }
+    if (images.eodOi) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.eodOi.split(',')[1] } });
+        parts.push({ text: "Image 3: End of Day OI Data" });
+    }
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            predictionAccuracy: { type: Type.STRING, enum: ['High', 'Medium', 'Low'] },
+            actualTrend: { type: Type.STRING, description: "What actually happened today? (e.g. 'Gap up and trended higher')" },
+            planVsReality: { type: Type.STRING, description: "Detailed critique: Did the morning plan work? Where did it fail or succeed?" },
+            keyTakeaways: { type: Type.STRING, description: "One major lesson from today's price action." },
+            tomorrowOutlook: {
+                type: Type.OBJECT,
+                properties: {
+                    bias: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral'] },
+                    earlyLevels: {
+                        type: Type.OBJECT,
+                        properties: {
+                            support: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                            resistance: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                        }
+                    },
+                    watchFor: { type: Type.STRING, description: "Specific setup to watch for at tomorrow's open." }
+                }
+            }
+        }
+    };
+
+    const promptText = `
+        You are the Head Risk Manager. The trading day is over.
+        
+        TASK:
+        1. Review today's full price action (Intraday Chart).
+        2. Compare it against the Morning Plan (if provided). Did we predict the bias correctly?
+        3. Analyze the Daily Candle structure. What does it signal for TOMORROW?
+        4. Provide early Support/Resistance levels for the next trading session.
+        
+        Output structured JSON. Be critical and educational.
+    `;
+    
+    parts.push({ text: promptText });
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a retrospective trading analyst. Your goal is to learn from today to prepare for tomorrow.",
+                temperature: 0.3
+            }
+        });
+        return JSON.parse(response.text || "{}");
+    } catch (e) {
+        console.error("Post-Market Analysis Error", e);
+        throw new Error("Failed Post-Market Analysis.");
     }
 }

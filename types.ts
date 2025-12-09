@@ -113,6 +113,22 @@ export interface LiveMarketAnalysis {
     }
 }
 
+// --- POST-MARKET DEBRIEF TYPES ---
+export interface PostMarketAnalysis {
+    predictionAccuracy: 'High' | 'Medium' | 'Low';
+    actualTrend: string; // What actually happened
+    planVsReality: string; // Detailed comparison
+    keyTakeaways: string; // Lesson learned
+    tomorrowOutlook: {
+        bias: 'Bullish' | 'Bearish' | 'Neutral';
+        earlyLevels: {
+            support: number[];
+            resistance: number[];
+        };
+        watchFor: string; // What to look for at tomorrow's open
+    }
+}
+
 export interface TradeNote {
     id: string;
     timestamp: string; // HH:mm:ss

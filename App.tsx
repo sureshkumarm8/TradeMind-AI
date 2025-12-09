@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis } from './types';
+import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
@@ -54,6 +54,8 @@ const App: React.FC = () => {
   const [preMarketAnalysis, setPreMarketAnalysis] = useState<{date: string, data: PreMarketAnalysis} | undefined>(undefined);
   // New: AI Live Market Analysis State
   const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, data: LiveMarketAnalysis} | undefined>(undefined);
+  // New: Post-Market Analysis State
+  const [postMarketAnalysis, setPostMarketAnalysis] = useState<{date: string, data: PostMarketAnalysis} | undefined>(undefined);
   
   // Cloud Sync State
   const [googleClientId, setGoogleClientId] = useState<string>('');
@@ -83,6 +85,7 @@ const App: React.FC = () => {
     const savedPreMarket = localStorage.getItem('tradeMind_preMarket');
     const savedPreMarketAnalysis = localStorage.getItem('tradeMind_preMarketAnalysis');
     const savedLiveMarketAnalysis = localStorage.getItem('tradeMind_liveMarketAnalysis');
+    const savedPostMarketAnalysis = localStorage.getItem('tradeMind_postMarketAnalysis');
     const savedClientId = localStorage.getItem('tradeMind_googleClientId');
     const savedProfile = localStorage.getItem('tradeMind_userProfile');
     
@@ -97,6 +100,7 @@ const App: React.FC = () => {
     if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
     if (savedPreMarketAnalysis) try { setPreMarketAnalysis(JSON.parse(savedPreMarketAnalysis)); } catch(e) {};
     if (savedLiveMarketAnalysis) try { setLiveMarketAnalysis(JSON.parse(savedLiveMarketAnalysis)); } catch(e) {};
+    if (savedPostMarketAnalysis) try { setPostMarketAnalysis(JSON.parse(savedPostMarketAnalysis)); } catch(e) {};
     if (savedProfile) try { setUserProfile(JSON.parse(savedProfile)); } catch(e) {};
     
   }, []);
@@ -181,6 +185,7 @@ const App: React.FC = () => {
   useEffect(() => { if (preMarketNotes) localStorage.setItem('tradeMind_preMarket', JSON.stringify(preMarketNotes)); }, [preMarketNotes]);
   useEffect(() => { if (preMarketAnalysis) localStorage.setItem('tradeMind_preMarketAnalysis', JSON.stringify(preMarketAnalysis)); }, [preMarketAnalysis]);
   useEffect(() => { if (liveMarketAnalysis) localStorage.setItem('tradeMind_liveMarketAnalysis', JSON.stringify(liveMarketAnalysis)); }, [liveMarketAnalysis]);
+  useEffect(() => { if (postMarketAnalysis) localStorage.setItem('tradeMind_postMarketAnalysis', JSON.stringify(postMarketAnalysis)); }, [postMarketAnalysis]);
   useEffect(() => { if (userProfile) localStorage.setItem('tradeMind_userProfile', JSON.stringify(userProfile)); }, [userProfile]);
 
   const handleSaveSettings = () => {
@@ -305,6 +310,11 @@ const App: React.FC = () => {
       setLiveMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
   }
 
+  // Update AI Post-Market Analysis
+  const handleUpdatePostMarketAnalysis = (data: PostMarketAnalysis) => {
+      setPostMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+  }
+
   const handleSaveTrade = (trade: Trade) => {
     if (editingTrade) {
       setTrades(prev => prev.map(t => t.id === trade.id ? trade : t));
@@ -391,6 +401,7 @@ const App: React.FC = () => {
           setPreMarketNotes(undefined);
           setPreMarketAnalysis(undefined);
           setLiveMarketAnalysis(undefined);
+          setPostMarketAnalysis(undefined);
           setUserProfile(null);
           setSyncStatus(SyncStatus.OFFLINE);
           setAuthError(null);
@@ -579,8 +590,10 @@ const App: React.FC = () => {
                 apiKey={apiKey} 
                 initialData={preMarketAnalysis?.data} // Pass existing data
                 liveData={liveMarketAnalysis?.data} // Pass Live data
+                postData={postMarketAnalysis?.data} // Pass Post data
                 onAnalysisUpdate={handleUpdatePreMarketAnalysis} // Sync up
                 onLiveAnalysisUpdate={handleUpdateLiveMarketAnalysis} // Sync up live
+                onPostAnalysisUpdate={handleUpdatePostMarketAnalysis} // Sync up post
                 onSavePlan={handleSavePlan} 
             />
           }

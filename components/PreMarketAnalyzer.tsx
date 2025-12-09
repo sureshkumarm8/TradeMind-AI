@@ -1,21 +1,57 @@
-
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, Maximize2, X, BrainCircuit, Loader2, Save, ChevronDown, ChevronUp, CheckCircle, ShieldAlert, Lock, RefreshCw, Clock, AlertTriangle, MonitorPlay } from 'lucide-react';
-import { PreMarketAnalysis, LiveMarketAnalysis, TradeDirection } from '../types';
-import { analyzePreMarketRoutine, analyzeLiveMarketRoutine } from '../services/geminiService';
+import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit } from 'lucide-react';
+import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection } from '../types';
+import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
 
 interface PreMarketAnalyzerProps {
     apiKey: string;
     initialData?: PreMarketAnalysis;
     liveData?: LiveMarketAnalysis;
+    postData?: PostMarketAnalysis;
     onAnalysisUpdate?: (data: PreMarketAnalysis) => void;
     onLiveAnalysisUpdate?: (data: LiveMarketAnalysis) => void;
+    onPostAnalysisUpdate?: (data: PostMarketAnalysis) => void;
     onClose?: () => void;
     onSavePlan?: (notes: string) => void;
 }
 
-const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialData, liveData, onAnalysisUpdate, onLiveAnalysisUpdate, onClose, onSavePlan }) => {
+// Helper: Compact Upload Card
+const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange }: any) => (
+    <div className={`relative flex flex-col items-center justify-center p-2 rounded-lg border-2 border-dashed transition-all h-24 group overflow-hidden ${imageSrc ? 'border-indigo-500/50' : 'border-slate-700 hover:border-indigo-500/30 bg-slate-800'}`}>
+        {imageSrc && (
+            <div className="absolute inset-0 z-0">
+                <img src={imageSrc} alt={label} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
+            </div>
+        )}
+        <div className="relative z-10 flex flex-col items-center">
+            <div className="flex items-center gap-1.5 mb-1">
+                <Icon size={12} className={imageSrc ? "text-indigo-300 shadow-black drop-shadow-md" : "text-slate-500"} />
+                <span className={`text-[10px] font-bold uppercase shadow-black drop-shadow-md ${imageSrc ? "text-white" : "text-slate-500"}`}>{label}</span>
+            </div>
+            {imageSrc ? (
+                <div className="flex items-center gap-1 bg-emerald-900/80 px-2 py-0.5 rounded-full border border-emerald-500/30 backdrop-blur-sm mt-1">
+                    <CheckCircle size={10} className="text-emerald-400" />
+                    <span className="text-[9px] text-emerald-100 font-bold">Ready</span>
+                </div>
+            ) : (
+                <UploadCloud size={16} className="text-slate-600 mt-1" />
+            )}
+        </div>
+        <input type="file" accept="image/*" onChange={onChange} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
+    </div>
+);
+
+// Helper: Direction Badge
+const DirectionBadge = ({ dir }: { dir: string }) => {
+    const isLong = dir === TradeDirection.LONG || dir === 'Bullish';
+    const isShort = dir === TradeDirection.SHORT || dir === 'Bearish';
+    const color = isLong ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : isShort ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-700 text-slate-300';
+    return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${color}`}>{dir}</span>;
+};
+
+const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialData, liveData, postData, onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onClose, onSavePlan }) => {
     // Phase 1 Images
     const [images, setImages] = useState<{
         market: string;
@@ -30,15 +66,24 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         liveOi: string;
     }>({ liveChart: '', liveOi: '' });
 
+    // Phase 3 Images
+    const [postImages, setPostImages] = useState<{
+        dailyChart: string;
+        eodChart: string;
+        eodOi: string;
+    }>({ dailyChart: '', eodChart: '', eodOi: '' });
+
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
+    const [isPostAnalyzing, setIsPostAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     const [analysis, setAnalysis] = useState<PreMarketAnalysis | null>(initialData || null);
     const [liveAnalysis, setLiveAnalysis] = useState<LiveMarketAnalysis | null>(liveData || null);
+    const [postAnalysis, setPostAnalysis] = useState<PostMarketAnalysis | null>(postData || null);
     
     // Tab State
-    const [activeView, setActiveView] = useState<'phase1' | 'phase2'>('phase1');
+    const [activeView, setActiveView] = useState<'phase1' | 'phase2' | 'phase3'>('phase1');
     const [isIntelFolded, setIsIntelFolded] = useState(true);
 
     // Pre-Flight Checklist State
@@ -66,11 +111,12 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    // Sync if initialData changes externally
+    // Sync if data changes externally
     useEffect(() => {
         if (initialData) setAnalysis(initialData);
         if (liveData) setLiveAnalysis(liveData);
-    }, [initialData, liveData]);
+        if (postData) setPostAnalysis(postData);
+    }, [initialData, liveData, postData]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof images) => {
         const file = e.target.files?.[0];
@@ -78,7 +124,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         try {
             const compressed = await compressImage(file);
             setImages(prev => ({ ...prev, [field]: compressed }));
-            setError(null); // Clear error on new upload
+            setError(null); 
         } catch (err) {
             setError("Failed to process image. Try a smaller file.");
         }
@@ -96,27 +142,30 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         }
     };
 
+    const handlePostUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof postImages) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const compressed = await compressImage(file);
+            setPostImages(prev => ({ ...prev, [field]: compressed }));
+            setError(null);
+        } catch (err) {
+            setError("Failed to process EOD image.");
+        }
+    };
+
     const runAnalysis = async () => {
         setError(null);
-        
-        if (!apiKey) {
-            setError("API Key missing. Please configure it in Settings.");
-            return;
-        }
-        if (!images.market || !images.intraday || !images.oi || !images.multiStrike) {
-            setError("Incomplete Intelligence. Upload all 4 charts.");
-            return;
-        }
-
+        if (!apiKey) { setError("API Key missing."); return; }
+        if (!images.market || !images.intraday || !images.oi || !images.multiStrike) { setError("Incomplete Intelligence."); return; }
         setIsAnalyzing(true);
         try {
             const result = await analyzePreMarketRoutine(images, apiKey);
             setAnalysis(result);
             if (onAnalysisUpdate) onAnalysisUpdate(result);
-            setIsIntelFolded(true); // Auto fold after success
+            setIsIntelFolded(true);
         } catch (e: any) {
-            console.error(e);
-            setError(e.message || "Analysis failed. Check API Key/Connection.");
+            setError(e.message || "Analysis failed.");
         } finally {
             setIsAnalyzing(false);
         }
@@ -124,30 +173,34 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
 
     const runLiveCheck = async () => {
         setError(null);
-
-        if (!apiKey) {
-            setError("API Key missing.");
-            return;
-        }
-        if (!analysis) {
-            setError("No Pre-Market Plan found. Run Phase 1 first.");
-            return;
-        }
-        if (!liveImages.liveChart || !liveImages.liveOi) {
-            setError("Upload both Live Chart and Live OI data.");
-            return;
-        }
-
+        if (!apiKey) { setError("API Key missing."); return; }
+        if (!analysis) { setError("No Pre-Market Plan found."); return; }
+        if (!liveImages.liveChart || !liveImages.liveOi) { setError("Upload Live Chart & OI."); return; }
         setIsLiveAnalyzing(true);
         try {
             const result = await analyzeLiveMarketRoutine(liveImages, analysis, apiKey);
             setLiveAnalysis(result);
             if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(result);
         } catch(e: any) {
-            console.error(e);
             setError(e.message || "Live check failed.");
         } finally {
             setIsLiveAnalyzing(false);
+        }
+    };
+
+    const runPostAnalysis = async () => {
+        setError(null);
+        if (!apiKey) { setError("API Key missing."); return; }
+        if (!postImages.dailyChart || !postImages.eodChart || !postImages.eodOi) { setError("Upload EOD Charts."); return; }
+        setIsPostAnalyzing(true);
+        try {
+            const result = await analyzePostMarketRoutine(postImages, analysis, apiKey);
+            setPostAnalysis(result);
+            if (onPostAnalysisUpdate) onPostAnalysisUpdate(result);
+        } catch(e: any) {
+            setError(e.message || "Post-Market analysis failed.");
+        } finally {
+            setIsPostAnalyzing(false);
         }
     };
 
@@ -157,62 +210,29 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         onSavePlan(note);
     };
 
-    // Helper Component for Compact Upload Cards with Preview
-    const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange }: any) => (
-        <div className={`relative flex flex-col items-center justify-center p-2 rounded-lg border-2 border-dashed transition-all h-24 group overflow-hidden ${imageSrc ? 'border-indigo-500/50' : 'border-slate-700 hover:border-indigo-500/30 bg-slate-800'}`}>
-            
-            {/* Image Preview Layer */}
-            {imageSrc && (
-                <div className="absolute inset-0 z-0">
-                    <img src={imageSrc} alt={label} className="w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 to-transparent"></div>
-                </div>
-            )}
-
-            <div className="relative z-10 flex flex-col items-center">
-                <div className="flex items-center gap-1.5 mb-1">
-                    <Icon size={12} className={imageSrc ? "text-indigo-300 shadow-black drop-shadow-md" : "text-slate-500"} />
-                    <span className={`text-[10px] font-bold uppercase shadow-black drop-shadow-md ${imageSrc ? "text-white" : "text-slate-500"}`}>{label}</span>
-                </div>
-                
-                {imageSrc ? (
-                    <div className="flex items-center gap-1 bg-emerald-900/80 px-2 py-0.5 rounded-full border border-emerald-500/30 backdrop-blur-sm mt-1">
-                        <CheckCircle size={10} className="text-emerald-400" />
-                        <span className="text-[9px] text-emerald-100 font-bold">Ready</span>
-                    </div>
-                ) : (
-                    <UploadCloud size={16} className="text-slate-600 mt-1" />
-                )}
-            </div>
-            
-            <input type="file" accept="image/*" onChange={onChange} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
-        </div>
-    );
-
-    const DirectionBadge = ({ dir }: { dir: string }) => {
-        const isLong = dir === TradeDirection.LONG || dir === 'Bullish';
-        const isShort = dir === TradeDirection.SHORT || dir === 'Bearish';
-        const color = isLong ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : isShort ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-700 text-slate-300';
-        return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${color}`}>{dir}</span>;
-    };
-
     return (
         <div className="bg-slate-900 min-h-screen md:min-h-0 md:h-full w-full flex flex-col pb-20 md:pb-0 animate-fade-in">
             
             {/* TABS NAVIGATION */}
             <div className="px-4 pt-4 sticky top-0 bg-slate-900 z-20">
-                <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-md border border-slate-700">
+                <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-md border border-slate-700 overflow-x-auto">
                     <button 
                         onClick={() => setActiveView('phase1')}
-                        className={`flex-1 py-3 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeView === 'phase1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeView === 'phase1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
                     >
                         <BrainCircuit size={16} /> Phase 1: Pre-Market
                     </button>
                     <button 
                         onClick={() => setActiveView('phase2')}
-                        className={`flex-1 py-3 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${activeView === 'phase2' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeView === 'phase2' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
                     >
-                        <ShieldAlert size={16} /> Phase 2: Live Check
+                        <ShieldAlert size={16} /> Phase 2: Live
+                    </button>
+                     <button 
+                        onClick={() => setActiveView('phase3')}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeView === 'phase3' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                    >
+                        <Sunset size={16} /> Phase 3: Post-Market
                     </button>
                 </div>
             </div>
@@ -266,7 +286,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 <CompactUploadCard label="Market Graph" icon={Activity} imageSrc={images.market} onChange={(e: any) => handleUpload(e, 'market')} />
                                 <CompactUploadCard label="5m Chart" icon={TrendingUp} imageSrc={images.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} />
                                 <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={images.oi} onChange={(e: any) => handleUpload(e, 'oi')} />
-                                <CompactUploadCard label="Multi-Strike" icon={Layers} imageSrc={images.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} />
+                                <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={images.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} />
                             </div>
 
                             {/* Error Banner */}
@@ -310,8 +330,8 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <span className="text-[10px] text-indigo-400 font-bold uppercase mb-2 flex items-center gap-1"><BrainCircuit size={12}/> Core Thesis</span>
                                         <p className="text-sm text-slate-200 font-medium italic leading-relaxed">"{analysis.coreThesis}"</p>
                                         <div className="mt-4 flex gap-4 text-xs font-mono">
-                                             <div className="text-red-400"><span className="font-bold opacity-50">RES:</span> {analysis.keyLevels.resistance.join(', ')}</div>
-                                             <div className="text-emerald-400"><span className="font-bold opacity-50">SUP:</span> {analysis.keyLevels.support.join(', ')}</div>
+                                             <div className="text-red-400"><span className="font-bold opacity-50">RES:</span> {analysis.keyLevels?.resistance?.join(', ') || 'None'}</div>
+                                             <div className="text-emerald-400"><span className="font-bold opacity-50">SUP:</span> {analysis.keyLevels?.support?.join(', ') || 'None'}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -322,10 +342,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <Clock size={16} className="mr-2"/> 09:25 - 09:45 AM Attack Plan
                                     </h4>
                                     <div className="bg-slate-900/50 border-l-2 border-indigo-500 p-4 rounded-r-xl mb-4">
-                                        <p className="text-sm text-slate-200">{analysis.firstHourPlan.action}</p>
+                                        <p className="text-sm text-slate-200">{analysis.firstHourPlan?.action}</p>
                                     </div>
                                     
-                                    {analysis.firstHourPlan.potentialTrade && (
+                                    {analysis.firstHourPlan?.potentialTrade && (
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
                                                 <div className="text-[10px] text-slate-500 uppercase font-bold">Direction</div>
@@ -350,28 +370,32 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 {/* Scenarios & Setups */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Primary Setup */}
-                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
-                                        <span className="text-[10px] text-emerald-400 font-bold uppercase mb-2 block">Primary Setup</span>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <DirectionBadge dir={analysis.tradeSetups.primary.direction} />
-                                            <span className="text-xs font-mono text-slate-400">Trigger: {analysis.tradeSetups.primary.trigger}</span>
+                                    {analysis.tradeSetups?.primary && (
+                                        <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                            <span className="text-[10px] text-emerald-400 font-bold uppercase mb-2 block">Primary Setup</span>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <DirectionBadge dir={analysis.tradeSetups.primary.direction} />
+                                                <span className="text-xs font-mono text-slate-400">Trigger: {analysis.tradeSetups.primary.trigger}</span>
+                                            </div>
+                                            <div className="flex gap-3 text-xs font-mono mt-3 pt-3 border-t border-slate-700">
+                                                <span className="text-red-400">SL: {analysis.tradeSetups.primary.stopLoss}</span>
+                                                <span className="text-emerald-400">TGT: {analysis.tradeSetups.primary.target}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-3 text-xs font-mono mt-3 pt-3 border-t border-slate-700">
-                                            <span className="text-red-400">SL: {analysis.tradeSetups.primary.stopLoss}</span>
-                                            <span className="text-emerald-400">TGT: {analysis.tradeSetups.primary.target}</span>
-                                        </div>
-                                    </div>
+                                    )}
                                     {/* Opening Scenarios */}
-                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
-                                        <div>
-                                            <span className="text-[10px] text-emerald-500 font-bold uppercase block mb-1">Gap Up Scenario</span>
-                                            <p className="text-xs text-slate-300 leading-snug">{analysis.openingScenarios.gapUp}</p>
+                                    {analysis.openingScenarios && (
+                                        <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
+                                            <div>
+                                                <span className="text-[10px] text-emerald-500 font-bold uppercase block mb-1">Gap Up Scenario</span>
+                                                <p className="text-xs text-slate-300 leading-snug">{analysis.openingScenarios.gapUp}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-red-500 font-bold uppercase block mb-1">Gap Down Scenario</span>
+                                                <p className="text-xs text-slate-300 leading-snug">{analysis.openingScenarios.gapDown}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <span className="text-[10px] text-red-500 font-bold uppercase block mb-1">Gap Down Scenario</span>
-                                            <p className="text-xs text-slate-300 leading-snug">{analysis.openingScenarios.gapDown}</p>
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
 
                                 {/* Mission Intel (Collapsible) */}
@@ -381,7 +405,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         className="w-full flex justify-between items-center p-3 bg-slate-800 hover:bg-slate-700 transition"
                                     >
                                         <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
-                                            <Layers size={14}/> Mission Intel (Source Images)
+                                            <LayersIcon size={14}/> Mission Intel (Source Images)
                                         </span>
                                         {isIntelFolded ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
                                     </button>
@@ -523,6 +547,106 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     </div>
                                 )}
                             </>
+                        )}
+                    </div>
+                )}
+                
+                {/* ========================== PHASE 3 VIEW (POST MARKET) ========================== */}
+                {activeView === 'phase3' && (
+                    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
+                        {/* INPUTS */}
+                        <div className="bg-purple-900/10 border border-purple-500/30 p-6 rounded-2xl">
+                             <div className="flex items-center gap-3 mb-6">
+                                <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
+                                    <Sunset size={24} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white uppercase tracking-wide">Post-Market Debrief</h3>
+                                    <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-3 mb-6">
+                                <CompactUploadCard label="Daily Candle" icon={Activity} imageSrc={postImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} />
+                                <CompactUploadCard label="EOD 5m Chart" icon={TrendingUp} imageSrc={postImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} />
+                                <CompactUploadCard label="EOD OI Data" icon={BarChart2} imageSrc={postImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} />
+                            </div>
+
+                            {error && (
+                                <div className="mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in">
+                                    <AlertTriangle size={16} className="text-red-400 shrink-0"/>
+                                    <span className="text-xs text-red-200 font-bold">{error}</span>
+                                </div>
+                            )}
+
+                            {!isPostAnalyzing ? (
+                                <button 
+                                    onClick={runPostAnalysis}
+                                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-widest rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-900/40"
+                                >
+                                    <Flag size={18}/> Generate EOD Report
+                                </button>
+                            ) : (
+                                <div className="w-full py-3 bg-slate-800 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-purple-400 animate-pulse border border-purple-500/30">
+                                    <Loader2 size={16} className="animate-spin"/> Crunching Day's Data...
+                                </div>
+                            )}
+                        </div>
+
+                        {/* RESULTS */}
+                        {postAnalysis && (
+                             <div className="space-y-4 animate-fade-in">
+                                 {/* Accuracy Grade */}
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center">
+                                         <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Morning Prediction</div>
+                                         <div className={`text-2xl font-black uppercase ${postAnalysis.predictionAccuracy === 'High' ? 'text-emerald-400' : postAnalysis.predictionAccuracy === 'Medium' ? 'text-amber-400' : 'text-red-400'}`}>
+                                            {postAnalysis.predictionAccuracy}
+                                         </div>
+                                         <div className="text-[10px] text-slate-500 font-bold mt-1">Accuracy</div>
+                                     </div>
+                                     <div className="md:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                         <div className="text-[10px] text-indigo-400 font-bold uppercase mb-2">Plan vs Reality</div>
+                                         <p className="text-sm text-slate-300 italic">"{postAnalysis.planVsReality}"</p>
+                                     </div>
+                                 </div>
+
+                                 {/* Key Lesson */}
+                                 <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                     <h4 className="text-xs font-bold text-white uppercase mb-2 flex items-center gap-2">
+                                        <Target size={14} className="text-emerald-400"/> Key Takeaway
+                                     </h4>
+                                     <p className="text-sm text-emerald-100 bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
+                                         {postAnalysis.keyTakeaways}
+                                     </p>
+                                 </div>
+
+                                 {/* Tomorrow's Prelude */}
+                                 <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-xl border border-indigo-500/30">
+                                     <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest mb-4">Tomorrow's Prelude</h4>
+                                     
+                                     <div className="flex items-center gap-4 mb-4">
+                                         <DirectionBadge dir={postAnalysis.tomorrowOutlook?.bias || 'Neutral'} />
+                                         <span className="text-xs text-slate-400">Early Bias</span>
+                                     </div>
+
+                                     <div className="grid grid-cols-2 gap-4 text-xs font-mono mb-4">
+                                         <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
+                                            <span className="text-red-400 font-bold block mb-1">Watch Res</span>
+                                            {postAnalysis.tomorrowOutlook?.earlyLevels?.resistance?.join(', ') || 'None'}
+                                         </div>
+                                         <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
+                                            <span className="text-emerald-400 font-bold block mb-1">Watch Sup</span>
+                                            {postAnalysis.tomorrowOutlook?.earlyLevels?.support?.join(', ') || 'None'}
+                                         </div>
+                                     </div>
+
+                                     <div className="text-sm text-slate-300 bg-slate-900 p-3 rounded border border-slate-800">
+                                        <span className="text-indigo-400 font-bold uppercase text-[10px] block mb-1">Watch For</span>
+                                        {postAnalysis.tomorrowOutlook?.watchFor}
+                                     </div>
+                                 </div>
+                             </div>
                         )}
                     </div>
                 )}
