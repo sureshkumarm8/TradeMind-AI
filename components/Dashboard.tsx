@@ -1,7 +1,8 @@
+
 import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
 import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis, AiAnalysisResponse } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale, Bot, Loader2, Lightbulb, GraduationCap, RefreshCw } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -32,10 +33,83 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// Internal Component for Beautiful AI Report Rendering
+const AiCoachReport = ({ report, title }: { report: string, title: string }) => {
+    if (!report) return null;
+
+    // Rudimentary Markdown Parser for the specific structure returned by Gemini
+    // Expects: ### Header \n Content
+    const sections = report.split('###').filter(s => s.trim().length > 0);
+
+    return (
+        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 rounded-2xl border border-indigo-500/30 overflow-hidden shadow-2xl mb-8 animate-fade-in-up w-full text-left">
+            {/* Header */}
+            <div className="bg-slate-950/50 p-5 border-b border-indigo-500/20 flex justify-between items-center backdrop-blur-sm">
+                <div className="flex items-center gap-3">
+                    <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400 border border-indigo-500/30">
+                        <BrainCircuit size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-white font-bold text-base uppercase tracking-wide">{title}</h3>
+                        <p className="text-[10px] text-indigo-300 font-medium">AI Intelligence Briefing</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                     <div className="flex space-x-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/20"></div>
+                     </div>
+                </div>
+            </div>
+
+            {/* Content Grid */}
+            <div className="p-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {sections.map((section, idx) => {
+                    const lines = section.trim().split('\n');
+                    const rawTitle = lines[0].trim();
+                    const content = lines.slice(1).join('\n').trim();
+                    
+                    // Determine Styling based on content content
+                    let icon = <Activity size={18} />;
+                    let containerStyle = "bg-slate-800/50 border-slate-700/50";
+                    let titleColor = "text-slate-300";
+
+                    if (rawTitle.includes('Market Sync') || rawTitle.includes('Sync')) {
+                        icon = <Target size={18} className="text-blue-400"/>;
+                        containerStyle = "bg-blue-900/10 border-blue-500/20";
+                        titleColor = "text-blue-300";
+                    } else if (rawTitle.includes('Execution Grade') || rawTitle.includes('Grade')) {
+                        icon = <GraduationCap size={18} className="text-emerald-400"/>;
+                        containerStyle = "bg-emerald-900/10 border-emerald-500/20";
+                        titleColor = "text-emerald-300";
+                    } else if (rawTitle.includes('Pro Tip') || rawTitle.includes('Tip')) {
+                        icon = <Lightbulb size={18} className="text-amber-400"/>;
+                        containerStyle = "bg-amber-900/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]";
+                        titleColor = "text-amber-300";
+                    }
+
+                    return (
+                        <div key={idx} className={`p-5 rounded-xl border ${containerStyle} flex flex-col relative group hover:bg-slate-800/80 transition-colors ${idx === sections.length - 1 && sections.length % 3 !== 0 ? 'md:col-span-2 lg:col-span-1' : ''}`}>
+                            <div className="flex items-center gap-2 mb-3">
+                                {icon}
+                                <h4 className={`font-bold text-sm uppercase tracking-wider ${titleColor}`}>{rawTitle.replace(/[\u{1F300}-\u{1F6FF}]/gu, '')}</h4>
+                            </div>
+                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">
+                                {content}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, preMarketNotes, preMarketAnalysis, onUpdatePreMarket, onNavigateToPreMarket, onViewTrade }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'playbook' | 'simulator'>('overview');
   
-  const [reportPeriod, setReportPeriod] = useState<'week' | 'month'>('week');
+  const [reportPeriod, setReportPeriod] = useState<'week' | 'fortnight' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [showScoreDetails, setShowScoreDetails] = useState(false);
@@ -217,11 +291,22 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     setAiReport(null);
     
     const now = new Date();
-    const cutoff = new Date();
-    if (reportPeriod === 'week') cutoff.setDate(now.getDate() - 7);
-    if (reportPeriod === 'month') cutoff.setDate(now.getDate() - 30);
+    // Normalize to start of day for accurate comparison
+    now.setHours(0,0,0,0);
+    
+    const cutoffDate = new Date(now);
+    
+    if (reportPeriod === 'week') cutoffDate.setDate(now.getDate() - 7);
+    if (reportPeriod === 'fortnight') cutoffDate.setDate(now.getDate() - 15);
+    if (reportPeriod === 'month') cutoffDate.setDate(now.getDate() - 30);
+    
+    // Robust Date Filtering using ISO String prefixes YYYY-MM-DD
+    const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
-    const recentTrades = trades.filter(t => new Date(t.date) >= cutoff && t.outcome !== TradeOutcome.OPEN);
+    const recentTrades = trades.filter(t => {
+         // Assuming trade.date is YYYY-MM-DD
+         return t.date >= cutoffStr && t.outcome !== TradeOutcome.OPEN;
+    });
     
     if (recentTrades.length === 0) {
       setAiReport("No closed trades found for this period to analyze.");
@@ -229,7 +314,9 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
       return;
     }
 
-    const report = await analyzeBatch(recentTrades, `Past ${reportPeriod === 'week' ? '7 Days' : '30 Days'}`, strategyProfile, apiKey);
+    const periodText = reportPeriod === 'week' ? '7 Days' : reportPeriod === 'fortnight' ? '15 Days' : '30 Days';
+    const report = await analyzeBatch(recentTrades, `Past ${periodText}`, strategyProfile, apiKey);
+    
     setAiReport(report);
     setIsGeneratingReport(false);
   };
@@ -610,33 +697,39 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
             <div className="bg-gradient-to-br from-indigo-900/30 to-slate-800 p-6 rounded-xl border border-indigo-500/30 shadow-lg relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none"><BrainCircuit size={120} className="text-indigo-400" /></div>
                 <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-indigo-400 font-bold text-lg flex items-center"><Sparkles size={20} className="mr-2" /> AI Performance Review</h3>
-                    <div className="flex bg-slate-900/50 rounded-lg p-1 border border-slate-700">
-                        <button onClick={() => setReportPeriod('week')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Last 7 Days</button>
-                        <button onClick={() => setReportPeriod('month')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'month' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Last 30 Days</button>
-                    </div>
-                    </div>
-                    {!aiReport && !isGeneratingReport && (
-                    <div className="text-center py-6">
-                        <p className="text-slate-400 text-sm mb-4">Get a deep-dive analysis of your recent trading performance.</p>
-                        <button onClick={handleGenerateReport} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-semibold transition shadow-lg shadow-indigo-900/50 flex items-center mx-auto"><BrainCircuit size={18} className="mr-2" /> Generate Coach's Report</button>
-                    </div>
-                    )}
-                    {isGeneratingReport && (
-                    <div className="text-center py-8 animate-pulse">
-                        <BrainCircuit size={48} className="mx-auto text-indigo-500 mb-4 opacity-50" />
-                        <p className="text-indigo-300 font-medium">Analyzing your trade journal...</p>
-                        <p className="text-xs text-slate-500 mt-2">Thinking deep to find your edge (10-20s)</p>
-                    </div>
-                    )}
-                    {aiReport && (
-                    <div className="bg-slate-900/60 rounded-lg p-5 border border-indigo-500/20 text-slate-200 text-sm leading-7 whitespace-pre-wrap">
-                        {aiReport}
-                        <div className="mt-4 pt-4 border-t border-slate-700/50 text-center">
-                            <button onClick={handleGenerateReport} className="text-indigo-400 text-xs hover:text-indigo-300 underline">Refresh Analysis</button>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+                        <h3 className="text-indigo-400 font-bold text-lg flex items-center"><Sparkles size={20} className="mr-2" /> AI Performance Review</h3>
+                        <div className="flex bg-slate-900/50 rounded-lg p-1 border border-slate-700">
+                            <button onClick={() => setReportPeriod('week')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>7 Days</button>
+                            <button onClick={() => setReportPeriod('fortnight')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'fortnight' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>15 Days</button>
+                            <button onClick={() => setReportPeriod('month')} className={`px-3 py-1 text-xs font-medium rounded-md transition ${reportPeriod === 'month' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>30 Days</button>
                         </div>
                     </div>
+                    
+                    {!aiReport && !isGeneratingReport && (
+                        <div className="text-center py-6">
+                            <p className="text-slate-400 text-sm mb-4">Get a deep-dive analysis of your recent trading performance.</p>
+                            <button onClick={handleGenerateReport} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-semibold transition shadow-lg shadow-indigo-900/50 flex items-center mx-auto"><BrainCircuit size={18} className="mr-2" /> Generate Coach's Report</button>
+                        </div>
+                    )}
+                    
+                    {isGeneratingReport && (
+                        <div className="text-center py-8 animate-pulse">
+                            <BrainCircuit size={48} className="mx-auto text-indigo-500 mb-4 opacity-50" />
+                            <p className="text-indigo-300 font-medium">Analyzing your trade journal...</p>
+                            <p className="text-xs text-slate-500 mt-2">Thinking deep to find your edge (10-20s)</p>
+                        </div>
+                    )}
+                    
+                    {aiReport && (
+                        <div className="mt-4">
+                            <AiCoachReport report={aiReport} title={`Coach's Report (${reportPeriod === 'week' ? 'Last 7 Days' : reportPeriod === 'fortnight' ? 'Last 15 Days' : 'Last 30 Days'})`} />
+                            <div className="mt-2 text-center">
+                                <button onClick={handleGenerateReport} className="text-indigo-400 text-xs hover:text-indigo-300 underline flex items-center justify-center mx-auto gap-1">
+                                    <RefreshCw size={12}/> Refresh Analysis
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
