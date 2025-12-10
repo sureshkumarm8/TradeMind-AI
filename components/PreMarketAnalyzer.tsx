@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2 } from 'lucide-react';
+import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw } from 'lucide-react';
 import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection } from '../types';
 import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
@@ -11,17 +12,17 @@ interface PreMarketAnalyzerProps {
     initialImages?: any;
     liveData?: LiveMarketAnalysis;
     postData?: PostMarketAnalysis;
-    onAnalysisUpdate?: (data: PreMarketAnalysis) => void;
-    onLiveAnalysisUpdate?: (data: LiveMarketAnalysis) => void;
-    onPostAnalysisUpdate?: (data: PostMarketAnalysis) => void;
+    onAnalysisUpdate?: (data: PreMarketAnalysis | null) => void;
+    onLiveAnalysisUpdate?: (data: LiveMarketAnalysis | null) => void;
+    onPostAnalysisUpdate?: (data: PostMarketAnalysis | null) => void;
     onImagesUpdate?: (images: any) => void;
     onClose?: () => void;
     onSavePlan?: (notes: string) => void;
 }
 
 // Calculate KB size from base64 string
-const getImageSizeKB = (base64String: string) => {
-    if (!base64String) return 0;
+const getImageSizeKB = (base64String: string): string => {
+    if (!base64String) return "0";
     const stringLength = base64String.length - 'data:image/jpeg;base64,'.length;
     const sizeInBytes = 4 * Math.ceil(stringLength / 3) * 0.5624896334383812;
     return (sizeInBytes / 1024).toFixed(1);
@@ -175,7 +176,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
             const compressed = await compressImage(file);
             setImages(prev => ({ ...prev, [field]: compressed }));
             setError(null); 
-        } catch (err) {
+        } catch (err: any) {
             setError("Failed to process image. Try a smaller file.");
         }
     };
@@ -187,7 +188,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
             const compressed = await compressImage(file);
             setLiveImages(prev => ({ ...prev, [field]: compressed }));
             setError(null);
-        } catch (err) {
+        } catch (err: any) {
             setError("Failed to process live image.");
         }
     };
@@ -199,7 +200,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
             const compressed = await compressImage(file);
             setPostImages(prev => ({ ...prev, [field]: compressed }));
             setError(null);
-        } catch (err) {
+        } catch (err: any) {
             setError("Failed to process EOD image.");
         }
     };
@@ -258,6 +259,29 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         if (!analysis || !onSavePlan) return;
         const note = `[AI PLAN] Bias: ${analysis.marketBias}. Thesis: ${analysis.coreThesis}. Levels: Res ${analysis.keyLevels.resistance.join(', ')} / Sup ${analysis.keyLevels.support.join(', ')}.`;
         onSavePlan(note);
+    };
+
+    // --- RESET HANDLERS ---
+    const handleResetPhase1 = () => {
+        if(!window.confirm("Clear all Pre-Market data and images?")) return;
+        setImages({ market: '', intraday: '', oi: '', multiStrike: '' });
+        setAnalysis(null);
+        if (onAnalysisUpdate) onAnalysisUpdate(null);
+        if (onImagesUpdate) onImagesUpdate(undefined);
+    };
+
+    const handleResetPhase2 = () => {
+        if(!window.confirm("Clear Live Check data?")) return;
+        setLiveImages({ liveChart: '', liveOi: '' });
+        setLiveAnalysis(null);
+        if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(null);
+    };
+
+    const handleResetPhase3 = () => {
+        if(!window.confirm("Clear Post-Market data?")) return;
+        setPostImages({ dailyChart: '', eodChart: '', eodOi: '' });
+        setPostAnalysis(null);
+        if (onPostAnalysisUpdate) onPostAnalysisUpdate(null);
     };
 
     return (
@@ -332,7 +356,14 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                     <UploadCloud size={14} className="text-indigo-400"/> Upload Intel
                                 </h3>
-                                {analysis && <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30"><CheckCircle size={10} className="mr-1"/> Analysis Complete</span>}
+                                <div className="flex items-center gap-3">
+                                    {(analysis || images.market) && (
+                                        <button onClick={handleResetPhase1} className="text-xs flex items-center gap-1 text-slate-500 hover:text-white transition" title="Clear All Phase 1 Data">
+                                            <RotateCcw size={12}/> Reset
+                                        </button>
+                                    )}
+                                    {analysis && <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30"><CheckCircle size={10} className="mr-1"/> Analysis Complete</span>}
+                                </div>
                             </div>
                             
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -508,14 +539,21 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                             <>
                                 {/* HEADER & UPLOAD */}
                                 <div className="bg-red-900/10 border border-red-500/30 p-6 rounded-2xl">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="p-2 bg-red-500/10 rounded-lg text-red-500 animate-pulse">
-                                            <ShieldAlert size={24} />
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-red-500/10 rounded-lg text-red-500 animate-pulse">
+                                                <ShieldAlert size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-white uppercase tracking-wide">Live Combat Check</h3>
+                                                <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="text-lg font-bold text-white uppercase tracking-wide">Live Combat Check</h3>
-                                            <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
-                                        </div>
+                                        {(liveAnalysis || liveImages.liveChart) && (
+                                            <button onClick={handleResetPhase2} className="text-xs flex items-center gap-1 text-red-400/70 hover:text-red-400 transition" title="Clear Phase 2 Data">
+                                                <RotateCcw size={12}/> Reset
+                                            </button>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 mb-6">
@@ -610,14 +648,21 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
                         {/* INPUTS */}
                         <div className="bg-purple-900/10 border border-purple-500/30 p-6 rounded-2xl">
-                             <div className="flex items-center gap-3 mb-6">
-                                <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
-                                    <Sunset size={24} />
+                             <div className="flex justify-between items-start mb-6">
+                                 <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
+                                        <Sunset size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white uppercase tracking-wide">Post-Market Debrief</h3>
+                                        <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-white uppercase tracking-wide">Post-Market Debrief</h3>
-                                    <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
-                                </div>
+                                {(postAnalysis || postImages.dailyChart) && (
+                                    <button onClick={handleResetPhase3} className="text-xs flex items-center gap-1 text-purple-400/70 hover:text-purple-400 transition" title="Clear Phase 3 Data">
+                                        <RotateCcw size={12}/> Reset
+                                    </button>
+                                )}
                             </div>
                             
                             <div className="grid grid-cols-3 gap-3 mb-6">
