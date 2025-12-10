@@ -412,7 +412,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     </div>
                                     <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
                                         <span className="text-[10px] text-indigo-400 font-bold uppercase mb-2 flex items-center gap-1"><BrainCircuit size={12}/> Core Thesis</span>
-                                        <p className="text-sm text-slate-200 font-medium italic leading-relaxed">{analysis.coreThesis}</p>
+                                        <p className="text-sm text-slate-200 font-medium italic leading-relaxed">{analysis.coreThesis?.replace(/^"|"$/g, '')}</p>
                                         <div className="mt-4 flex gap-4 text-xs font-mono">
                                              <div className="text-red-400"><span className="font-bold opacity-50">RES:</span> {analysis.keyLevels?.resistance?.join(', ') || 'None'}</div>
                                              <div className="text-emerald-400"><span className="font-bold opacity-50">SUP:</span> {analysis.keyLevels?.support?.join(', ') || 'None'}</div>
@@ -697,7 +697,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                              <div className="space-y-4 animate-fade-in">
                                  {/* Accuracy Grade */}
                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center">
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center">
                                          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Morning Prediction</div>
                                          <div className={`text-2xl font-black uppercase ${postAnalysis.predictionAccuracy === 'High' ? 'text-emerald-400' : postAnalysis.predictionAccuracy === 'Medium' ? 'text-amber-400' : 'text-red-400'}`}>
                                             {postAnalysis.predictionAccuracy}
@@ -706,7 +706,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                      </div>
                                      <div className="md:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700">
                                          <div className="text-[10px] text-indigo-400 font-bold uppercase mb-2">Plan vs Reality</div>
-                                         <p className="text-sm text-slate-300 italic">{postAnalysis.planVsReality}</p>
+                                         <p className="text-sm text-slate-300 italic">{postAnalysis.planVsReality?.replace(/^"|"$/g, '')}</p>
                                      </div>
                                  </div>
 
@@ -716,7 +716,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <Target size={14} className="text-emerald-400"/> Key Takeaway
                                      </h4>
                                      <p className="text-sm text-emerald-100 bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
-                                         {postAnalysis.keyTakeaways}
+                                         {postAnalysis.keyTakeaways?.replace(/^"|"$/g, '')}
                                      </p>
                                  </div>
 
@@ -742,7 +742,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
 
                                      <div className="text-sm text-slate-300 bg-slate-900 p-3 rounded border border-slate-800">
                                         <span className="text-indigo-400 font-bold uppercase text-[10px] block mb-1">Watch For</span>
-                                        {postAnalysis.tomorrowOutlook?.watchFor}
+                                        {postAnalysis.tomorrowOutlook?.watchFor?.replace(/^"|"$/g, '')}
                                      </div>
                                  </div>
                              </div>

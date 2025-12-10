@@ -147,15 +147,16 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 
     return JSON.stringify(resultObj);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error analyzing trade:", error);
+    // Return actual API error message
     return JSON.stringify({
       grade: 0,
       gradeColor: "red",
       marketTrend: "API Error",
-      realityCheck: "Failed to connect to AI service.",
+      realityCheck: `Analysis Failed: ${error.message || "Unknown API Error"}`,
       strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
-      coachCommand: "Check internet and API Key."
+      coachCommand: "Check API Key and Quota."
     });
   }
 };
@@ -208,9 +209,9 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
 
     return response.text || "Analysis complete.";
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error batch analyzing:", error);
-    return "Deep analysis failed. Please check your API Key and try again.";
+    return `Deep analysis failed. API Error: ${error.message || "Unknown"}`;
   }
 };
 
@@ -435,9 +436,9 @@ export const analyzePreMarketRoutine = async (
 
         return JSON.parse(response.text || "{}");
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Pre-Market Analysis Error", e);
-        throw new Error("Failed to generate Pre-Market Plan. Check API Key and Images.");
+        throw new Error(e.message || "Failed to generate Pre-Market Plan.");
     }
 }
 
@@ -516,9 +517,9 @@ export const analyzeLiveMarketRoutine = async (
             }
         });
         return JSON.parse(response.text || "{}");
-    } catch (e) {
+    } catch (e: any) {
         console.error("Live Check Error", e);
-        throw new Error("Failed Live Check.");
+        throw new Error(e.message || "Failed Live Check.");
     }
 }
 
@@ -606,9 +607,9 @@ export const analyzePostMarketRoutine = async (
             }
         });
         return JSON.parse(response.text || "{}");
-    } catch (e) {
+    } catch (e: any) {
         console.error("Post-Market Analysis Error", e);
-        throw new Error("Failed Post-Market Analysis.");
+        throw new Error(e.message || "Failed Post-Market Analysis.");
     }
 }
 
@@ -676,8 +677,8 @@ export const getMentorChatResponse = async (
         const result = await activeChat.sendMessage({ message: lastUserMsg.parts[0].text });
         return result.text;
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Mentor Chat Error", e);
-        return "The comms link is unstable. Check your API Key or try again.";
+        return `SIGNAL INTERRUPTED. API Error: ${e.message || "Unknown Connection Failure"}. Check Key and Quota.`;
     }
 }

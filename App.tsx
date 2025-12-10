@@ -197,7 +197,8 @@ const App: React.FC = () => {
   const handleRefreshTip = async () => {
       setIsLoadingTip(true);
       const tip = await getDailyCoachTip(apiKey);
-      setDailyTip(tip);
+      // Strip any quotes if AI adds them
+      setDailyTip(tip.replace(/^"|"$/g, ''));
       setIsLoadingTip(false);
   }
 
@@ -288,10 +289,14 @@ const App: React.FC = () => {
               setSyncStatus(SyncStatus.ERROR);
               notify("Empty Cloud Data", 'error');
           }
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
           setSyncStatus(SyncStatus.ERROR);
-          notify("Sync Failed: Try logging in again", 'error');
+          if (e.message === 'Auth Expired') {
+              notify("Session Expired: Please reconnect", 'error');
+          } else {
+              notify("Sync Failed: Try logging in again", 'error');
+          }
       }
   };
 
