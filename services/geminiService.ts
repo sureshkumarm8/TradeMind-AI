@@ -216,17 +216,17 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
 
 export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
   const key = apiKey || process.env.API_KEY;
-  if (!key) return "Add your Gemini API Key to get daily tips.";
+  if (!key) return "Add API Key for daily wisdom.";
   
   try {
     const ai = new GoogleGenAI({ apiKey: key });
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
-      contents: "Give me one powerful, short trading aphorism for a Nifty Intraday scalper. Focus on patience or risk management.",
+      contents: "Give me ONE powerful, ultra-short trading aphorism (MAX 15 WORDS). Focus on patience, risk, or discipline. Tone: Sun Tzu / Marcus Aurelius. No generic advice.",
     });
-    return response.text || "Wait for the setup. Cash is also a position.";
+    return response.text?.trim() || "The market transfers money from the impatient to the patient.";
   } catch (e) {
-    return "Protect your capital. The market will be there tomorrow.";
+    return "Protect your capital. It is your ammo.";
   }
 };
 
@@ -609,5 +609,75 @@ export const analyzePostMarketRoutine = async (
     } catch (e) {
         console.error("Post-Market Analysis Error", e);
         throw new Error("Failed Post-Market Analysis.");
+    }
+}
+
+// --- MENTOR CHAT ROUTINE ---
+// This enables a conversational interface with the full context of the user's trading history.
+export const getMentorChatResponse = async (
+    chatHistory: { role: string, parts: { text: string }[] }[],
+    trades: Trade[],
+    strategyProfile: StrategyProfile,
+    apiKey?: string
+): Promise<string> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required for Mentor Chat");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+
+    // 1. Summarize History for Context (Last 50 trades)
+    // We don't send full objects to save tokens, just key metrics
+    const recentHistory = trades
+        .slice(0, 50)
+        .map(t => `${t.date}: ${t.direction} ${t.instrument}. Res: ${t.outcome} (${t.pnl}). Setup: ${t.setupName}. Mistakes: ${t.mistakes?.join(',') || 'None'}`)
+        .join('\n');
+
+    const strategyContext = formatStrategyForAI(strategyProfile);
+
+    // 2. Define System Instruction (Persona)
+    const systemInstruction = `
+        You are "The War Room Mentor", a battle-hardened, professional trading psychologist and risk manager.
+        
+        CONTEXT:
+        You have access to the user's Trading Strategy and their last 50 trades.
+        
+        USER STRATEGY:
+        ${strategyContext}
+        
+        RECENT TRADE LOG (Last 50):
+        ${recentHistory}
+        
+        YOUR MISSION:
+        - Answer the user's questions about their performance, psychology, or strategy.
+        - Be direct, concise, and professional. No fluff.
+        - Cite specific trades from their history if relevant (e.g., "Look at your loss on 2024-03-12...").
+        - If they show signs of "Tilt" (emotional trading), shut them down gently but firmly.
+        - Use emojis sparingly, only for emphasis (🛡️, 📉, 💡).
+        - Format responses in Markdown.
+    `;
+
+    try {
+        // Initialize Chat with System Instruction
+        // Pop the last message (current user prompt) to send it via sendMessage
+        // The rest is history.
+        const historyForInit = [...chatHistory];
+        const lastUserMsg = historyForInit.pop(); 
+        
+        const activeChat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: {
+                systemInstruction: systemInstruction,
+            },
+            history: historyForInit as any
+        });
+
+        if (!lastUserMsg || !lastUserMsg.parts[0].text) return "Silent check.";
+
+        const result = await activeChat.sendMessage({ message: lastUserMsg.parts[0].text });
+        return result.text;
+
+    } catch (e) {
+        console.error("Mentor Chat Error", e);
+        return "The comms link is unstable. Check your API Key or try again.";
     }
 }

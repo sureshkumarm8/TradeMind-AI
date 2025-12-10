@@ -219,7 +219,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     
     const highDiscWins = highDiscTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
     const lowDiscWins = lowDiscTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
-    
+
     const highWR = highDiscTrades.length > 0 ? (highDiscWins / highDiscTrades.length) * 100 : 0;
     const lowWR = lowDiscTrades.length > 0 ? (lowDiscWins / lowDiscTrades.length) * 100 : 0;
     
@@ -554,7 +554,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                        <div className="md:col-span-2">
                            <span className="text-[10px] text-indigo-400 uppercase font-bold mb-1 block">Core Thesis</span>
                            <p className="text-sm text-slate-300 italic line-clamp-2 leading-relaxed">
-                               "{preMarketAnalysis.data.coreThesis}"
+                               {preMarketAnalysis.data.coreThesis}
                            </p>
                            <div className="mt-2 text-[10px] text-slate-500 font-bold flex gap-2">
                                <span className="text-emerald-500">Sup: {preMarketAnalysis.data.keyLevels.support.join(', ')}</span>
@@ -931,7 +931,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                       <div className="bg-indigo-500/20 p-3 rounded-full text-indigo-400 shrink-0"><Sparkles size={24}/></div>
                       <div>
                           <h5 className="text-indigo-300 font-bold text-sm uppercase mb-2 tracking-wide">Coach's Diagnosis</h5>
-                          <p className="text-lg text-slate-200 italic font-medium leading-relaxed">"{getMotivationalMessage()}"</p>
+                          <p className="text-lg text-slate-200 italic font-medium leading-relaxed">{getMotivationalMessage()}</p>
                       </div>
                   </div>
 

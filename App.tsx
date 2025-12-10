@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis } from './types';
 import Dashboard from './components/Dashboard';
@@ -5,11 +6,12 @@ import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
 import AccountModal from './components/AccountModal'; 
-import PreMarketAnalyzer from './components/PreMarketAnalyzer'; // Import the new component
+import PreMarketAnalyzer from './components/PreMarketAnalyzer'; 
+import MentorChat from './components/MentorChat'; // Import Mentor Chat
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile, loadBackupData } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap, MessageSquare, Quote } from 'lucide-react';
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
@@ -42,8 +44,8 @@ const DEFAULT_STRATEGY: StrategyProfile = {
 };
 
 const App: React.FC = () => {
-  // Added 'premarket' to view state type
-  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket'>('dashboard');
+  // Added 'mentor' to view state type
+  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket' | 'mentor'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [apiKey, setApiKey] = useState<string>('');
@@ -76,6 +78,7 @@ const App: React.FC = () => {
 
   const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
   const [dailyTip, setDailyTip] = useState<string>("");
+  const [isLoadingTip, setIsLoadingTip] = useState(false);
 
   // Tilt Breaker State
   const [isTiltLocked, setIsTiltLocked] = useState(false);
@@ -138,9 +141,14 @@ const App: React.FC = () => {
              try {
                  await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
                  setSyncStatus(SyncStatus.SYNCED);
-             } catch(e) {
+             } catch(e: any) {
                  console.error("Auto Sync Failed", e);
-                 setSyncStatus(SyncStatus.ERROR);
+                 if (e.message === 'Auth Expired') {
+                     setSyncStatus(SyncStatus.ERROR);
+                     notify("Cloud Sync Paused: Session Expired", 'info');
+                 } else {
+                     setSyncStatus(SyncStatus.ERROR);
+                 }
              }
          }, 5000); 
      }
@@ -183,8 +191,15 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-     getDailyCoachTip(apiKey).then(setDailyTip);
+     if(apiKey) handleRefreshTip();
   }, [apiKey]);
+
+  const handleRefreshTip = async () => {
+      setIsLoadingTip(true);
+      const tip = await getDailyCoachTip(apiKey);
+      setDailyTip(tip);
+      setIsLoadingTip(false);
+  }
 
   useEffect(() => { localStorage.setItem('tradeMind_trades', JSON.stringify(trades)); }, [trades]);
   useEffect(() => { localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile)); }, [strategyProfile]);
@@ -199,7 +214,7 @@ const App: React.FC = () => {
       localStorage.setItem('tradeMind_apiKey', apiKey);
       localStorage.setItem('tradeMind_googleClientId', googleClientId);
       setAuthError(null);
-      getDailyCoachTip(apiKey).then(setDailyTip);
+      handleRefreshTip();
       notify("Configuration Saved!", 'success');
   };
 
@@ -255,7 +270,10 @@ const App: React.FC = () => {
   };
 
   const handleManualSync = async () => {
-      if (!driveFileId || syncStatus === SyncStatus.OFFLINE) return;
+      if (!driveFileId) {
+          notify("Not connected to Cloud", 'error');
+          return;
+      }
       
       setSyncStatus(SyncStatus.SYNCING);
       try {
@@ -273,12 +291,12 @@ const App: React.FC = () => {
       } catch (e) {
           console.error(e);
           setSyncStatus(SyncStatus.ERROR);
-          notify("Sync Failed", 'error');
+          notify("Sync Failed: Try logging in again", 'error');
       }
   };
 
   const handleForceSave = async () => {
-      if (syncStatus === SyncStatus.OFFLINE || !driveFileId) {
+      if (!driveFileId) {
           notify("Not connected to Cloud", 'error');
           return;
       }
@@ -287,10 +305,14 @@ const App: React.FC = () => {
           await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
           setSyncStatus(SyncStatus.SYNCED);
           notify("Manual Save Successful", 'success');
-      } catch(e) {
+      } catch(e: any) {
           console.error(e);
           setSyncStatus(SyncStatus.ERROR);
-          notify("Save Failed", 'error');
+          if (e.message === 'Auth Expired') {
+              notify("Session Expired: Please reconnect in Account", 'error');
+          } else {
+              notify("Save Failed", 'error');
+          }
       }
   }
 
@@ -463,11 +485,12 @@ const App: React.FC = () => {
   const getPageTitle = () => {
      switch(view) {
         case 'dashboard': return 'Dashboard';
-        case 'premarket': return 'Pre-Market Center'; // Title for new view
+        case 'premarket': return 'Pre-Market Center';
         case 'journal': return 'Trade Journal';
         case 'system': return 'My System';
         case 'new': return editingTrade ? 'Edit Trade' : 'Log Trade';
         case 'account': return 'Account & Settings';
+        case 'mentor': return 'The War Room'; // New Title
         default: return 'TradeMind.AI';
      }
   }
@@ -510,9 +533,13 @@ const App: React.FC = () => {
             <button onClick={() => setView('dashboard')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <LayoutDashboard size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Dashboard</span>
             </button>
-             {/* NEW BUTTON FOR PRE-MARKET */}
+             {/* PRE-MARKET */}
              <button onClick={() => setView('premarket')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'premarket' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <Zap size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Pre-Market</span>
+            </button>
+             {/* MENTOR CHAT (WAR ROOM) */}
+            <button onClick={() => setView('mentor')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'mentor' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <MessageSquare size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Mentor</span>
             </button>
             <button onClick={() => setView('journal')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'journal' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <BookOpen size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Journal</span>
@@ -529,35 +556,37 @@ const App: React.FC = () => {
          </div>
          
          <div className="hidden md:block mt-auto space-y-4">
-             {/* 🔮 BEAUTIFIED COACH'S TIP CARD */}
-             <div className="relative group cursor-default">
-                 {/* Glowing Background */}
-                 <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
+             {/* 🔮 BEAUTIFIED WISDOM CHIP */}
+             <div className="relative group cursor-pointer overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-slate-800 hover:border-amber-500/30 transition-all duration-500 shadow-xl">
                  
-                 <div className="relative p-5 bg-slate-950 rounded-xl border border-slate-800 shadow-xl">
-                    <div className="flex items-center gap-2 mb-3">
-                        <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400 border border-indigo-500/20">
-                            <Sparkles size={12} className="group-hover:animate-spin-slow" />
+                 {/* Animated Glow */}
+                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-0 group-hover:opacity-100 transition duration-700"></div>
+                 
+                 <div className="p-5 relative z-10">
+                    <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2">
+                            <Sparkles size={14} className="text-amber-400 animate-pulse" />
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500/80">Mindset Link</span>
                         </div>
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-indigo-300 transition-colors">Daily Wisdom</span>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); handleRefreshTip(); }}
+                            disabled={isLoadingTip}
+                            className="text-slate-500 hover:text-white transition transform hover:rotate-180 duration-500"
+                            title="New Transmission"
+                        >
+                            <RefreshCw size={12} className={isLoadingTip ? "animate-spin" : ""} />
+                        </button>
                     </div>
 
-                    <blockquote className="relative mb-2">
-                        <span className="absolute -top-3 -left-1 text-4xl text-slate-800 font-serif leading-none select-none opacity-50">“</span>
-                        <p className="text-xs font-medium text-slate-300 leading-relaxed italic pl-2 relative z-10">
-                            {dailyTip || "Patience is the sniper's greatest weapon."}
+                    <div className="relative pl-3 border-l-2 border-amber-500/20 group-hover:border-amber-500/50 transition-colors">
+                        <p className={`text-sm font-serif font-medium text-slate-200 leading-relaxed italic ${isLoadingTip ? 'opacity-50 blur-[2px]' : 'opacity-100 blur-0'} transition-all duration-300`}>
+                            {dailyTip || "The market transfers money from the impatient to the patient."}
                         </p>
-                    </blockquote>
-
-                    <div className="pt-3 border-t border-slate-900 flex justify-between items-center">
-                        <span className="text-[9px] text-slate-600 font-mono">AI Coach v1.0</span>
-                        <div className="flex space-x-0.5">
-                            <div className="w-1 h-1 rounded-full bg-emerald-500/50"></div>
-                            <div className="w-1 h-1 rounded-full bg-emerald-500/30"></div>
-                            <div className="w-1 h-1 rounded-full bg-emerald-500/10"></div>
-                        </div>
                     </div>
                  </div>
+                 
+                 {/* Tech Background Pattern */}
+                 <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none"></div>
              </div>
              
              <div className="pt-2">
@@ -574,6 +603,7 @@ const App: React.FC = () => {
              {view === 'new' && <PlusCircle size={18} className="mr-2 text-indigo-400"/>}
              {view === 'dashboard' && <LayoutDashboard size={18} className="mr-2 text-indigo-400"/>}
              {view === 'premarket' && <Zap size={18} className="mr-2 text-indigo-400"/>}
+             {view === 'mentor' && <MessageSquare size={18} className="mr-2 text-indigo-400"/>}
              {view === 'system' && <Target size={18} className="mr-2 text-indigo-400"/>}
              {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
              {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
@@ -638,7 +668,6 @@ const App: React.FC = () => {
             />
           }
           {view === 'system' && <MySystem strategyProfile={strategyProfile} onImport={handleUpdateStrategy} onUpdate={handleUpdateStrategy} notify={notify}/>}
-          {/* NEW PRE-MARKET ANALYZER VIEW */}
           {view === 'premarket' && 
             <PreMarketAnalyzer 
                 apiKey={apiKey} 
@@ -652,6 +681,14 @@ const App: React.FC = () => {
                 onImagesUpdate={handleUpdatePreMarketImages} // Sync images up
                 onSavePlan={handleSavePlan} 
             />
+          }
+          {/* MENTOR CHAT VIEW */}
+          {view === 'mentor' && 
+             <MentorChat 
+                trades={trades} 
+                strategyProfile={strategyProfile} 
+                apiKey={apiKey} 
+             />
           }
           {view === 'account' && (
               <AccountModal 

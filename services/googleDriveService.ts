@@ -122,6 +122,7 @@ export const getUserProfile = async (): Promise<UserProfile | null> => {
 // Internal helper to find file ID
 const findBackupFileId = async (): Promise<string | null> => {
     try {
+        // Use a timestamp to prevent caching issues in list requests if any
         const response = await window.gapi.client.drive.files.list({
             q: `name = '${BACKUP_FILE_NAME}' and trashed = false`,
             fields: 'files(id, name)',
@@ -191,19 +192,30 @@ export const performInitialSync = async (localTrades: Trade[], localStrategy: St
 
 const loadFromDrive = async (fileId: string): Promise<BackupData | null> => {
     try {
+        // Use GAPI client to fetch file content
+        // We explicitly don't use 'fetch' here to let GAPI handle auth headers more robustly
         const response = await window.gapi.client.drive.files.get({
             fileId: fileId,
             alt: 'media',
         });
+        
+        // GAPI response.body or response.result depending on environment
+        // For 'alt=media', response.body contains the stringified JSON usually
         return response.result as BackupData;
-    } catch (err) {
+    } catch (err: any) {
         console.error("Error reading file", err);
+        if (err.status === 401) {
+             // Token likely expired
+             throw new Error("Auth Expired");
+        }
         return null;
     }
 };
 
 // Exported wrapper for Manual Sync
 export const loadBackupData = async (fileId: string): Promise<BackupData | null> => {
+    // Before loading, ensure token is valid (rudimentary check via GAPI)
+    // If expired, loadFromDrive will throw 401, which App.tsx catches.
     return loadFromDrive(fileId);
 };
 
@@ -219,20 +231,19 @@ export const saveToDrive = async (data: any, existingFileId?: string | null): Pr
         mimeType: 'application/json',
     };
 
-    try {
-        const accessToken = window.gapi.client.getToken().access_token;
-        
+    const performUpload = async (token: string) => {
         if (existingFileId) {
             // PATCH existing file
             const url = `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`;
             const res = await fetch(url, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: fileContent
             });
+            if (res.status === 401) throw new Error("Auth Expired");
             if (!res.ok) throw new Error("Update Failed");
             return existingFileId;
         } else {
@@ -243,14 +254,42 @@ export const saveToDrive = async (data: any, existingFileId?: string | null): Pr
 
             const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${accessToken}` },
+                headers: { 'Authorization': `Bearer ${token}` },
                 body: form
             });
+            if (res.status === 401) throw new Error("Auth Expired");
             if (!res.ok) throw new Error("Create Failed");
             const json = await res.json();
             return json.id;
         }
-    } catch (err) {
+    };
+
+    try {
+        const tokenObj = window.gapi.client.getToken();
+        if (!tokenObj) throw new Error("Auth Expired");
+        
+        return await performUpload(tokenObj.access_token);
+        
+    } catch (err: any) {
+        if (err.message === "Auth Expired") {
+            console.warn("Token expired. Attempting refresh...");
+            // Attempt simple silent refresh if possible, otherwise fail gracefully
+            try {
+                // We use prompt: '' to try silent refresh if consent exists
+                await new Promise((resolve, reject) => {
+                    tokenClient.requestAccessToken({ prompt: '', callback: (resp: any) => {
+                        if (resp.error) reject(resp);
+                        else resolve(resp);
+                    }});
+                });
+                // Retry upload with new token
+                const newToken = window.gapi.client.getToken().access_token;
+                return await performUpload(newToken);
+            } catch (refreshErr) {
+                console.error("Refresh failed", refreshErr);
+                throw new Error("Auth Expired"); // Propagate to UI to ask user to login
+            }
+        }
         console.error("Save Error", err);
         throw err;
     }
