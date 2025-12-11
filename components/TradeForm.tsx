@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote } from '../types';
 import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus, FlaskConical, CircleDollarSign } from 'lucide-react';
@@ -381,9 +382,6 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     onSave(trade);
   };
 
-  // Determine if Exit Time can be entered
-  const isExitLocked = !formData.niftyExitPrice || !formData.exitPrice;
-
   return (
     <div className="max-w-6xl mx-auto pb-12 animate-fade-in-up">
       {/* 🚀 Header Actions */}
@@ -577,8 +575,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                          name="exitTime" 
                          value={formData.exitTime} 
                          onChange={handleChange} 
-                         disabled={isExitLocked}
-                         className={`w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none ${isExitLocked ? 'opacity-50 cursor-not-allowed bg-slate-950' : ''}`} 
+                         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-emerald-500 outline-none" 
                         />
                    </div>
                    <div>
