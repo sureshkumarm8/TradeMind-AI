@@ -93,7 +93,7 @@ export const initGoogleDrive = (clientId: string, onInitComplete: (success: bool
   }
 };
 
-export const loginToGoogle = (): Promise<boolean> => {
+export const loginToGoogle = (silent: boolean = false): Promise<boolean> => {
     return new Promise((resolve, reject) => {
         if (!tokenClient) {
             reject(new Error("Google Client not initialized. Please refresh."));
@@ -102,9 +102,9 @@ export const loginToGoogle = (): Promise<boolean> => {
         loginPromiseResolve = resolve;
         loginPromiseReject = reject;
 
-        // Force 'select_account' to allow user to switch or choose accounts
-        // Also include 'consent' to ensure we get permissions if needed
-        tokenClient.requestAccessToken({ prompt: 'select_account' });
+        // If silent (auto-connect), use empty prompt to avoid account picker if possible
+        // Otherwise use 'select_account' to force choice
+        tokenClient.requestAccessToken({ prompt: silent ? '' : 'select_account' });
     });
 };
 

@@ -140,6 +140,38 @@ const App: React.FC = () => {
      }
   }, [googleClientId]);
 
+  // Auto-connect and sync on load if profile exists
+  useEffect(() => {
+      const handleAutoConnect = async () => {
+          console.log("Attempting auto-sync with cloud...");
+          try {
+              // Attempt silent login (restore session)
+              await loginToGoogle(true);
+              
+              // Perform sync to get latest data
+              setSyncStatus(SyncStatus.SYNCING);
+              const { data, fileId } = await performInitialSync(trades, strategyProfile, preMarketNotes);
+              
+              if (data && fileId) {
+                  setDriveFileId(fileId);
+                  if (data.trades) setTrades(data.trades);
+                  if (data.strategy) setStrategyProfile(data.strategy);
+                  if (data.preMarketNotes) setPreMarketNotes(data.preMarketNotes);
+                  setSyncStatus(SyncStatus.SYNCED);
+                  console.log("Auto-sync complete.");
+              }
+          } catch (e) {
+              console.warn("Auto-sync failed:", e);
+              // Do not set error state visibly on auto-sync fail to avoid annoying user if offline
+              setSyncStatus(SyncStatus.OFFLINE);
+          }
+      };
+
+      if (isDriveInitialized && userProfile && googleClientId) {
+          handleAutoConnect();
+      }
+  }, [isDriveInitialized]); // Run when Drive API becomes ready
+
   useEffect(() => {
      if (syncStatus !== SyncStatus.OFFLINE && driveFileId) {
          setSyncStatus(SyncStatus.SYNCING);
@@ -150,7 +182,7 @@ const App: React.FC = () => {
                  await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
                  setSyncStatus(SyncStatus.SYNCED);
              } catch(e: any) {
-                 console.error("Auto Sync Failed", e);
+                 console.error("Auto Save Failed", e);
                  if (e.message === 'Auth Expired') {
                      setSyncStatus(SyncStatus.ERROR);
                      notify("Cloud Sync Paused: Session Expired", 'info');
@@ -241,7 +273,7 @@ const App: React.FC = () => {
           return;
       }
       try {
-          await loginToGoogle();
+          await loginToGoogle(false); // Force explicit login
           const profile = await getUserProfile();
           if (profile) setUserProfile(profile);
 
