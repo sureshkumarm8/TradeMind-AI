@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload, X, FlaskConical, CircleDollarSign, Lightbulb, GraduationCap } from 'lucide-react';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload, X, FlaskConical, CircleDollarSign, Lightbulb, GraduationCap, Minus, Maximize2 } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON, shareBackupData } from '../services/dataService';
 import { shareElementAsImage } from '../services/shareService';
@@ -37,79 +37,132 @@ const ImageModal = ({ src, onClose }: { src: string | null, onClose: () => void 
     );
 };
 
-// --- NEW COMPONENT: Beautiful AI Report Renderer ---
+// --- NEW COMPONENT: Tactical Dossier Report ---
 const AiCoachReport = ({ report, title }: { report: string, title: string }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
     if (!report) return null;
 
     // Rudimentary Markdown Parser for the specific structure returned by Gemini
     // Expects: ### Header \n Content
     const sections = report.split('###').filter(s => s.trim().length > 0);
 
+    // Extract a "Grade" if present for the header teaser
+    const gradeMatch = report.match(/Grade\s*([A-F][+-]?)/i);
+    const detectedGrade = gradeMatch ? gradeMatch[1] : null;
+
     return (
-        <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 rounded-2xl border border-indigo-500/30 overflow-hidden shadow-2xl mb-8 animate-fade-in-up">
-            {/* Header */}
-            <div className="bg-slate-950/50 p-5 border-b border-indigo-500/20 flex justify-between items-center backdrop-blur-sm">
-                <div className="flex items-center gap-3">
-                    <div className="bg-indigo-500/20 p-2 rounded-lg text-indigo-400 border border-indigo-500/30">
-                        <BrainCircuit size={20} />
-                    </div>
-                    <div>
-                        <h3 className="text-white font-bold text-base uppercase tracking-wide">{title}</h3>
-                        <p className="text-[10px] text-indigo-300 font-medium">AI Intelligence Briefing</p>
-                    </div>
-                </div>
-                <div className="flex gap-2">
-                     <div className="flex space-x-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50"></div>
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/20"></div>
-                     </div>
-                </div>
-            </div>
-
-            {/* Content Grid */}
-            <div className="p-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {sections.map((section, idx) => {
-                    const lines = section.trim().split('\n');
-                    const rawTitle = lines[0].trim();
-                    const content = lines.slice(1).join('\n').trim();
-                    
-                    // Determine Styling based on content content
-                    let icon = <Activity size={18} />;
-                    let containerStyle = "bg-slate-800/50 border-slate-700/50";
-                    let titleColor = "text-slate-300";
-
-                    if (rawTitle.includes('Market Sync') || rawTitle.includes('Sync')) {
-                        icon = <Target size={18} className="text-blue-400"/>;
-                        containerStyle = "bg-blue-900/10 border-blue-500/20";
-                        titleColor = "text-blue-300";
-                    } else if (rawTitle.includes('Execution Grade') || rawTitle.includes('Grade')) {
-                        icon = <GraduationCap size={18} className="text-emerald-400"/>;
-                        containerStyle = "bg-emerald-900/10 border-emerald-500/20";
-                        titleColor = "text-emerald-300";
-                    } else if (rawTitle.includes('Pro Tip') || rawTitle.includes('Tip')) {
-                        icon = <Lightbulb size={18} className="text-amber-400"/>;
-                        containerStyle = "bg-amber-900/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]";
-                        titleColor = "text-amber-300";
-                    }
-
-                    return (
-                        <div key={idx} className={`p-5 rounded-xl border ${containerStyle} flex flex-col relative group hover:bg-slate-800/80 transition-colors ${idx === sections.length - 1 && sections.length % 3 !== 0 ? 'md:col-span-2 lg:col-span-1' : ''}`}>
-                            <div className="flex items-center gap-2 mb-3">
-                                {icon}
-                                <h4 className={`font-bold text-sm uppercase tracking-wider ${titleColor}`}>{rawTitle.replace(/[\u{1F300}-\u{1F6FF}]/gu, '')}</h4> {/* Strip emojis from title if present */}
-                            </div>
-                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">
-                                {content}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+        <div className={`group relative rounded-2xl border transition-all duration-500 overflow-hidden mb-6 ${isExpanded ? 'bg-slate-900/80 border-indigo-500/40 shadow-2xl shadow-indigo-900/20' : 'bg-slate-900 border-slate-800 hover:border-indigo-500/30 hover:shadow-lg cursor-pointer'}`}>
             
-            {/* Footer */}
-            <div className="bg-slate-950/30 p-3 border-t border-indigo-500/10 text-center">
-                 <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Confidential Performance Audit</p>
+            {/* --- HEADER STRIP (Always Visible) --- */}
+            <div 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-4 flex items-center justify-between relative z-10 bg-slate-950/50 backdrop-blur-sm"
+            >
+                <div className="flex items-center gap-4">
+                    {/* Icon Box */}
+                    <div className={`p-2.5 rounded-xl border transition-all duration-300 ${isExpanded ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-500/50 shadow-lg' : 'bg-slate-800 text-indigo-400 border-slate-700 group-hover:bg-slate-700 group-hover:text-white'}`}>
+                        <BrainCircuit size={20} className={!isExpanded ? "animate-pulse" : ""} />
+                    </div>
+
+                    <div>
+                        <h3 className="text-white font-black text-sm uppercase tracking-wide flex items-center gap-2">
+                            {title}
+                            {!isExpanded && <span className="flex h-2 w-2 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>}
+                        </h3>
+                        <div className="flex items-center gap-3 mt-1">
+                            <p className="text-[10px] text-slate-400 font-mono font-medium uppercase tracking-wider">
+                                {isExpanded ? 'INTELLIGENCE BRIEFING OPEN' : 'CLASSIFIED INSIGHTS READY'}
+                            </p>
+                            {detectedGrade && !isExpanded && (
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${['A','A+'].includes(detectedGrade) ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'}`}>
+                                    GRADE: {detectedGrade}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {!isExpanded && (
+                        <span className="text-[10px] font-bold text-indigo-400 uppercase mr-2 opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-2 group-hover:translate-x-0 duration-300">
+                            Read Dossier
+                        </span>
+                    )}
+                    <button className={`p-2 rounded-full border transition-all duration-300 ${isExpanded ? 'bg-slate-800 text-white border-slate-600 rotate-180' : 'bg-transparent text-slate-500 border-slate-800 group-hover:border-slate-600 group-hover:text-white'}`}>
+                        <ChevronDown size={16} />
+                    </button>
+                </div>
+                
+                {/* Progress Bar visual at bottom of header when collapsed */}
+                {!isExpanded && (
+                    <div className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 w-full opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                )}
+            </div>
+
+            {/* --- EXPANDED CONTENT (The Dossier) --- */}
+            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <div className="p-6 pt-2 bg-gradient-to-b from-slate-950/50 to-slate-900/50">
+                    
+                    {/* Decorative Grid Lines */}
+                    <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+
+                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 relative z-10">
+                        {sections.map((section, idx) => {
+                            const lines = section.trim().split('\n');
+                            const rawTitle = lines[0].trim();
+                            const content = lines.slice(1).join('\n').trim();
+                            
+                            // Determine Styling based on content content
+                            let icon = <Activity size={18} />;
+                            let containerStyle = "bg-slate-800/40 border-slate-700/50";
+                            let titleColor = "text-slate-300";
+                            let iconBg = "bg-slate-700/50 text-slate-400";
+
+                            if (rawTitle.includes('Market Sync') || rawTitle.includes('Sync')) {
+                                icon = <Target size={18} />;
+                                containerStyle = "bg-blue-900/10 border-blue-500/20 shadow-[0_4px_20px_-10px_rgba(59,130,246,0.3)]";
+                                titleColor = "text-blue-300";
+                                iconBg = "bg-blue-500/20 text-blue-400";
+                            } else if (rawTitle.includes('Execution Grade') || rawTitle.includes('Grade')) {
+                                icon = <GraduationCap size={18} />;
+                                containerStyle = "bg-emerald-900/10 border-emerald-500/20 shadow-[0_4px_20px_-10px_rgba(16,185,129,0.3)]";
+                                titleColor = "text-emerald-300";
+                                iconBg = "bg-emerald-500/20 text-emerald-400";
+                            } else if (rawTitle.includes('Pro Tip') || rawTitle.includes('Tip')) {
+                                icon = <Lightbulb size={18} />;
+                                containerStyle = "bg-amber-900/10 border-amber-500/30 shadow-[0_4px_20px_-10px_rgba(245,158,11,0.2)]";
+                                titleColor = "text-amber-300";
+                                iconBg = "bg-amber-500/20 text-amber-400";
+                            }
+
+                            return (
+                                <div 
+                                    key={idx} 
+                                    className={`p-5 rounded-2xl border backdrop-blur-sm flex flex-col relative group/card transition-transform hover:-translate-y-1 duration-300 ${containerStyle} ${idx === sections.length - 1 && sections.length % 3 !== 0 ? 'md:col-span-2 lg:col-span-1' : ''}`}
+                                >
+                                    <div className="flex items-center gap-3 mb-3 border-b border-white/5 pb-3">
+                                        <div className={`p-1.5 rounded-lg ${iconBg}`}>
+                                            {icon}
+                                        </div>
+                                        <h4 className={`font-black text-xs uppercase tracking-wider ${titleColor}`}>
+                                            {rawTitle.replace(/[\u{1F300}-\u{1F6FF}]/gu, '')}
+                                        </h4> 
+                                    </div>
+                                    <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap font-medium">
+                                        {content}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    
+                    {/* Footer Signature */}
+                    <div className="mt-6 flex justify-between items-center text-[10px] text-slate-500 font-mono uppercase border-t border-slate-800 pt-4">
+                         <span>AI Neural Audit Complete</span>
+                         <span>Confidential</span>
+                    </div>
+                </div>
             </div>
         </div>
     );
