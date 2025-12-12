@@ -325,27 +325,22 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
         - Extract the specific status of "Gift Nifty" (points up/down).
         - Find the latest FII/DII cash market activity if available.
         
-        Output strictly JSON.
-    `;
-
-    const schema = {
-        type: Type.OBJECT,
-        properties: {
-            sentiment: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral', 'Mixed'] },
-            sentimentScore: { type: Type.NUMBER, description: "1 (Very Bearish) to 10 (Very Bullish)" },
-            summary: { type: Type.STRING, description: "2-3 sentence executive summary of the pre-market situation." },
-            globalCues: {
-                type: Type.OBJECT,
-                properties: {
-                    usMarket: { type: Type.STRING, description: "e.g. Nasdaq closed down 1.5% on tech weakness" },
-                    asianMarket: { type: Type.STRING, description: "e.g. Nikkei is trading flat" },
-                    giftNifty: { type: Type.STRING, description: "e.g. Trading at 22,150 (+40 pts)" }
-                }
+        OUTPUT FORMAT:
+        Return valid JSON only. No Markdown. No code blocks.
+        JSON Structure:
+        {
+            "sentiment": "Bullish" | "Bearish" | "Neutral" | "Mixed",
+            "sentimentScore": number (1-10),
+            "summary": "string",
+            "globalCues": {
+                "usMarket": "string",
+                "asianMarket": "string",
+                "giftNifty": "string"
             },
-            keyHeadlines: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Top 3-4 news headlines" },
-            institutionalActivity: { type: Type.STRING, description: "Latest FII/DII Buy/Sell figures" }
+            "keyHeadlines": ["string", "string"],
+            "institutionalActivity": "string"
         }
-    };
+    `;
 
     try {
         const response = await ai.models.generateContent({
@@ -353,14 +348,18 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
             contents: { parts: [{ text: promptText }] },
             config: {
                 tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: schema,
-                systemInstruction: "You are a financial news aggregator. Prioritize recency and accuracy. Focus on the Indian Nifty 50 context.",
+                // Removed responseMimeType and responseSchema to be compatible with Google Search tool
+                systemInstruction: "You are a financial news aggregator. Prioritize recency. Return strictly valid JSON text.",
                 temperature: 0.1
             }
         });
 
-        return JSON.parse(response.text || "{}");
+        let jsonText = response.text || "{}";
+        // Clean markdown if present
+        if (jsonText.includes("```")) {
+            jsonText = jsonText.replace(/```json/g, "").replace(/```/g, "");
+        }
+        return JSON.parse(jsonText);
     } catch (e: any) {
         console.error("News Fetch Error", e);
         throw new Error(e.message || "Failed to fetch market news.");
