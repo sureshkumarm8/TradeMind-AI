@@ -55,6 +55,20 @@ export interface AiAnalysisResponse {
   sources?: string[]; // Grounding links
 }
 
+// --- NEWS INTELLIGENCE TYPES ---
+export interface NewsAnalysis {
+  sentiment: 'Bullish' | 'Bearish' | 'Neutral' | 'Mixed';
+  sentimentScore: number; // 1-10
+  summary: string; // Executive summary
+  globalCues: {
+    usMarket: string; // "Nasdaq +1.5%"
+    asianMarket: string; // "Nikkei -0.4%"
+    giftNifty: string; // "Trading at 22,100 (+50)"
+  };
+  keyHeadlines: string[];
+  institutionalActivity?: string; // FII/DII data summary
+}
+
 // --- PRE-MARKET ANALYSIS TYPES ---
 export interface PreMarketAnalysis {
   marketBias: 'Bullish' | 'Bearish' | 'Neutral' | 'Volatile';

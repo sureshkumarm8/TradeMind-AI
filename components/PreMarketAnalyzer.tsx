@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw } from 'lucide-react';
-import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection } from '../types';
-import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine } from '../services/geminiService';
+import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw, Globe, Newspaper } from 'lucide-react';
+import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection, NewsAnalysis } from '../types';
+import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine, fetchMarketNews } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
 
 interface PreMarketAnalyzerProps {
@@ -115,6 +115,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         eodChart: string;
         eodOi: string;
     }>({ dailyChart: '', eodChart: '', eodOi: '' });
+    
+    // News Analysis State (Phase 0)
+    const [newsAnalysis, setNewsAnalysis] = useState<NewsAnalysis | null>(null);
+    const [isNewsAnalyzing, setIsNewsAnalyzing] = useState(false);
 
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
@@ -127,8 +131,8 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
     
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-    // Tab State
-    const [activeView, setActiveView] = useState<'phase1' | 'phase2' | 'phase3'>('phase1');
+    // Tab State - Added 'phase0'
+    const [activeView, setActiveView] = useState<'phase0' | 'phase1' | 'phase2' | 'phase3'>('phase0');
     const [isIntelFolded, setIsIntelFolded] = useState(!!initialData);
 
     // Pre-Flight Checklist State
@@ -204,6 +208,21 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
             setError("Failed to process EOD image.");
         }
     };
+
+    // NEW: Phase 0 News Analysis
+    const runNewsAnalysis = async () => {
+        setError(null);
+        if (!apiKey) { setError("API Key missing."); return; }
+        setIsNewsAnalyzing(true);
+        try {
+            const result = await fetchMarketNews(apiKey);
+            setNewsAnalysis(result);
+        } catch (e: any) {
+            setError(e.message || "News Analysis Failed");
+        } finally {
+            setIsNewsAnalyzing(false);
+        }
+    }
 
     const runAnalysis = async () => {
         setError(null);
@@ -292,29 +311,138 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
 
             {/* TABS NAVIGATION */}
             <div className="px-4 pt-4 sticky top-0 bg-slate-900 z-20">
-                <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-md border border-slate-700 overflow-x-auto">
+                <div className="bg-slate-800 p-1 rounded-xl flex gap-1 shadow-md border border-slate-700 overflow-x-auto custom-scrollbar">
+                    <button 
+                        onClick={() => setActiveView('phase0')}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap min-w-[100px] ${activeView === 'phase0' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                    >
+                        <Newspaper size={16} /> News
+                    </button>
                     <button 
                         onClick={() => setActiveView('phase1')}
-                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeView === 'phase1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap min-w-[100px] ${activeView === 'phase1' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
                     >
-                        <BrainCircuit size={16} /> Phase 1: Pre-Market
+                        <BrainCircuit size={16} /> Plan
                     </button>
                     <button 
                         onClick={() => setActiveView('phase2')}
-                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeView === 'phase2' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap min-w-[100px] ${activeView === 'phase2' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
                     >
-                        <ShieldAlert size={16} /> Phase 2: Live
+                        <ShieldAlert size={16} /> Live
                     </button>
                      <button 
                         onClick={() => setActiveView('phase3')}
-                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap ${activeView === 'phase3' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                        className={`flex-1 py-3 px-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all whitespace-nowrap min-w-[100px] ${activeView === 'phase3' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}`}
                     >
-                        <Sunset size={16} /> Phase 3: Post-Market
+                        <Sunset size={16} /> Post
                     </button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+
+                {/* ========================== PHASE 0: NEWS INTEL ========================== */}
+                {activeView === 'phase0' && (
+                    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
+                         {/* Header Card */}
+                        <div className="bg-gradient-to-r from-blue-900/20 to-slate-800 border border-blue-500/20 p-6 rounded-2xl">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                        <Globe size={24} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white uppercase tracking-wide">Global Intelligence</h3>
+                                        <p className="text-xs text-blue-400 font-bold">Real-time Web Search Scan</p>
+                                    </div>
+                                </div>
+                                {!isNewsAnalyzing ? (
+                                    <button onClick={runNewsAnalysis} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 transition">
+                                        <Zap size={14} className="fill-current"/> Scan Markets
+                                    </button>
+                                ) : (
+                                    <button disabled className="px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
+                                        <Loader2 size={14} className="animate-spin"/> Scanning Web...
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {error && (
+                                <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in">
+                                    <AlertTriangle size={16} className="text-red-400 shrink-0"/>
+                                    <span className="text-xs text-red-200 font-bold">{error}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {newsAnalysis && (
+                             <div className="space-y-4 animate-fade-in">
+                                {/* Sentiment & Gift Nifty Row */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                                        <div className={`absolute top-0 w-full h-1 ${newsAnalysis.sentiment === 'Bullish' ? 'bg-emerald-500' : newsAnalysis.sentiment === 'Bearish' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Overall Sentiment</div>
+                                        <div className={`text-2xl font-black uppercase mb-1 ${newsAnalysis.sentiment === 'Bullish' ? 'text-emerald-400' : newsAnalysis.sentiment === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>
+                                            {newsAnalysis.sentiment}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-bold bg-slate-900 px-2 py-0.5 rounded-full border border-slate-700">
+                                            Score: {newsAnalysis.sentimentScore}/10
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Activity size={14} className="text-indigo-400"/>
+                                            <span className="text-[10px] text-indigo-400 font-bold uppercase">Executive Summary</span>
+                                        </div>
+                                        <p className="text-sm text-slate-200 leading-relaxed font-medium italic">
+                                            "{newsAnalysis.summary.replace(/^"|"$/g, '')}"
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Global Cues Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                         <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Globe size={10}/> US Markets</div>
+                                         <div className="text-sm font-bold text-slate-200">{newsAnalysis.globalCues.usMarket}</div>
+                                     </div>
+                                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                         <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Globe size={10}/> Asian Markets</div>
+                                         <div className="text-sm font-bold text-slate-200">{newsAnalysis.globalCues.asianMarket}</div>
+                                     </div>
+                                     <div className="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30">
+                                         <div className="text-[10px] text-indigo-400 font-bold uppercase mb-1 flex items-center gap-1"><Activity size={10}/> Gift Nifty</div>
+                                         <div className="text-sm font-bold text-white">{newsAnalysis.globalCues.giftNifty}</div>
+                                     </div>
+                                </div>
+                                
+                                {/* Headlines & FII */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                        <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
+                                            <Newspaper size={14} className="text-slate-400"/> Key Headlines
+                                        </h4>
+                                        <ul className="space-y-2">
+                                            {newsAnalysis.keyHeadlines.map((headline, idx) => (
+                                                <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
+                                                    <span className="text-slate-600 mt-0.5">•</span> {headline}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                        <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
+                                            <BarChart2 size={14} className="text-slate-400"/> FII / DII Data
+                                        </h4>
+                                        <p className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                                            {newsAnalysis.institutionalActivity || "Data not available in search snippet."}
+                                        </p>
+                                    </div>
+                                </div>
+                             </div>
+                        )}
+                    </div>
+                )}
 
                 {/* ========================== PHASE 1 VIEW ========================== */}
                 {activeView === 'phase1' && (

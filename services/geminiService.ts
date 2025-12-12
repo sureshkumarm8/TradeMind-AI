@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis } from "../types";
+import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
@@ -143,6 +143,11 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       if (sources.length > 0) {
         resultObj.sources = sources;
       }
+    }
+    
+    // Add error field if present to handle it in UI logic if needed
+    if (resultObj.realityCheck && resultObj.realityCheck.includes("Analysis Failed")) {
+        // Just return as is
     }
 
     return JSON.stringify(resultObj);
@@ -292,6 +297,75 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
         return { note: "Error processing voice note." }; 
     }
 }
+
+// NEWS INTELLIGENCE ROUTINE (PHASE 0)
+export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required for News Intelligence");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    
+    const promptText = `
+        You are a Pre-Market Intelligence Officer for an Indian Stock Market trader. It is currently morning on ${today}.
+        
+        YOUR MISSION:
+        Use Google Search to find real-time financial news impacting the "Nifty 50" opening today.
+        
+        SEARCH FOR:
+        1. "Global stock market news today" (US Close, Asian Open).
+        2. "Gift Nifty live status" (Gap Up/Down?).
+        3. "Indian stock market news today" (FII/DII data, Key Earnings).
+        4. "Crude oil price today" and "USD INR rate".
+        
+        ANALYZE & SYNTHESIZE:
+        - Determine the overall sentiment for Nifty 50 opening (Bullish/Bearish).
+        - Summarize the "Global Cues" concisely.
+        - Extract the specific status of "Gift Nifty" (points up/down).
+        - Find the latest FII/DII cash market activity if available.
+        
+        Output strictly JSON.
+    `;
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            sentiment: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral', 'Mixed'] },
+            sentimentScore: { type: Type.NUMBER, description: "1 (Very Bearish) to 10 (Very Bullish)" },
+            summary: { type: Type.STRING, description: "2-3 sentence executive summary of the pre-market situation." },
+            globalCues: {
+                type: Type.OBJECT,
+                properties: {
+                    usMarket: { type: Type.STRING, description: "e.g. Nasdaq closed down 1.5% on tech weakness" },
+                    asianMarket: { type: Type.STRING, description: "e.g. Nikkei is trading flat" },
+                    giftNifty: { type: Type.STRING, description: "e.g. Trading at 22,150 (+40 pts)" }
+                }
+            },
+            keyHeadlines: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Top 3-4 news headlines" },
+            institutionalActivity: { type: Type.STRING, description: "Latest FII/DII Buy/Sell figures" }
+        }
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: FAST_MODEL,
+            contents: { parts: [{ text: promptText }] },
+            config: {
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a financial news aggregator. Prioritize recency and accuracy. Focus on the Indian Nifty 50 context.",
+                temperature: 0.1
+            }
+        });
+
+        return JSON.parse(response.text || "{}");
+    } catch (e: any) {
+        console.error("News Fetch Error", e);
+        throw new Error(e.message || "Failed to fetch market news.");
+    }
+};
 
 // PRE-MARKET ANALYZER ROUTINE
 export const analyzePreMarketRoutine = async (
