@@ -8,6 +8,7 @@ import MySystem from './components/MySystem';
 import AccountModal from './components/AccountModal'; 
 import PreMarketAnalyzer from './components/PreMarketAnalyzer'; 
 import MentorChat from './components/MentorChat'; // Import Mentor Chat
+import PsychologyProfile from './components/PsychologyProfile'; // Import Psychology Profile
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile, loadBackupData } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
@@ -44,8 +45,8 @@ const DEFAULT_STRATEGY: StrategyProfile = {
 };
 
 const App: React.FC = () => {
-  // Added 'mentor' to view state type
-  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket' | 'mentor'>('dashboard');
+  // Added 'mentor' and 'psychology' to view state type
+  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket' | 'mentor' | 'psychology'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [apiKey, setApiKey] = useState<string>('');
@@ -661,6 +662,7 @@ const App: React.FC = () => {
         case 'new': return editingTrade ? 'Edit Trade' : 'Log Trade';
         case 'account': return 'Account & Settings';
         case 'mentor': return 'The War Room'; // New Title
+        case 'psychology': return 'Psychology Profile'; // New View
         default: return 'TradeMind.AI';
      }
   }
@@ -777,6 +779,7 @@ const App: React.FC = () => {
              {view === 'system' && <Target size={18} className="mr-2 text-indigo-400"/>}
              {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
              {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
+             {view === 'psychology' && <BrainCircuit size={18} className="mr-2 text-indigo-400"/>}
              {getPageTitle()}
            </h2>
            {userProfile && (
@@ -808,6 +811,7 @@ const App: React.FC = () => {
                 onUpdatePreMarket={handleUpdatePreMarket} 
                 onNavigateToPreMarket={handleNavigateToPreMarket} // Pass Nav
                 onViewTrade={handleViewTrade} // Pass Nav logic
+                onNavigateToPsychology={() => setView('psychology')} // Pass new nav
              />
           }
           {view === 'new' && 
@@ -877,6 +881,14 @@ const App: React.FC = () => {
                 apiKey={apiKey} 
              />
           }
+          {/* NEW PSYCHOLOGY PROFILE VIEW */}
+          {view === 'psychology' && (
+              <PsychologyProfile 
+                  trades={trades} 
+                  onBack={() => setView('dashboard')}
+                  onViewTrade={(id) => handleViewTrade(id)}
+              />
+          )}
           {view === 'account' && (
               <AccountModal 
                 isOpen={true} 

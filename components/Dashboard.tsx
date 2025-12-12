@@ -14,6 +14,7 @@ interface DashboardProps {
   onUpdatePreMarket: (notes: string) => void;
   onNavigateToPreMarket?: () => void; // Add Navigation Prop
   onViewTrade?: (tradeId: string) => void; // New prop for deep linking
+  onNavigateToPsychology?: () => void; // NEW: Navigate to Psycho Profile
 }
 
 // Custom Tooltip for Recharts to match Glassmorphism theme
@@ -106,14 +107,13 @@ const AiCoachReport = ({ report, title }: { report: string, title: string }) => 
     );
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, preMarketNotes, preMarketAnalysis, onUpdatePreMarket, onNavigateToPreMarket, onViewTrade }) => {
+const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, preMarketNotes, preMarketAnalysis, onUpdatePreMarket, onNavigateToPreMarket, onViewTrade, onNavigateToPsychology }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'playbook' | 'simulator'>('overview');
   
   const [reportPeriod, setReportPeriod] = useState<'week' | 'fortnight' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
-  const [showScoreDetails, setShowScoreDetails] = useState(false);
-  const [showFormulas, setShowFormulas] = useState(false);
+  // REMOVED showScoreDetails state as we now navigate to full page
   
   // Interactive Filters
   const [selectedFilter, setSelectedFilter] = useState<{ type: string, value: string | number } | null>(null);
@@ -200,31 +200,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         else break;
     }
 
-    // 5. Recent Offenses (Last 5 bad trades)
-    // We consider it an offense if rating is low OR followedSystem is false
-    const recentOffenses = sortedTrades
-        .filter(t => (t.disciplineRating && t.disciplineRating <= 3) || !t.followedSystem)
-        .slice(0, 5);
-    
-    // 6. Cost of Indiscipline
-    // Sum of losses where discipline rating <= 3 (Equivalent to Grade <= 60%)
-    const costOfIndiscipline = closedTrades
-        .filter(t => t.disciplineRating && t.disciplineRating <= 3)
-        .reduce((acc, t) => acc + (t.pnl || 0), 0);
-        
-    // 7. Win Rate Variance (Disciplined vs Undisciplined)
-    // High Discipline = Rating >= 4 (Grade >= 80%)
-    const highDiscTrades = closedTrades.filter(t => (t.disciplineRating || 0) >= 4);
-    const lowDiscTrades = closedTrades.filter(t => (t.disciplineRating || 0) <= 3);
-    
-    const highDiscWins = highDiscTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
-    const lowDiscWins = lowDiscTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
-
-    const highWR = highDiscTrades.length > 0 ? (highDiscWins / highDiscTrades.length) * 100 : 0;
-    const lowWR = lowDiscTrades.length > 0 ? (lowDiscWins / lowDiscTrades.length) * 100 : 0;
-    
-    const winRateVariance = highWR - lowWR;
-
     // Status Label
     let statusLabel = "Rookie";
     if (disciplineIndex >= 95) statusLabel = "Zen Master";
@@ -234,7 +209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     else if (disciplineIndex > 0) statusLabel = "Tilted";
     else statusLabel = "Rookie";
 
-    return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel, recentOffenses, costOfIndiscipline, winRateVariance };
+    return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel };
   }, [trades]);
 
   const stats: DashboardStats = useMemo(() => {
@@ -326,20 +301,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     { name: 'Short Win %', value: stats.shortWinRate, fill: '#F59E0B', type: 'Short' },
   ];
   
-  // --- Interactions ---
-  const getMotivationalMessage = () => {
-     const messages: Record<string, string[]> = {
-        "Zen Master": ["The market is a mirror. You have mastered reflection.", "Flow state achieved."],
-        "Sniper": ["One shot, one kill. Precision is your currency.", "Patience pays dividends."],
-        "Disciplined": ["Consistency builds empires.", "Trade the plan, trust the process."],
-        "Drifting": ["Focus. The market rewards patience, not activity.", "Re-read your rules."],
-        "Tilted": ["Step back. Breathe. Capital preservation is priority #1.", "Don't fight it."],
-        "Rookie": ["Every master was once a beginner.", "Learn to lose small."]
-     };
-     const pool = messages[psychoStats.statusLabel] || messages["Rookie"];
-     return pool[Math.floor(Math.random() * pool.length)];
-  };
-
   const filteredTrades = useMemo(() => {
      if (!selectedFilter) return [];
      const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
@@ -425,21 +386,12 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
   const bestTradeDisplay = renderExtremeTrade(stats.bestTrade, true);
   const worstTradeDisplay = renderExtremeTrade(stats.worstTrade, false);
 
-  // Helper to extract numeric grade from AI JSON string
-  const getNumericGrade = (trade: Trade) => {
-     try {
-         if(!trade.aiFeedback) return null;
-         const data = JSON.parse(trade.aiFeedback);
-         return typeof data.grade === 'number' ? data.grade : null;
-     } catch(e) { return null; }
-  };
-
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       
       {/* 🧠 PSYCHO-CYBERNETICS HUD */}
       <div 
-        onClick={() => setShowScoreDetails(true)}
+        onClick={() => onNavigateToPsychology?.()} // Replaces local modal logic
         className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 border border-indigo-500/30 shadow-2xl relative overflow-hidden group cursor-pointer transition-transform active:scale-[0.99] select-none"
       >
          {/* Background Effects */}
@@ -511,7 +463,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
          </div>
          <div className="absolute bottom-2 left-0 w-full text-center">
             <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-               <Info size={10} className="mr-1"/> Click for detailed breakdown & formulas
+               <Info size={10} className="mr-1"/> Click for detailed breakdown & analytics
             </span>
          </div>
       </div>
@@ -885,119 +837,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                   </div>
               )}
           </div>
-      )}
-
-      {/* 📊 FULL SCREEN DISCIPLINE MODAL */}
-      {showScoreDetails && (
-        <div className="fixed inset-0 z-[200] bg-slate-950/95 backdrop-blur-md overflow-y-auto animate-fade-in">
-           <div className="max-w-4xl mx-auto min-h-screen p-6 md:p-12 flex flex-col">
-              
-              <div className="flex justify-between items-center mb-8 sticky top-0 bg-slate-950/90 py-4 z-10 border-b border-slate-800">
-                  <div className="flex items-center gap-4">
-                      <div className="bg-indigo-500/20 p-3 rounded-xl text-indigo-400"><BrainCircuit size={32}/></div>
-                      <div>
-                          <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">Psychology Profile</h2>
-                          <p className="text-sm text-slate-500">Deep dive into your behavioral performance</p>
-                      </div>
-                  </div>
-                  <button onClick={() => setShowScoreDetails(false)} className="p-3 bg-slate-800 rounded-full hover:bg-slate-700 text-slate-400 hover:text-white transition shadow-lg border border-slate-700"><X size={24}/></button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  {/* Cost of Indiscipline */}
-                  <div className="bg-slate-900 p-6 rounded-2xl border border-red-500/20 shadow-lg">
-                      <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Wallet size={16}/> Cost of Indiscipline</h4>
-                      <div className="text-3xl font-black text-white font-mono mb-2">₹{Math.abs(psychoStats.costOfIndiscipline).toFixed(0)}</div>
-                      <p className="text-xs text-slate-500">Total losses incurred on trades where your AI Execution Grade was <strong>&le; 60%</strong> (Rating &le; 3).</p>
-                  </div>
-
-                  {/* The Tilt Gap */}
-                  <div className="bg-slate-900 p-6 rounded-2xl border border-indigo-500/20 shadow-lg">
-                      <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Scale size={16}/> The Tilt Gap</h4>
-                      <div className="text-3xl font-black text-white font-mono mb-2">+{psychoStats.winRateVariance.toFixed(1)}%</div>
-                      <p className="text-xs text-slate-500">Your Win Rate is higher when your Execution Grade is <strong>&ge; 80%</strong> (Rating &ge; 4).</p>
-                  </div>
-
-                   {/* Consistency */}
-                   <div className="bg-slate-900 p-6 rounded-2xl border border-emerald-500/20 shadow-lg">
-                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Percent size={16}/> System Adherence</h4>
-                      <div className="text-3xl font-black text-white font-mono mb-2">{psychoStats.systemAdherence}%</div>
-                      <p className="text-xs text-slate-500">Percentage of total trades where you strictly followed your trading plan.</p>
-                  </div>
-              </div>
-
-              <div className="space-y-6">
-                  <div className="bg-indigo-900/10 border border-indigo-500/30 p-6 rounded-2xl flex items-start gap-5">
-                      <div className="bg-indigo-500/20 p-3 rounded-full text-indigo-400 shrink-0"><Sparkles size={24}/></div>
-                      <div>
-                          <h5 className="text-indigo-300 font-bold text-sm uppercase mb-2 tracking-wide">Coach's Diagnosis</h5>
-                          <p className="text-lg text-slate-200 italic font-medium leading-relaxed">{getMotivationalMessage()}</p>
-                      </div>
-                  </div>
-
-                  <div>
-                      <h4 className="flex items-center gap-2 text-red-400 font-bold text-sm uppercase tracking-wider mb-4"><AlertTriangle size={18}/> Recent Discipline Leaks</h4>
-                      {psychoStats.recentOffenses.length === 0 ? (
-                          <div className="bg-emerald-900/10 border border-emerald-500/20 rounded-2xl p-8 text-center">
-                              <ShieldCheck size={48} className="mx-auto text-emerald-500 mb-4 opacity-50"/>
-                              <p className="text-emerald-400 font-bold text-lg">Clean Record!</p>
-                              <p className="text-slate-500 text-sm mt-2">You haven't logged a discipline error in your last 5 trades.</p>
-                          </div>
-                      ) : (
-                          <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-                              <table className="w-full text-left text-sm">
-                                  <thead className="bg-slate-950 text-slate-500 uppercase font-bold text-xs">
-                                      <tr>
-                                          <th className="p-4">Date</th>
-                                          <th className="p-4">Issue</th>
-                                          <th className="p-4 text-right">Execution Grade</th>
-                                          <th className="p-4 text-right">Action</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-800">
-                                      {psychoStats.recentOffenses.map(t => {
-                                          const grade = getNumericGrade(t);
-                                          return (
-                                              <tr key={t.id} onClick={() => { setShowScoreDetails(false); onViewTrade?.(t.id); }} className="hover:bg-slate-800/50 cursor-pointer transition group">
-                                                  <td className="p-4 text-white font-mono">{t.date}</td>
-                                                  <td className="p-4">
-                                                      <span className="bg-red-500/10 text-red-400 px-2 py-1 rounded border border-red-500/20 text-xs font-bold uppercase">Discipline Leak</span>
-                                                  </td>
-                                                  <td className="p-4 text-right">
-                                                      {grade !== null ? (
-                                                          <div className="inline-block px-2 py-1 bg-slate-950 rounded text-red-400 font-bold font-mono">{grade}%</div>
-                                                      ) : (
-                                                          <div className="inline-block px-2 py-1 bg-slate-950 rounded text-red-400 font-bold">{t.disciplineRating}/5</div>
-                                                      )}
-                                                  </td>
-                                                  <td className="p-4 text-right text-slate-500 group-hover:text-indigo-400">
-                                                      <ArrowUpRight size={16} className="ml-auto"/>
-                                                  </td>
-                                              </tr>
-                                          );
-                                      })}
-                                  </tbody>
-                              </table>
-                          </div>
-                      )}
-                  </div>
-                  
-                  <div className="border border-slate-800 rounded-xl overflow-hidden mt-8">
-                      <button onClick={() => setShowFormulas(!showFormulas)} className="w-full flex items-center justify-between p-4 bg-slate-900 hover:bg-slate-800 transition text-left">
-                         <div className="flex items-center gap-2"><Calculator size={16} className="text-slate-400"/><span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Show Calculation Methodology</span></div>
-                         {showFormulas ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}
-                      </button>
-                      {showFormulas && (
-                          <div className="p-6 bg-slate-950 border-t border-slate-800 text-xs text-slate-400 font-mono space-y-2">
-                              <p>Discipline Index = Average of AI Execution Scores</p>
-                              <p>Cost of Indiscipline = Sum(PnL) where Score &lt; 60%</p>
-                              <p>Tilt Gap = WinRate(Score &ge; 60%) - WinRate(Score &lt; 60%)</p>
-                          </div>
-                      )}
-                  </div>
-              </div>
-           </div>
-        </div>
       )}
 
       {selectedFilter && (
