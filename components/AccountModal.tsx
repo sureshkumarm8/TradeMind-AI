@@ -375,21 +375,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
                     {/* Data Management Section */}
                     <div className="mt-12 pt-8 border-t border-slate-800 relative z-10">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                                <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Download size={14} className="mr-2"/> Backup Data</h5>
-                                <div className="flex gap-2 mb-2">
-                                    <button onClick={onExportCSV} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600 flex items-center justify-center"><FileSpreadsheet size={12} className="mr-1"/> CSV</button>
-                                    <button onClick={onExportJSON} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600 flex items-center justify-center"><FileJson size={12} className="mr-1"/> JSON</button>
-                                </div>
-                                <button onClick={handleShareData} disabled={isSharing} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600 flex items-center justify-center disabled:opacity-50">
-                                   {isSharing ? <Loader2 size={12} className="animate-spin mr-1"/> : <Share2 size={12} className="mr-1"/>} Share File
-                                </button>
-                            </div>
-                            <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                                <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Upload size={14} className="mr-2"/> Restore Data</h5>
-                                <button onClick={onImportClick} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">Restore Data (JSON/CSV)</button>
-                            </div>
+                        <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50 mb-4">
+                            <h5 className="text-xs font-bold text-white uppercase mb-3 flex items-center"><Upload size={14} className="mr-2"/> Restore Data</h5>
+                            <button onClick={onImportClick} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs py-2 rounded border border-slate-600">Restore Data (JSON/CSV)</button>
                         </div>
                         
                         {/* Danger Zone */}

@@ -289,6 +289,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     };
 
     // --- RESET HANDLERS ---
+    const handleResetPhase0 = () => {
+        if(!window.confirm("Clear News Intelligence data?")) return;
+        if (onNewsAnalysisUpdate) onNewsAnalysisUpdate(null);
+    }
+
     const handleResetPhase1 = () => {
         if(!window.confirm("Clear all Pre-Market data and images?")) return;
         if (onAnalysisUpdate) onAnalysisUpdate(null);
@@ -371,15 +376,22 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         </div>
                                     </div>
                                 </div>
-                                {!isNewsAnalyzing ? (
-                                    <button onClick={runNewsAnalysis} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 transition">
-                                        <Zap size={14} className="fill-current"/> Scan Markets
-                                    </button>
-                                ) : (
-                                    <button disabled className="px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
-                                        <Loader2 size={14} className="animate-spin"/> Scanning Web...
-                                    </button>
-                                )}
+                                <div className="flex gap-2">
+                                    {newsData && (
+                                        <button onClick={handleResetPhase0} className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1">
+                                            <RotateCcw size={14}/> Reset
+                                        </button>
+                                    )}
+                                    {!isNewsAnalyzing ? (
+                                        <button onClick={runNewsAnalysis} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 transition">
+                                            <Zap size={14} className="fill-current"/> Scan Markets
+                                        </button>
+                                    ) : (
+                                        <button disabled className="px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
+                                            <Loader2 size={14} className="animate-spin"/> Scanning Web...
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             
                             {error && (

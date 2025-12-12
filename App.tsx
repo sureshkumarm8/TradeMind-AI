@@ -679,7 +679,7 @@ const App: React.FC = () => {
   const hasPreMarketAnalysisToday = preMarketAnalysis?.date === new Date().toISOString().split('T')[0];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 relative">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30 relative flex flex-col md:flex-row">
       
       <Toast notification={notification} onClose={() => setNotification(null)} />
 
@@ -701,7 +701,7 @@ const App: React.FC = () => {
       )}
 
       {/* Sidebar / Navigation */}
-      <nav className="fixed bottom-0 w-full z-40 md:static md:w-64 md:h-screen bg-slate-900 border-t md:border-r border-slate-800 md:float-left flex md:flex-col shadow-xl">
+      <nav className="fixed bottom-0 w-full z-40 md:static md:w-64 md:h-screen bg-slate-900 border-t md:border-r border-slate-800 flex md:flex-col shadow-xl md:shrink-0">
          <div className="hidden md:block mb-8 px-4 pt-4">
             <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent flex items-center gap-2">
                <BrainCircuit size={24} className="text-indigo-400" /> TradeMind.AI
@@ -815,38 +815,40 @@ const App: React.FC = () => {
          </div>
       </nav>
 
-      <main className="md:ml-64 p-4 md:p-8 pb-24 md:pb-8 min-h-screen">
-        <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-indigo-500/10 mb-6 flex justify-between items-center shadow-lg transition-all">
-           <h2 className="text-lg md:text-xl font-bold text-white tracking-tight flex items-center">
-             {view === 'new' && <PlusCircle size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'dashboard' && <LayoutDashboard size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'premarket' && <Zap size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'mentor' && <MessageSquare size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'system' && <Target size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
-             {view === 'psychology' && <BrainCircuit size={18} className="mr-2 text-indigo-400"/>}
-             {getPageTitle()}
-           </h2>
-           {userProfile && (
-             <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-700">
-                {syncStatus === SyncStatus.SYNCING && <Loader2 size={14} className="text-blue-400 animate-spin"/>}
-                {syncStatus === SyncStatus.SYNCED && <CheckCircle2 size={14} className="text-emerald-400"/>}
-                {syncStatus === SyncStatus.OFFLINE && <Cloud size={14} className="text-slate-500"/>}
-                {syncStatus === SyncStatus.ERROR && <AlertCircle size={14} className="text-red-400"/>}
-                <span className="text-[10px] font-bold uppercase text-slate-400 hidden sm:block">
-                  {syncStatus === SyncStatus.SYNCING ? 'Syncing...' : syncStatus === SyncStatus.SYNCED ? 'Synced' : 'Offline'}
-                </span>
-                {syncStatus === SyncStatus.SYNCED && (
-                    <button onClick={handleManualSync} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition" title="Pull from Cloud">
-                        <RefreshCw size={12} />
-                    </button>
+      <main className={`flex-1 min-h-screen ${view === 'mentor' ? 'p-0 overflow-hidden' : 'p-4 md:p-8 pb-24 md:pb-8 overflow-y-auto'}`}>
+        {/* Hide Global Header for Mentor View to utilize full screen */}
+        {view !== 'mentor' && (
+            <header className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md py-3 -mx-4 px-4 md:-mx-8 md:px-8 border-b border-indigo-500/10 mb-6 flex justify-between items-center shadow-lg transition-all">
+                <h2 className="text-lg md:text-xl font-bold text-white tracking-tight flex items-center">
+                    {view === 'new' && <PlusCircle size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'dashboard' && <LayoutDashboard size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'premarket' && <Zap size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'system' && <Target size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'psychology' && <BrainCircuit size={18} className="mr-2 text-indigo-400"/>}
+                    {getPageTitle()}
+                </h2>
+                {userProfile && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-700">
+                        {syncStatus === SyncStatus.SYNCING && <Loader2 size={14} className="text-blue-400 animate-spin"/>}
+                        {syncStatus === SyncStatus.SYNCED && <CheckCircle2 size={14} className="text-emerald-400"/>}
+                        {syncStatus === SyncStatus.OFFLINE && <Cloud size={14} className="text-slate-500"/>}
+                        {syncStatus === SyncStatus.ERROR && <AlertCircle size={14} className="text-red-400"/>}
+                        <span className="text-[10px] font-bold uppercase text-slate-400 hidden sm:block">
+                        {syncStatus === SyncStatus.SYNCING ? 'Syncing...' : syncStatus === SyncStatus.SYNCED ? 'Synced' : 'Offline'}
+                        </span>
+                        {syncStatus === SyncStatus.SYNCED && (
+                            <button onClick={handleManualSync} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition" title="Pull from Cloud">
+                                <RefreshCw size={12} />
+                            </button>
+                        )}
+                    </div>
                 )}
-             </div>
-           )}
-        </header>
+            </header>
+        )}
 
-        <div className="max-w-7xl mx-auto animate-fade-in-up">
+        <div className={`mx-auto ${view === 'mentor' ? 'h-full' : 'max-w-7xl animate-fade-in-up'}`}>
           {view === 'dashboard' && 
              <Dashboard 
                 trades={trades} 
