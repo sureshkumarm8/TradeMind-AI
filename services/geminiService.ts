@@ -370,6 +370,7 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
 // PRE-MARKET ANALYZER ROUTINE
 export const analyzePreMarketRoutine = async (
     images: { market: string; intraday: string; oi: string; multiStrike: string },
+    newsContext: NewsAnalysis | null,
     apiKey?: string
 ): Promise<PreMarketAnalysis> => {
     const key = apiKey || process.env.API_KEY;
@@ -396,6 +397,22 @@ export const analyzePreMarketRoutine = async (
     if (images.multiStrike) {
         parts.push({ inlineData: { mimeType: "image/jpeg", data: images.multiStrike.split(',')[1] } });
         parts.push({ text: "Image 4: Multi-Strike OI Changes" });
+    }
+
+    // Add News Context if available
+    if (newsContext) {
+        parts.push({
+            text: `
+            CONTEXT FROM LIVE NEWS SCAN:
+            - Overall Sentiment: ${newsContext.sentiment} (${newsContext.sentimentScore}/10)
+            - Global Cues: US ${newsContext.globalCues.usMarket}, Asia ${newsContext.globalCues.asianMarket}, Gift Nifty ${newsContext.globalCues.giftNifty}
+            - FII/DII: ${newsContext.institutionalActivity}
+            - Headlines: ${newsContext.keyHeadlines.join(', ')}
+            - News Summary: ${newsContext.summary}
+            
+            Use this news context to validate or question the technical signals from the charts.
+            `
+        });
     }
 
     // Strict Schema Definition
@@ -472,7 +489,7 @@ export const analyzePreMarketRoutine = async (
     // System Instruction
     const promptText = `
         You are an expert Nifty 50 intraday trading strategist.
-        Analyze the provided 4 images holistically.
+        Analyze the provided 4 images holistically${newsContext ? ' AND the provided Market News Intelligence' : ''}.
         
         CRITICAL TIME CONSTRAINTS:
         - The trader DOES NOT trade immediately at 9:15 AM.
@@ -485,7 +502,7 @@ export const analyzePreMarketRoutine = async (
         - The Target MUST be exactly 35 points from entry.
         
         Generate a detailed Battle Plan in JSON format based on the schema.
-        1. Identify the directional bias.
+        1. Identify the directional bias${newsContext ? ' (weighing chart structure vs news sentiment)' : ''}.
         2. Extract key Support & Resistance levels.
         3. Formulate a core thesis.
         4. Create a specific tactical plan for the 9:25 AM - 9:45 AM window.

@@ -119,6 +119,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
     // News Analysis State (Phase 0)
     const [newsAnalysis, setNewsAnalysis] = useState<NewsAnalysis | null>(null);
     const [isNewsAnalyzing, setIsNewsAnalyzing] = useState(false);
+    const [includeNews, setIncludeNews] = useState(true);
 
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
@@ -230,7 +231,8 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         if (!images.market || !images.intraday || !images.oi || !images.multiStrike) { setError("Incomplete Intelligence."); return; }
         setIsAnalyzing(true);
         try {
-            const result = await analyzePreMarketRoutine(images, apiKey);
+            const newsToUse = (includeNews && newsAnalysis) ? newsAnalysis : null;
+            const result = await analyzePreMarketRoutine(images, newsToUse, apiKey);
             setAnalysis(result);
             if (onAnalysisUpdate) onAnalysisUpdate(result);
             setIsIntelFolded(true);
@@ -500,6 +502,29 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={images.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(images.oi)} />
                                 <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={images.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(images.multiStrike)} />
                             </div>
+
+                            {/* News Context Toggle */}
+                            {newsAnalysis && (
+                                <div className="mb-4 flex items-center justify-between bg-slate-900/50 border border-blue-500/20 p-3 rounded-xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                                            <Newspaper size={16} />
+                                        </div>
+                                        <div>
+                                            <span className="text-xs font-bold text-slate-200 block">Inject News Intelligence</span>
+                                            <span className="text-[10px] text-slate-500 block">
+                                                Enhance plan with Phase 0 data ({newsAnalysis.sentiment})
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIncludeNews(!includeNews)}
+                                        className={`w-10 h-5 rounded-full relative transition-colors ${includeNews ? 'bg-blue-600' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${includeNews ? 'left-6' : 'left-1'}`}></div>
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Error Banner */}
                             {error && (
