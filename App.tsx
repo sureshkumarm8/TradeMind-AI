@@ -106,7 +106,15 @@ const App: React.FC = () => {
     if (savedApiKey) setApiKey(savedApiKey);
     if (savedClientId) setGoogleClientId(savedClientId);
     if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
-    if (savedPreMarketAnalysis) try { setPreMarketAnalysis(JSON.parse(savedPreMarketAnalysis)); } catch(e) {};
+    if (savedPreMarketAnalysis) {
+        try { 
+            const parsed = JSON.parse(savedPreMarketAnalysis);
+            // Safety Check: Ensure data property exists and is not null
+            if (parsed && parsed.data) {
+                setPreMarketAnalysis(parsed); 
+            }
+        } catch(e) {};
+    }
     if (savedLiveMarketAnalysis) try { setLiveMarketAnalysis(JSON.parse(savedLiveMarketAnalysis)); } catch(e) {};
     if (savedPostMarketAnalysis) try { setPostMarketAnalysis(JSON.parse(savedPostMarketAnalysis)); } catch(e) {};
     if (savedPreMarketImages) try { setPreMarketImages(JSON.parse(savedPreMarketImages)); } catch(e) {};
@@ -334,9 +342,13 @@ const App: React.FC = () => {
       setPreMarketNotes({ date: new Date().toISOString().split('T')[0], notes });
   }
 
-  // Update AI Pre-Market Analysis
-  const handleUpdatePreMarketAnalysis = (data: PreMarketAnalysis) => {
-      setPreMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+  // Update AI Pre-Market Analysis - FIXED: Handle null data gracefully
+  const handleUpdatePreMarketAnalysis = (data: PreMarketAnalysis | null) => {
+      if (data) {
+          setPreMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+      } else {
+          setPreMarketAnalysis(undefined);
+      }
   };
 
   // Update AI Live Analysis

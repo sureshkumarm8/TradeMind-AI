@@ -188,6 +188,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
 
   // Auto-calculate Spot Points
   useEffect(() => {
+    // Only calculate if both values exist
     if (formData.niftyEntryPrice && formData.niftyExitPrice) {
       let points = 0;
       if (formData.direction === TradeDirection.LONG) {
@@ -196,7 +197,9 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         points = formData.niftyEntryPrice - formData.niftyExitPrice;
       }
       const calculatedPoints = parseFloat(points.toFixed(2));
+      
       setFormData(prev => {
+        // Prevent infinite loop if value is same
         if (prev.spotPointsCaptured === calculatedPoints) return prev;
         return { ...prev, spotPointsCaptured: calculatedPoints };
       });

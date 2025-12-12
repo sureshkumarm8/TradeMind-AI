@@ -400,8 +400,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
   // --- Pre Market Logic ---
   const today = new Date().toISOString().split('T')[0];
   const hasPreMarketToday = preMarketNotes?.date === today;
-  // Check if we have valid AI Analysis for today
-  const hasAiAnalysisToday = preMarketAnalysis && preMarketAnalysis.date === today;
+  // Check if we have valid AI Analysis for today AND data exists (fix for null crash)
+  const hasAiAnalysisToday = preMarketAnalysis && preMarketAnalysis.date === today && !!preMarketAnalysis.data;
   const isMorning = new Date().getHours() < 10;
   
   const savePreMarket = () => {
@@ -539,7 +539,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
               </div>
               
               {/* CONTENT AREA: Prioritize AI Analysis */}
-              {hasAiAnalysisToday && preMarketAnalysis ? (
+              {hasAiAnalysisToday && preMarketAnalysis && preMarketAnalysis.data ? (
                    <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                        {/* Bias Badge */}
                        <div className="flex flex-col justify-center items-center p-2 bg-slate-900/50 rounded-lg border border-slate-700/50">
