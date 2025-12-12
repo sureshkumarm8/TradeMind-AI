@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis } from './types';
+import { Trade, StrategyProfile, TradeOutcome, SyncStatus, UserProfile, NotificationType, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis } from './types';
 import Dashboard from './components/Dashboard';
 import TradeForm from './components/TradeForm';
 import TradeList from './components/TradeList';
@@ -57,8 +57,14 @@ const App: React.FC = () => {
   const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, data: LiveMarketAnalysis} | undefined>(undefined);
   // New: Post-Market Analysis State
   const [postMarketAnalysis, setPostMarketAnalysis] = useState<{date: string, data: PostMarketAnalysis} | undefined>(undefined);
-  // New: Pre-Market Images Persistence
+  
+  // Phase 0: News Data Persistance
+  const [newsAnalysis, setNewsAnalysis] = useState<{date: string, data: NewsAnalysis} | undefined>(undefined);
+
+  // Image States (Persisted)
   const [preMarketImages, setPreMarketImages] = useState<any>(undefined);
+  const [liveMarketImages, setLiveMarketImages] = useState<any>(undefined);
+  const [postMarketImages, setPostMarketImages] = useState<any>(undefined);
 
   // New: Deep Linking State
   const [highlightedTradeId, setHighlightedTradeId] = useState<string | null>(null);
@@ -90,10 +96,18 @@ const App: React.FC = () => {
     const savedStrategy = localStorage.getItem('tradeMind_strategy');
     const savedApiKey = localStorage.getItem('tradeMind_apiKey');
     const savedPreMarket = localStorage.getItem('tradeMind_preMarket');
+    
+    // Analysis Data
     const savedPreMarketAnalysis = localStorage.getItem('tradeMind_preMarketAnalysis');
     const savedLiveMarketAnalysis = localStorage.getItem('tradeMind_liveMarketAnalysis');
     const savedPostMarketAnalysis = localStorage.getItem('tradeMind_postMarketAnalysis');
+    const savedNewsAnalysis = localStorage.getItem('tradeMind_newsAnalysis');
+    
+    // Image Data
     const savedPreMarketImages = localStorage.getItem('tradeMind_preMarketImages');
+    const savedLiveMarketImages = localStorage.getItem('tradeMind_liveMarketImages');
+    const savedPostMarketImages = localStorage.getItem('tradeMind_postMarketImages');
+
     const savedClientId = localStorage.getItem('tradeMind_googleClientId');
     const savedProfile = localStorage.getItem('tradeMind_userProfile');
     
@@ -106,18 +120,22 @@ const App: React.FC = () => {
     if (savedApiKey) setApiKey(savedApiKey);
     if (savedClientId) setGoogleClientId(savedClientId);
     if (savedPreMarket) setPreMarketNotes(JSON.parse(savedPreMarket));
+    
+    // Safety checks for Analysis JSONs
     if (savedPreMarketAnalysis) {
         try { 
             const parsed = JSON.parse(savedPreMarketAnalysis);
-            // Safety Check: Ensure data property exists and is not null
-            if (parsed && parsed.data) {
-                setPreMarketAnalysis(parsed); 
-            }
+            if (parsed && parsed.data) setPreMarketAnalysis(parsed); 
         } catch(e) {};
     }
     if (savedLiveMarketAnalysis) try { setLiveMarketAnalysis(JSON.parse(savedLiveMarketAnalysis)); } catch(e) {};
     if (savedPostMarketAnalysis) try { setPostMarketAnalysis(JSON.parse(savedPostMarketAnalysis)); } catch(e) {};
+    if (savedNewsAnalysis) try { setNewsAnalysis(JSON.parse(savedNewsAnalysis)); } catch(e) {};
+
     if (savedPreMarketImages) try { setPreMarketImages(JSON.parse(savedPreMarketImages)); } catch(e) {};
+    if (savedLiveMarketImages) try { setLiveMarketImages(JSON.parse(savedLiveMarketImages)); } catch(e) {};
+    if (savedPostMarketImages) try { setPostMarketImages(JSON.parse(savedPostMarketImages)); } catch(e) {};
+
     if (savedProfile) try { setUserProfile(JSON.parse(savedProfile)); } catch(e) {};
     
   }, []);
@@ -157,6 +175,16 @@ const App: React.FC = () => {
                   if (data.trades) setTrades(data.trades);
                   if (data.strategy) setStrategyProfile(data.strategy);
                   if (data.preMarketNotes) setPreMarketNotes(data.preMarketNotes);
+                  
+                  // Sync Extended Data if available in cloud
+                  if (data.preMarketAnalysis) setPreMarketAnalysis(data.preMarketAnalysis);
+                  if (data.liveMarketAnalysis) setLiveMarketAnalysis(data.liveMarketAnalysis);
+                  if (data.postMarketAnalysis) setPostMarketAnalysis(data.postMarketAnalysis);
+                  if (data.newsAnalysis) setNewsAnalysis(data.newsAnalysis);
+                  if (data.preMarketImages) setPreMarketImages(data.preMarketImages);
+                  if (data.liveMarketImages) setLiveMarketImages(data.liveMarketImages);
+                  if (data.postMarketImages) setPostMarketImages(data.postMarketImages);
+
                   setSyncStatus(SyncStatus.SYNCED);
                   console.log("Auto-sync complete.");
               }
@@ -179,7 +207,20 @@ const App: React.FC = () => {
          
          syncTimeoutRef.current = setTimeout(async () => {
              try {
-                 await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
+                 // Expanded Payload for Cloud Save
+                 const payload = {
+                     trades, 
+                     strategy: strategyProfile, 
+                     preMarketNotes,
+                     preMarketAnalysis,
+                     liveMarketAnalysis,
+                     postMarketAnalysis,
+                     newsAnalysis,
+                     preMarketImages,
+                     liveMarketImages,
+                     postMarketImages
+                 };
+                 await saveToDrive(payload, driveFileId);
                  setSyncStatus(SyncStatus.SYNCED);
              } catch(e: any) {
                  console.error("Auto Save Failed", e);
@@ -193,7 +234,7 @@ const App: React.FC = () => {
          }, 5000); 
      }
      return () => { if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current); };
-  }, [trades, strategyProfile, preMarketNotes]);
+  }, [trades, strategyProfile, preMarketNotes, preMarketAnalysis, liveMarketAnalysis, postMarketAnalysis, newsAnalysis, preMarketImages, liveMarketImages, postMarketImages]);
 
   useEffect(() => {
      const closedTrades = trades
@@ -242,13 +283,20 @@ const App: React.FC = () => {
       setIsLoadingTip(false);
   }
 
+  // Persist Local State Changes
   useEffect(() => { localStorage.setItem('tradeMind_trades', JSON.stringify(trades)); }, [trades]);
   useEffect(() => { localStorage.setItem('tradeMind_strategy', JSON.stringify(strategyProfile)); }, [strategyProfile]);
   useEffect(() => { if (preMarketNotes) localStorage.setItem('tradeMind_preMarket', JSON.stringify(preMarketNotes)); }, [preMarketNotes]);
+  
   useEffect(() => { if (preMarketAnalysis) localStorage.setItem('tradeMind_preMarketAnalysis', JSON.stringify(preMarketAnalysis)); }, [preMarketAnalysis]);
   useEffect(() => { if (liveMarketAnalysis) localStorage.setItem('tradeMind_liveMarketAnalysis', JSON.stringify(liveMarketAnalysis)); }, [liveMarketAnalysis]);
   useEffect(() => { if (postMarketAnalysis) localStorage.setItem('tradeMind_postMarketAnalysis', JSON.stringify(postMarketAnalysis)); }, [postMarketAnalysis]);
+  useEffect(() => { if (newsAnalysis) localStorage.setItem('tradeMind_newsAnalysis', JSON.stringify(newsAnalysis)); }, [newsAnalysis]);
+
   useEffect(() => { if (preMarketImages) localStorage.setItem('tradeMind_preMarketImages', JSON.stringify(preMarketImages)); }, [preMarketImages]);
+  useEffect(() => { if (liveMarketImages) localStorage.setItem('tradeMind_liveMarketImages', JSON.stringify(liveMarketImages)); }, [liveMarketImages]);
+  useEffect(() => { if (postMarketImages) localStorage.setItem('tradeMind_postMarketImages', JSON.stringify(postMarketImages)); }, [postMarketImages]);
+
   useEffect(() => { if (userProfile) localStorage.setItem('tradeMind_userProfile', JSON.stringify(userProfile)); }, [userProfile]);
 
   const handleSaveSettings = () => {
@@ -286,6 +334,15 @@ const App: React.FC = () => {
              if (data.trades) setTrades(data.trades);
              if (data.strategy) setStrategyProfile(data.strategy);
              if (data.preMarketNotes) setPreMarketNotes(data.preMarketNotes);
+             // Sync extended
+             if (data.preMarketAnalysis) setPreMarketAnalysis(data.preMarketAnalysis);
+             if (data.liveMarketAnalysis) setLiveMarketAnalysis(data.liveMarketAnalysis);
+             if (data.postMarketAnalysis) setPostMarketAnalysis(data.postMarketAnalysis);
+             if (data.newsAnalysis) setNewsAnalysis(data.newsAnalysis);
+             if (data.preMarketImages) setPreMarketImages(data.preMarketImages);
+             if (data.liveMarketImages) setLiveMarketImages(data.liveMarketImages);
+             if (data.postMarketImages) setPostMarketImages(data.postMarketImages);
+
              setSyncStatus(SyncStatus.SYNCED);
              notify("Cloud Sync Activated", 'success');
           } else {
@@ -323,6 +380,15 @@ const App: React.FC = () => {
               if (cloudData.trades) setTrades(cloudData.trades);
               if (cloudData.strategy) setStrategyProfile(cloudData.strategy);
               if (cloudData.preMarketNotes) setPreMarketNotes(cloudData.preMarketNotes);
+              
+              if (cloudData.preMarketAnalysis) setPreMarketAnalysis(cloudData.preMarketAnalysis);
+              if (cloudData.liveMarketAnalysis) setLiveMarketAnalysis(cloudData.liveMarketAnalysis);
+              if (cloudData.postMarketAnalysis) setPostMarketAnalysis(cloudData.postMarketAnalysis);
+              if (cloudData.newsAnalysis) setNewsAnalysis(cloudData.newsAnalysis);
+              if (cloudData.preMarketImages) setPreMarketImages(cloudData.preMarketImages);
+              if (cloudData.liveMarketImages) setLiveMarketImages(cloudData.liveMarketImages);
+              if (cloudData.postMarketImages) setPostMarketImages(cloudData.postMarketImages);
+
               notify("Synced from Cloud", 'success');
               setSyncStatus(SyncStatus.SYNCED);
           } else {
@@ -347,7 +413,19 @@ const App: React.FC = () => {
       }
       setSyncStatus(SyncStatus.SYNCING);
       try {
-          await saveToDrive({ trades, strategy: strategyProfile, preMarketNotes }, driveFileId);
+          const payload = {
+             trades, 
+             strategy: strategyProfile, 
+             preMarketNotes,
+             preMarketAnalysis,
+             liveMarketAnalysis,
+             postMarketAnalysis,
+             newsAnalysis,
+             preMarketImages,
+             liveMarketImages,
+             postMarketImages
+          };
+          await saveToDrive(payload, driveFileId);
           setSyncStatus(SyncStatus.SYNCED);
           notify("Manual Save Successful", 'success');
       } catch(e: any) {
@@ -384,18 +462,41 @@ const App: React.FC = () => {
   };
 
   // Update AI Live Analysis
-  const handleUpdateLiveMarketAnalysis = (data: LiveMarketAnalysis) => {
-      setLiveMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+  const handleUpdateLiveMarketAnalysis = (data: LiveMarketAnalysis | null) => {
+      if (data) {
+          setLiveMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+      } else {
+          setLiveMarketAnalysis(undefined);
+      }
   }
 
   // Update AI Post-Market Analysis
-  const handleUpdatePostMarketAnalysis = (data: PostMarketAnalysis) => {
-      setPostMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+  const handleUpdatePostMarketAnalysis = (data: PostMarketAnalysis | null) => {
+      if (data) {
+          setPostMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+      } else {
+          setPostMarketAnalysis(undefined);
+      }
+  }
+
+  // Update News Analysis
+  const handleUpdateNewsAnalysis = (data: NewsAnalysis | null) => {
+      if (data) {
+          setNewsAnalysis({ date: new Date().toISOString().split('T')[0], data });
+      } else {
+          setNewsAnalysis(undefined);
+      }
   }
 
   // Update Pre-Market Images
   const handleUpdatePreMarketImages = (images: any) => {
      setPreMarketImages(images);
+  };
+  const handleUpdateLiveMarketImages = (images: any) => {
+     setLiveMarketImages(images);
+  };
+  const handleUpdatePostMarketImages = (images: any) => {
+     setPostMarketImages(images);
   };
 
   const handleSaveTrade = (trade: Trade) => {
@@ -511,6 +612,10 @@ const App: React.FC = () => {
           setLiveMarketAnalysis(undefined);
           setPostMarketAnalysis(undefined);
           setPreMarketImages(undefined);
+          setLiveMarketImages(undefined);
+          setPostMarketImages(undefined);
+          setNewsAnalysis(undefined);
+          
           setUserProfile(null);
           setSyncStatus(SyncStatus.OFFLINE);
           setAuthError(null);
@@ -698,6 +803,7 @@ const App: React.FC = () => {
               notify={notify} 
               onDelete={(id) => { handleDeleteTrade(id); setView('journal'); }}
               preMarketDone={hasPreMarketAnalysisToday} // Pass Today's Pre-Market Status
+              strategyProfile={strategyProfile} // Pass Strategy for AI Assistant Context
             />
           }
           {view === 'journal' && 
@@ -720,14 +826,25 @@ const App: React.FC = () => {
           {view === 'premarket' && 
             <PreMarketAnalyzer 
                 apiKey={apiKey} 
-                initialData={preMarketAnalysis?.data} // Pass existing data
-                initialImages={preMarketImages} // Pass persisted images
-                liveData={liveMarketAnalysis?.data} // Pass Live data
-                postData={postMarketAnalysis?.data} // Pass Post data
-                onAnalysisUpdate={handleUpdatePreMarketAnalysis} // Sync up
-                onLiveAnalysisUpdate={handleUpdateLiveMarketAnalysis} // Sync up live
-                onPostAnalysisUpdate={handleUpdatePostMarketAnalysis} // Sync up post
-                onImagesUpdate={handleUpdatePreMarketImages} // Sync images up
+                // DATA
+                initialData={preMarketAnalysis?.data} 
+                liveData={liveMarketAnalysis?.data} 
+                postData={postMarketAnalysis?.data}
+                newsData={newsAnalysis?.data}
+                // IMAGES
+                initialImages={preMarketImages} 
+                initialLiveImages={liveMarketImages}
+                initialPostImages={postMarketImages}
+                // UPDATERS
+                onAnalysisUpdate={handleUpdatePreMarketAnalysis} 
+                onLiveAnalysisUpdate={handleUpdateLiveMarketAnalysis}
+                onPostAnalysisUpdate={handleUpdatePostMarketAnalysis}
+                onNewsAnalysisUpdate={handleUpdateNewsAnalysis}
+                
+                onImagesUpdate={handleUpdatePreMarketImages}
+                onLiveImagesUpdate={handleUpdateLiveMarketImages}
+                onPostImagesUpdate={handleUpdatePostMarketImages}
+                
                 onSavePlan={handleSavePlan} 
             />
           }

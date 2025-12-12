@@ -772,3 +772,70 @@ export const getMentorChatResponse = async (
         return `SIGNAL INTERRUPTED. API Error: ${e.message || "Unknown Connection Failure"}. Check Key and Quota.`;
     }
 }
+
+// --- LIVE TRADE COACH ROUTINE (New) ---
+// Focused on the current trade being logged
+export const getLiveTradeCoachResponse = async (
+    chatHistory: { role: string, parts: { text?: string, inlineData?: any }[] }[],
+    currentTradeData: any, // The formData
+    strategyProfile: StrategyProfile,
+    apiKey: string
+): Promise<string> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+
+    const strategyContext = formatStrategyForAI(strategyProfile);
+    
+    // Format live timeline
+    const timeline = currentTradeData.notes 
+        ? currentTradeData.notes.map((n: any) => `[${n.timestamp}] ${n.content} (${n.type})`).join('\n') 
+        : "No live notes yet.";
+
+    const systemInstruction = `
+        You are an AI Co-Pilot for a live trader. You are situated INSIDE the cockpit.
+        
+        CURRENT TRADE DATA:
+        Instrument: ${currentTradeData.instrument || 'Nifty'} ${currentTradeData.strikePrice || ''} ${currentTradeData.optionType || ''}
+        Direction: ${currentTradeData.direction}
+        Entry: ${currentTradeData.entryPrice || 0}
+        Qty: ${currentTradeData.quantity || 0}
+        Reason: ${currentTradeData.entryReason || 'Not specified'}
+        
+        LIVE MISSION TIMELINE (User's Thoughts):
+        ${timeline}
+        
+        USER STRATEGY:
+        ${strategyContext}
+        
+        YOUR MISSION:
+        - Provide immediate, tactical advice based on the user's strategy.
+        - Check their emotional state from the timeline. If they seem tilted, tell them to stop.
+        - If they upload a chart image, analyze it for the specific setup they claim to be trading.
+        - Keep responses SHORT and PUNCHY. You are on the radio.
+    `;
+
+    try {
+        const historyForInit = [...chatHistory];
+        const lastUserMsg = historyForInit.pop();
+
+        const activeChat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: { systemInstruction },
+            history: historyForInit as any
+        });
+
+        if (!lastUserMsg) return "Standby.";
+        
+        // Construct message content (text + optional images)
+        const messageContent: any = { parts: lastUserMsg.parts };
+
+        const result = await activeChat.sendMessage(messageContent);
+        return result.text;
+
+    } catch (e: any) {
+        console.error("Live Coach Error", e);
+        return `COMM LINK OFFLINE: ${e.message}`;
+    }
+}

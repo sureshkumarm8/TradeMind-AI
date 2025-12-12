@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote } from '../types';
-import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus, FlaskConical, CircleDollarSign } from 'lucide-react';
-import { parseVoiceCommand } from '../services/geminiService';
+import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote, StrategyProfile } from '../types';
+import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus, FlaskConical, CircleDollarSign, Bot, Terminal, ChevronRight } from 'lucide-react';
+import { parseVoiceCommand, getLiveTradeCoachResponse } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
 
 interface TradeFormProps {
@@ -13,6 +13,7 @@ interface TradeFormProps {
   notify?: (message: string, type?: NotificationType) => void;
   onDelete?: (id: string) => void;
   preMarketDone?: boolean; // Prop to indicate if analysis exists for today
+  strategyProfile?: StrategyProfile;
 }
 
 const COMMON_CONFLUENCES = [
@@ -54,7 +55,133 @@ const QUICK_THOUGHTS = [
     { label: "Adding Qty", type: 'logic' }
 ];
 
-const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete, preMarketDone }) => {
+// --- Sub-component: Live Coach Chat ---
+const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey?: string, currentTradeData: Partial<Trade>, strategyProfile?: StrategyProfile }) => {
+    const [messages, setMessages] = useState<{role: 'user'|'model', text: string, image?: string}[]>([
+        { role: 'model', text: "Tactical Co-Pilot Online. I'm monitoring your inputs. Need a setup check?" }
+    ]);
+    const [input, setInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [chatImage, setChatImage] = useState<string | null>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [messages]);
+
+    const handleSend = async () => {
+        if (!input.trim() && !chatImage) return;
+        if (!apiKey || !strategyProfile) {
+            alert("API Key and Strategy required.");
+            return;
+        }
+
+        const userMsg = { role: 'user' as const, text: input, image: chatImage || undefined };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setChatImage(null);
+        setIsLoading(true);
+
+        try {
+            // Construct history for API
+            const history = messages.map(m => ({
+                role: m.role,
+                parts: [
+                    { text: m.text },
+                    ...(m.image ? [{ inlineData: { mimeType: 'image/jpeg', data: m.image.split(',')[1] } }] : [])
+                ]
+            }));
+            
+            // Add current message to history payload
+            history.push({
+                role: 'user',
+                parts: [
+                    { text: userMsg.text },
+                    ...(userMsg.image ? [{ inlineData: { mimeType: 'image/jpeg', data: userMsg.image.split(',')[1] } }] : [])
+                ]
+            });
+
+            const response = await getLiveTradeCoachResponse(history, currentTradeData, strategyProfile, apiKey);
+            setMessages(prev => [...prev, { role: 'model', text: response }]);
+        } catch (e) {
+            setMessages(prev => [...prev, { role: 'model', text: "Connection Error. Try again." }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                const compressed = await compressImage(file);
+                setChatImage(compressed);
+            } catch (e) {
+                alert("Image upload failed");
+            }
+        }
+    }
+
+    return (
+        <div className="bg-slate-900 border border-indigo-500/30 rounded-xl flex flex-col h-[400px] overflow-hidden shadow-2xl relative">
+            <div className="bg-indigo-900/30 p-3 border-b border-indigo-500/20 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <Bot size={16} className="text-indigo-400"/>
+                    <span className="text-xs font-black uppercase tracking-wider text-indigo-100">Live Co-Pilot</span>
+                </div>
+                <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                </div>
+            </div>
+            
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-950/50">
+                {messages.map((m, i) => (
+                    <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        <div className={`p-2.5 rounded-xl max-w-[90%] text-xs ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none'}`}>
+                            {m.image && <img src={m.image} alt="Context" className="w-full h-auto rounded-lg mb-2 border border-white/10" />}
+                            <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                        </div>
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="flex items-start">
+                        <div className="bg-slate-800 p-2 rounded-xl rounded-tl-none border border-slate-700">
+                            <Loader2 size={14} className="animate-spin text-indigo-400"/>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="p-2 bg-slate-900 border-t border-slate-800">
+                {chatImage && (
+                    <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-lg mb-2 border border-slate-700">
+                        <img src={chatImage} className="w-8 h-8 rounded object-cover" />
+                        <span className="text-[10px] text-slate-400 flex-1 truncate">Image attached</span>
+                        <button onClick={() => setChatImage(null)}><X size={14} className="text-slate-500 hover:text-white"/></button>
+                    </div>
+                )}
+                <div className="flex gap-2">
+                    <label className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer text-slate-400 hover:text-white transition border border-slate-700">
+                        <ImageIcon size={16}/>
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload}/>
+                    </label>
+                    <input 
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:border-indigo-500 outline-none"
+                        placeholder="Ask coach..."
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                    />
+                    <button onClick={handleSend} disabled={isLoading || (!input && !chatImage)} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white disabled:opacity-50">
+                        <Send size={16}/>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete, preMarketDone, strategyProfile }) => {
   // Toggle states for foldable sections
   const [showConfluences, setShowConfluences] = useState(false);
   const [showMistakes, setShowMistakes] = useState(false);
@@ -597,74 +724,81 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                </div>
             </div>
             
-            {/* 3. Narrative & Context (LIVE TIMELINE) */}
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col h-[500px]">
-                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest flex items-center">
-                        <MessageSquare size={14} className="mr-2 text-indigo-400"/> Live Mission Timeline
-                    </h3>
-                    <div className="text-[10px] text-slate-600 font-bold uppercase">Chat Logic</div>
-                 </div>
+            {/* 3. Narrative & Context (LIVE TIMELINE) + AI COACH */}
+            <div className="flex flex-col gap-6">
+                
+                {/* LIVE TIMELINE */}
+                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col h-[400px]">
+                     <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest flex items-center">
+                            <MessageSquare size={14} className="mr-2 text-indigo-400"/> Live Mission Timeline
+                        </h3>
+                        <div className="text-[10px] text-slate-600 font-bold uppercase">Chat Logic</div>
+                     </div>
 
-                 {/* Timeline Feed */}
-                 <div ref={notesContainerRef} className="flex-1 bg-slate-900/50 rounded-xl border border-slate-800 p-4 overflow-y-auto mb-4 custom-scrollbar space-y-4">
-                    {formData.notes && formData.notes.length > 0 ? (
-                        formData.notes.map(note => (
-                            <div key={note.id} className="animate-fade-in flex gap-3">
-                                <div className="text-[10px] font-mono text-slate-500 pt-1 shrink-0">{note.timestamp.slice(0,5)}</div>
-                                <div className={`flex-1 text-sm p-3 rounded-tr-xl rounded-bl-xl rounded-br-xl ${note.type === 'emotion' ? 'bg-purple-900/20 text-purple-200 border border-purple-500/20' : note.type === 'market' ? 'bg-amber-900/20 text-amber-200 border border-amber-500/20' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>
-                                    {note.content}
+                     {/* Timeline Feed */}
+                     <div ref={notesContainerRef} className="flex-1 bg-slate-900/50 rounded-xl border border-slate-800 p-4 overflow-y-auto mb-4 custom-scrollbar space-y-4">
+                        {formData.notes && formData.notes.length > 0 ? (
+                            formData.notes.map(note => (
+                                <div key={note.id} className="animate-fade-in flex gap-3">
+                                    <div className="text-[10px] font-mono text-slate-500 pt-1 shrink-0">{note.timestamp.slice(0,5)}</div>
+                                    <div className={`flex-1 text-sm p-3 rounded-tr-xl rounded-bl-xl rounded-br-xl ${note.type === 'emotion' ? 'bg-purple-900/20 text-purple-200 border border-purple-500/20' : note.type === 'market' ? 'bg-amber-900/20 text-amber-200 border border-amber-500/20' : 'bg-slate-800 text-slate-200 border border-slate-700'}`}>
+                                        {note.content}
+                                    </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-600 text-xs italic opacity-50">
+                                <Zap size={24} className="mb-2"/>
+                                Log your thoughts live...
                             </div>
-                        ))
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-600 text-xs italic opacity-50">
-                            <Zap size={24} className="mb-2"/>
-                            Log your thoughts live...
-                        </div>
-                    )}
-                 </div>
+                        )}
+                     </div>
 
-                 {/* Quick Chips */}
-                 <div className="flex gap-2 mb-3 overflow-x-auto pb-1 custom-scrollbar">
-                     {QUICK_THOUGHTS.map((qt, idx) => (
+                     {/* Quick Chips */}
+                     <div className="flex gap-2 mb-3 overflow-x-auto pb-1 custom-scrollbar">
+                         {QUICK_THOUGHTS.map((qt, idx) => (
+                             <button 
+                                key={idx} 
+                                type="button" 
+                                onClick={() => addNote(qt.label, qt.type as any)}
+                                className={`whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition ${qt.type === 'emotion' ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10' : qt.type === 'market' ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' : 'border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10'}`}
+                             >
+                                {qt.label}
+                             </button>
+                         ))}
+                     </div>
+
+                     {/* Input Area */}
+                     <div className="flex gap-2">
+                         <input 
+                            type="text" 
+                            value={currentNote}
+                            onChange={(e) => setCurrentNote(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNote(currentNote))}
+                            placeholder="Log thought..."
+                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                         />
                          <button 
-                            key={idx} 
                             type="button" 
-                            onClick={() => addNote(qt.label, qt.type as any)}
-                            className={`whitespace-nowrap px-3 py-1 rounded-full text-[10px] font-bold border transition ${qt.type === 'emotion' ? 'border-purple-500/30 text-purple-400 hover:bg-purple-500/10' : qt.type === 'market' ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' : 'border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10'}`}
+                            onClick={() => addNote(currentNote)}
+                            className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition"
                          >
-                            {qt.label}
+                            <Send size={18}/>
                          </button>
-                     ))}
-                 </div>
+                         <button 
+                            type="button" 
+                            onClick={isRecording ? stopRecording : startRecording}
+                            className={`p-2 rounded-lg transition ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
+                            title="Voice Log (Append to Timeline)"
+                         >
+                            {isProcessingVoice ? <Loader2 size={18} className="animate-spin"/> : <Mic size={18}/>}
+                         </button>
+                     </div>
+                </div>
 
-                 {/* Input Area */}
-                 <div className="flex gap-2">
-                     <input 
-                        type="text" 
-                        value={currentNote}
-                        onChange={(e) => setCurrentNote(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNote(currentNote))}
-                        placeholder="Log thought..."
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none"
-                     />
-                     <button 
-                        type="button" 
-                        onClick={() => addNote(currentNote)}
-                        className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition"
-                     >
-                        <Send size={18}/>
-                     </button>
-                     <button 
-                        type="button" 
-                        onClick={isRecording ? stopRecording : startRecording}
-                        className={`p-2 rounded-lg transition ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-700 text-slate-400 hover:text-white'}`}
-                        title="Voice Log (Append to Timeline)"
-                     >
-                        {isProcessingVoice ? <Loader2 size={18} className="animate-spin"/> : <Mic size={18}/>}
-                     </button>
-                 </div>
+                {/* NEW: LIVE COACH */}
+                <LiveCoachWidget apiKey={apiKey} currentTradeData={formData} strategyProfile={strategyProfile} />
             </div>
             
             {/* 4. Evidence Locker (Images) */}

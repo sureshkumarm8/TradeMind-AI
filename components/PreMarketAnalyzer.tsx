@@ -8,14 +8,27 @@ import { compressImage } from '../services/imageService';
 
 interface PreMarketAnalyzerProps {
     apiKey: string;
+    // Data Props
     initialData?: PreMarketAnalysis;
-    initialImages?: any;
     liveData?: LiveMarketAnalysis;
     postData?: PostMarketAnalysis;
+    newsData?: NewsAnalysis;
+    
+    // Image Props
+    initialImages?: any;
+    initialLiveImages?: any;
+    initialPostImages?: any;
+
+    // Updaters
     onAnalysisUpdate?: (data: PreMarketAnalysis | null) => void;
     onLiveAnalysisUpdate?: (data: LiveMarketAnalysis | null) => void;
     onPostAnalysisUpdate?: (data: PostMarketAnalysis | null) => void;
+    onNewsAnalysisUpdate?: (data: NewsAnalysis | null) => void;
+
     onImagesUpdate?: (images: any) => void;
+    onLiveImagesUpdate?: (images: any) => void;
+    onPostImagesUpdate?: (images: any) => void;
+
     onClose?: () => void;
     onSavePlan?: (notes: string) => void;
 }
@@ -64,8 +77,6 @@ const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange, onClick }: a
         )}
         {imageSrc && (
              <div className="absolute top-0 right-0 w-full h-full z-10">
-                 {/* Invisible overlay to allow clicking the image for preview, but allowing a small 'change' button could be added later */}
-                 {/* For now, clicking the card opens preview. To change image, we might need a clear button or overlay input */}
                  <input type="file" accept="image/*" onChange={onChange} className="absolute top-0 right-0 w-6 h-6 opacity-0 cursor-pointer" title="Change Image"/> 
              </div>
         )}
@@ -94,49 +105,21 @@ const DirectionBadge = ({ dir }: { dir: string }) => {
     return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${color}`}>{dir}</span>;
 };
 
-const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialData, initialImages, liveData, postData, onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onImagesUpdate, onClose, onSavePlan }) => {
-    // Phase 1 Images
-    const [images, setImages] = useState<{
-        market: string;
-        intraday: string;
-        oi: string;
-        multiStrike: string;
-    }>(initialImages || { market: '', intraday: '', oi: '', multiStrike: '' });
+const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ 
+    apiKey, 
+    initialData, liveData, postData, newsData,
+    initialImages, initialLiveImages, initialPostImages,
+    onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onNewsAnalysisUpdate,
+    onImagesUpdate, onLiveImagesUpdate, onPostImagesUpdate,
+    onClose, onSavePlan 
+}) => {
     
-    // Phase 2 Images
-    const [liveImages, setLiveImages] = useState<{
-        liveChart: string;
-        liveOi: string;
-    }>({ liveChart: '', liveOi: '' });
-
-    // Phase 3 Images
-    const [postImages, setPostImages] = useState<{
-        dailyChart: string;
-        eodChart: string;
-        eodOi: string;
-    }>({ dailyChart: '', eodChart: '', eodOi: '' });
-    
-    // News Analysis State (Phase 0)
-    const [newsAnalysis, setNewsAnalysis] = useState<NewsAnalysis | null>(null);
-    const [isNewsAnalyzing, setIsNewsAnalyzing] = useState(false);
-    const [includeNews, setIncludeNews] = useState(true);
-
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
-    const [isPostAnalyzing, setIsPostAnalyzing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    
-    const [analysis, setAnalysis] = useState<PreMarketAnalysis | null>(initialData || null);
-    const [liveAnalysis, setLiveAnalysis] = useState<LiveMarketAnalysis | null>(liveData || null);
-    const [postAnalysis, setPostAnalysis] = useState<PostMarketAnalysis | null>(postData || null);
-    
-    const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-    // Tab State - Added 'phase0'
+    // Internal State for View Mode Only
     const [activeView, setActiveView] = useState<'phase0' | 'phase1' | 'phase2' | 'phase3'>('phase0');
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [isIntelFolded, setIsIntelFolded] = useState(!!initialData);
-
-    // Pre-Flight Checklist State
+    
+    // Checklists (Local Preference)
     const [checklist, setChecklist] = useState({
         mindset: false,
         environment: false,
@@ -144,6 +127,23 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         news: false
     });
     const allChecked = Object.values(checklist).every(Boolean);
+
+    // Analysis Loading States
+    const [isNewsAnalyzing, setIsNewsAnalyzing] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isLiveAnalyzing, setIsLiveAnalyzing] = useState(false);
+    const [isPostAnalyzing, setIsPostAnalyzing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [includeNews, setIncludeNews] = useState(true);
+
+    // Local refs to images for immediate UI updates before parent sync (optional, but good for responsiveness)
+    // Actually, we should rely on props for single source of truth to avoid de-sync.
+    // However, we need to handle the image upload -> parent update flow.
+
+    // Helper to safely get image values from props
+    const getImages = () => initialImages || { market: '', intraday: '', oi: '', multiStrike: '' };
+    const getLiveImages = () => initialLiveImages || { liveChart: '', liveOi: '' };
+    const getPostImages = () => initialPostImages || { dailyChart: '', eodChart: '', eodOi: '' };
 
     // Persist Checklist
     useEffect(() => {
@@ -157,67 +157,60 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
         localStorage.setItem('tradeMind_preFlightChecklist', JSON.stringify(checklist));
     }, [checklist]);
 
-    // Sync state updates with parent
-    useEffect(() => {
-        if (onImagesUpdate) onImagesUpdate(images);
-    }, [images, onImagesUpdate]);
-
     const toggleCheck = (key: keyof typeof checklist) => {
         setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    // Sync if data changes externally
-    useEffect(() => {
-        if (initialData) setAnalysis(initialData);
-        if (liveData) setLiveAnalysis(liveData);
-        if (postData) setPostAnalysis(postData);
-        if (initialImages) setImages(initialImages);
-    }, [initialData, liveData, postData, initialImages]);
-
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof images) => {
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
             const compressed = await compressImage(file);
-            setImages(prev => ({ ...prev, [field]: compressed }));
+            const current = getImages();
+            const updated = { ...current, [field]: compressed };
+            if(onImagesUpdate) onImagesUpdate(updated);
             setError(null); 
         } catch (err: any) {
             setError("Failed to process image. Try a smaller file.");
         }
     };
 
-    const handleLiveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof liveImages) => {
+    const handleLiveUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
             const compressed = await compressImage(file);
-            setLiveImages(prev => ({ ...prev, [field]: compressed }));
+            const current = getLiveImages();
+            const updated = { ...current, [field]: compressed };
+            if(onLiveImagesUpdate) onLiveImagesUpdate(updated);
             setError(null);
         } catch (err: any) {
             setError("Failed to process live image.");
         }
     };
 
-    const handlePostUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: keyof typeof postImages) => {
+    const handlePostUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
             const compressed = await compressImage(file);
-            setPostImages(prev => ({ ...prev, [field]: compressed }));
+            const current = getPostImages();
+            const updated = { ...current, [field]: compressed };
+            if(onPostImagesUpdate) onPostImagesUpdate(updated);
             setError(null);
         } catch (err: any) {
             setError("Failed to process EOD image.");
         }
     };
 
-    // NEW: Phase 0 News Analysis
+    // Phase 0 News Analysis
     const runNewsAnalysis = async () => {
         setError(null);
         if (!apiKey) { setError("API Key missing."); return; }
         setIsNewsAnalyzing(true);
         try {
             const result = await fetchMarketNews(apiKey);
-            setNewsAnalysis(result);
+            if (onNewsAnalysisUpdate) onNewsAnalysisUpdate(result);
         } catch (e: any) {
             setError(e.message || "News Analysis Failed");
         } finally {
@@ -227,13 +220,13 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
 
     const runAnalysis = async () => {
         setError(null);
+        const images = getImages();
         if (!apiKey) { setError("API Key missing."); return; }
         if (!images.market || !images.intraday || !images.oi || !images.multiStrike) { setError("Incomplete Intelligence."); return; }
         setIsAnalyzing(true);
         try {
-            const newsToUse = (includeNews && newsAnalysis) ? newsAnalysis : null;
+            const newsToUse = (includeNews && newsData) ? newsData : null;
             const result = await analyzePreMarketRoutine(images, newsToUse, apiKey);
-            setAnalysis(result);
             if (onAnalysisUpdate) onAnalysisUpdate(result);
             setIsIntelFolded(true);
         } catch (e: any) {
@@ -245,13 +238,13 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
 
     const runLiveCheck = async () => {
         setError(null);
+        const lImages = getLiveImages();
         if (!apiKey) { setError("API Key missing."); return; }
-        if (!analysis) { setError("No Pre-Market Plan found."); return; }
-        if (!liveImages.liveChart || !liveImages.liveOi) { setError("Upload Live Chart & OI."); return; }
+        if (!initialData) { setError("No Pre-Market Plan found."); return; }
+        if (!lImages.liveChart || !lImages.liveOi) { setError("Upload Live Chart & OI."); return; }
         setIsLiveAnalyzing(true);
         try {
-            const result = await analyzeLiveMarketRoutine(liveImages, analysis, apiKey);
-            setLiveAnalysis(result);
+            const result = await analyzeLiveMarketRoutine(lImages, initialData, apiKey);
             if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(result);
         } catch(e: any) {
             setError(e.message || "Live check failed.");
@@ -262,12 +255,12 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
 
     const runPostAnalysis = async () => {
         setError(null);
+        const pImages = getPostImages();
         if (!apiKey) { setError("API Key missing."); return; }
-        if (!postImages.dailyChart || !postImages.eodChart || !postImages.eodOi) { setError("Upload EOD Charts."); return; }
+        if (!pImages.dailyChart || !pImages.eodChart || !pImages.eodOi) { setError("Upload EOD Charts."); return; }
         setIsPostAnalyzing(true);
         try {
-            const result = await analyzePostMarketRoutine(postImages, analysis, apiKey);
-            setPostAnalysis(result);
+            const result = await analyzePostMarketRoutine(pImages, initialData || null, apiKey);
             if (onPostAnalysisUpdate) onPostAnalysisUpdate(result);
         } catch(e: any) {
             setError(e.message || "Post-Market analysis failed.");
@@ -277,33 +270,33 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
     };
 
     const handleSaveToNotes = () => {
-        if (!analysis || !onSavePlan) return;
-        const note = `[AI PLAN] Bias: ${analysis.marketBias}. Thesis: ${analysis.coreThesis}. Levels: Res ${analysis.keyLevels.resistance.join(', ')} / Sup ${analysis.keyLevels.support.join(', ')}.`;
+        if (!initialData || !onSavePlan) return;
+        const note = `[AI PLAN] Bias: ${initialData.marketBias}. Thesis: ${initialData.coreThesis}. Levels: Res ${initialData.keyLevels.resistance.join(', ')} / Sup ${initialData.keyLevels.support.join(', ')}.`;
         onSavePlan(note);
     };
 
     // --- RESET HANDLERS ---
     const handleResetPhase1 = () => {
         if(!window.confirm("Clear all Pre-Market data and images?")) return;
-        setImages({ market: '', intraday: '', oi: '', multiStrike: '' });
-        setAnalysis(null);
         if (onAnalysisUpdate) onAnalysisUpdate(null);
-        if (onImagesUpdate) onImagesUpdate(undefined);
+        if (onImagesUpdate) onImagesUpdate({ market: '', intraday: '', oi: '', multiStrike: '' });
     };
 
     const handleResetPhase2 = () => {
         if(!window.confirm("Clear Live Check data?")) return;
-        setLiveImages({ liveChart: '', liveOi: '' });
-        setLiveAnalysis(null);
         if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(null);
+        if (onLiveImagesUpdate) onLiveImagesUpdate({ liveChart: '', liveOi: '' });
     };
 
     const handleResetPhase3 = () => {
         if(!window.confirm("Clear Post-Market data?")) return;
-        setPostImages({ dailyChart: '', eodChart: '', eodOi: '' });
-        setPostAnalysis(null);
         if (onPostAnalysisUpdate) onPostAnalysisUpdate(null);
+        if (onPostImagesUpdate) onPostImagesUpdate({ dailyChart: '', eodChart: '', eodOi: '' });
     };
+
+    const currentImages = getImages();
+    const currentLiveImages = getLiveImages();
+    const currentPostImages = getPostImages();
 
     return (
         <div className="bg-slate-900 min-h-screen md:min-h-0 md:h-full w-full flex flex-col pb-20 md:pb-0 animate-fade-in relative">
@@ -377,18 +370,18 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                             )}
                         </div>
 
-                        {newsAnalysis && (
+                        {newsData && (
                              <div className="space-y-4 animate-fade-in">
                                 {/* Sentiment & Gift Nifty Row */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center relative overflow-hidden">
-                                        <div className={`absolute top-0 w-full h-1 ${newsAnalysis.sentiment === 'Bullish' ? 'bg-emerald-500' : newsAnalysis.sentiment === 'Bearish' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                                        <div className={`absolute top-0 w-full h-1 ${newsData.sentiment === 'Bullish' ? 'bg-emerald-500' : newsData.sentiment === 'Bearish' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
                                         <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Overall Sentiment</div>
-                                        <div className={`text-2xl font-black uppercase mb-1 ${newsAnalysis.sentiment === 'Bullish' ? 'text-emerald-400' : newsAnalysis.sentiment === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>
-                                            {newsAnalysis.sentiment}
+                                        <div className={`text-2xl font-black uppercase mb-1 ${newsData.sentiment === 'Bullish' ? 'text-emerald-400' : newsData.sentiment === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>
+                                            {newsData.sentiment}
                                         </div>
                                         <div className="text-[10px] text-slate-500 font-bold bg-slate-900 px-2 py-0.5 rounded-full border border-slate-700">
-                                            Score: {newsAnalysis.sentimentScore}/10
+                                            Score: {newsData.sentimentScore}/10
                                         </div>
                                     </div>
                                     <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
@@ -397,7 +390,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                             <span className="text-[10px] text-indigo-400 font-bold uppercase">Executive Summary</span>
                                         </div>
                                         <p className="text-sm text-slate-200 leading-relaxed font-medium italic">
-                                            "{newsAnalysis.summary.replace(/^"|"$/g, '')}"
+                                            "{newsData.summary.replace(/^"|"$/g, '')}"
                                         </p>
                                     </div>
                                 </div>
@@ -406,15 +399,15 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                      <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
                                          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Globe size={10}/> US Markets</div>
-                                         <div className="text-sm font-bold text-slate-200">{newsAnalysis.globalCues.usMarket}</div>
+                                         <div className="text-sm font-bold text-slate-200">{newsData.globalCues.usMarket}</div>
                                      </div>
                                      <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
                                          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Globe size={10}/> Asian Markets</div>
-                                         <div className="text-sm font-bold text-slate-200">{newsAnalysis.globalCues.asianMarket}</div>
+                                         <div className="text-sm font-bold text-slate-200">{newsData.globalCues.asianMarket}</div>
                                      </div>
                                      <div className="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30">
                                          <div className="text-[10px] text-indigo-400 font-bold uppercase mb-1 flex items-center gap-1"><Activity size={10}/> Gift Nifty</div>
-                                         <div className="text-sm font-bold text-white">{newsAnalysis.globalCues.giftNifty}</div>
+                                         <div className="text-sm font-bold text-white">{newsData.globalCues.giftNifty}</div>
                                      </div>
                                 </div>
                                 
@@ -425,7 +418,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                             <Newspaper size={14} className="text-slate-400"/> Key Headlines
                                         </h4>
                                         <ul className="space-y-2">
-                                            {newsAnalysis.keyHeadlines.map((headline, idx) => (
+                                            {newsData.keyHeadlines.map((headline, idx) => (
                                                 <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
                                                     <span className="text-slate-600 mt-0.5">•</span> {headline}
                                                 </li>
@@ -437,7 +430,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                             <BarChart2 size={14} className="text-slate-400"/> FII / DII Data
                                         </h4>
                                         <p className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
-                                            {newsAnalysis.institutionalActivity || "Data not available in search snippet."}
+                                            {newsData.institutionalActivity || "Data not available in search snippet."}
                                         </p>
                                     </div>
                                 </div>
@@ -487,24 +480,24 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     <UploadCloud size={14} className="text-indigo-400"/> Upload Intel
                                 </h3>
                                 <div className="flex items-center gap-3">
-                                    {(analysis || images.market) && (
+                                    {(initialData || currentImages.market) && (
                                         <button onClick={handleResetPhase1} className="text-xs flex items-center gap-1 text-slate-500 hover:text-white transition" title="Clear All Phase 1 Data">
                                             <RotateCcw size={12}/> Reset
                                         </button>
                                     )}
-                                    {analysis && <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30"><CheckCircle size={10} className="mr-1"/> Analysis Complete</span>}
+                                    {initialData && <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30"><CheckCircle size={10} className="mr-1"/> Analysis Complete</span>}
                                 </div>
                             </div>
                             
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                <CompactUploadCard label="Market Graph" icon={Activity} imageSrc={images.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(images.market)} />
-                                <CompactUploadCard label="5m Chart" icon={TrendingUp} imageSrc={images.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(images.intraday)} />
-                                <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={images.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(images.oi)} />
-                                <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={images.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(images.multiStrike)} />
+                                <CompactUploadCard label="Market Graph" icon={Activity} imageSrc={currentImages.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(currentImages.market)} />
+                                <CompactUploadCard label="5m Chart" icon={TrendingUp} imageSrc={currentImages.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(currentImages.intraday)} />
+                                <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={currentImages.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(currentImages.oi)} />
+                                <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={currentImages.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(currentImages.multiStrike)} />
                             </div>
 
                             {/* News Context Toggle */}
-                            {newsAnalysis && (
+                            {newsData && (
                                 <div className="mb-4 flex items-center justify-between bg-slate-900/50 border border-blue-500/20 p-3 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
@@ -513,7 +506,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <div>
                                             <span className="text-xs font-bold text-slate-200 block">Inject News Intelligence</span>
                                             <span className="text-[10px] text-slate-500 block">
-                                                Enhance plan with Phase 0 data ({newsAnalysis.sentiment})
+                                                Enhance plan with Phase 0 data ({newsData.sentiment})
                                             </span>
                                         </div>
                                     </div>
@@ -537,9 +530,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                             {!isAnalyzing ? (
                                 <button 
                                     onClick={runAnalysis}
-                                    className={`w-full py-3 text-xs font-black uppercase tracking-widest rounded-xl transition flex items-center justify-center gap-2 ${analysis ? 'bg-slate-700 text-indigo-300 hover:bg-slate-600 border border-indigo-500/30' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-900/50'}`}
+                                    className={`w-full py-3 text-xs font-black uppercase tracking-widest rounded-xl transition flex items-center justify-center gap-2 ${initialData ? 'bg-slate-700 text-indigo-300 hover:bg-slate-600 border border-indigo-500/30' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-900/50'}`}
                                 >
-                                    <Zap size={16} className={analysis ? "" : "fill-current"}/> {analysis ? "Re-Generate Plan" : "Generate Battle Plan"}
+                                    <Zap size={16} className={initialData ? "" : "fill-current"}/> {initialData ? "Re-Generate Plan" : "Generate Battle Plan"}
                                 </button>
                             ) : (
                                 <div className="w-full py-3 bg-slate-800 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-indigo-400 animate-pulse border border-indigo-500/30">
@@ -549,26 +542,26 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                         </div>
 
                         {/* RESULTS SECTION */}
-                        {analysis ? (
+                        {initialData ? (
                             <div className="space-y-4">
                                 {/* Bias & Thesis */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative overflow-hidden flex flex-col justify-center items-center text-center">
-                                        <div className={`absolute top-0 left-0 w-1 h-full ${analysis.marketBias === 'Bullish' ? 'bg-emerald-500' : analysis.marketBias === 'Bearish' ? 'bg-red-500' : 'bg-slate-500'}`}></div>
+                                        <div className={`absolute top-0 left-0 w-1 h-full ${initialData.marketBias === 'Bullish' ? 'bg-emerald-500' : initialData.marketBias === 'Bearish' ? 'bg-red-500' : 'bg-slate-500'}`}></div>
                                         <span className="text-[10px] text-slate-500 font-bold uppercase mb-1">Market Bias</span>
-                                        <div className={`text-2xl font-black uppercase mb-1 ${analysis.marketBias === 'Bullish' ? 'text-emerald-400' : analysis.marketBias === 'Bearish' ? 'text-red-400' : 'text-slate-200'}`}>
-                                            {analysis.marketBias}
+                                        <div className={`text-2xl font-black uppercase mb-1 ${initialData.marketBias === 'Bullish' ? 'text-emerald-400' : initialData.marketBias === 'Bearish' ? 'text-red-400' : 'text-slate-200'}`}>
+                                            {initialData.marketBias}
                                         </div>
                                         <div className="text-[10px] text-slate-500 font-bold bg-slate-900 px-2 py-0.5 rounded-full">
-                                            Conf: {analysis.confidenceScore}/10
+                                            Conf: {initialData.confidenceScore}/10
                                         </div>
                                     </div>
                                     <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
                                         <span className="text-[10px] text-indigo-400 font-bold uppercase mb-2 flex items-center gap-1"><BrainCircuit size={12}/> Core Thesis</span>
-                                        <p className="text-sm text-slate-200 font-medium italic leading-relaxed">{analysis.coreThesis?.replace(/^"|"$/g, '')}</p>
+                                        <p className="text-sm text-slate-200 font-medium italic leading-relaxed">{initialData.coreThesis?.replace(/^"|"$/g, '')}</p>
                                         <div className="mt-4 flex gap-4 text-xs font-mono">
-                                             <div className="text-red-400"><span className="font-bold opacity-50">RES:</span> {analysis.keyLevels?.resistance?.join(', ') || 'None'}</div>
-                                             <div className="text-emerald-400"><span className="font-bold opacity-50">SUP:</span> {analysis.keyLevels?.support?.join(', ') || 'None'}</div>
+                                             <div className="text-red-400"><span className="font-bold opacity-50">RES:</span> {initialData.keyLevels?.resistance?.join(', ') || 'None'}</div>
+                                             <div className="text-emerald-400"><span className="font-bold opacity-50">SUP:</span> {initialData.keyLevels?.support?.join(', ') || 'None'}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -579,26 +572,26 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <Clock size={16} className="mr-2"/> 09:25 - 09:45 AM Attack Plan
                                     </h4>
                                     <div className="bg-slate-900/50 border-l-2 border-indigo-500 p-4 rounded-r-xl mb-4">
-                                        <p className="text-sm text-slate-200">{analysis.firstHourPlan?.action}</p>
+                                        <p className="text-sm text-slate-200">{initialData.firstHourPlan?.action}</p>
                                     </div>
                                     
-                                    {analysis.firstHourPlan?.potentialTrade && (
+                                    {initialData.firstHourPlan?.potentialTrade && (
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
                                                 <div className="text-[10px] text-slate-500 uppercase font-bold">Direction</div>
-                                                <DirectionBadge dir={analysis.firstHourPlan.potentialTrade.direction} />
+                                                <DirectionBadge dir={initialData.firstHourPlan.potentialTrade.direction} />
                                             </div>
                                             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
                                                 <div className="text-[10px] text-slate-500 uppercase font-bold">Entry Zone</div>
-                                                <div className="text-sm font-bold text-white">{analysis.firstHourPlan.potentialTrade.entryZone}</div>
+                                                <div className="text-sm font-bold text-white">{initialData.firstHourPlan.potentialTrade.entryZone}</div>
                                             </div>
                                             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
                                                 <div className="text-[10px] text-slate-500 uppercase font-bold">Stop Loss</div>
-                                                <div className="text-sm font-bold text-red-400">{analysis.firstHourPlan.potentialTrade.stopLoss}</div>
+                                                <div className="text-sm font-bold text-red-400">{initialData.firstHourPlan.potentialTrade.stopLoss}</div>
                                             </div>
                                             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
                                                 <div className="text-[10px] text-slate-500 uppercase font-bold">Target</div>
-                                                <div className="text-sm font-bold text-emerald-400">{analysis.firstHourPlan.potentialTrade.target}</div>
+                                                <div className="text-sm font-bold text-emerald-400">{initialData.firstHourPlan.potentialTrade.target}</div>
                                             </div>
                                         </div>
                                     )}
@@ -607,29 +600,29 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 {/* Scenarios & Setups */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Primary Setup */}
-                                    {analysis.tradeSetups?.primary && (
+                                    {initialData.tradeSetups?.primary && (
                                         <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
                                             <span className="text-[10px] text-emerald-400 font-bold uppercase mb-2 block">Primary Setup</span>
                                             <div className="flex justify-between items-start mb-2">
-                                                <DirectionBadge dir={analysis.tradeSetups.primary.direction} />
-                                                <span className="text-xs font-mono text-slate-400">Trigger: {analysis.tradeSetups.primary.trigger}</span>
+                                                <DirectionBadge dir={initialData.tradeSetups.primary.direction} />
+                                                <span className="text-xs font-mono text-slate-400">Trigger: {initialData.tradeSetups.primary.trigger}</span>
                                             </div>
                                             <div className="flex gap-3 text-xs font-mono mt-3 pt-3 border-t border-slate-700">
-                                                <span className="text-red-400">SL: {analysis.tradeSetups.primary.stopLoss}</span>
-                                                <span className="text-emerald-400">TGT: {analysis.tradeSetups.primary.target}</span>
+                                                <span className="text-red-400">SL: {initialData.tradeSetups.primary.stopLoss}</span>
+                                                <span className="text-emerald-400">TGT: {initialData.tradeSetups.primary.target}</span>
                                             </div>
                                         </div>
                                     )}
                                     {/* Opening Scenarios */}
-                                    {analysis.openingScenarios && (
+                                    {initialData.openingScenarios && (
                                         <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
                                             <div>
                                                 <span className="text-[10px] text-emerald-500 font-bold uppercase block mb-1">Gap Up Scenario</span>
-                                                <p className="text-xs text-slate-300 leading-snug">{analysis.openingScenarios.gapUp}</p>
+                                                <p className="text-xs text-slate-300 leading-snug">{initialData.openingScenarios.gapUp}</p>
                                             </div>
                                             <div>
                                                 <span className="text-[10px] text-red-500 font-bold uppercase block mb-1">Gap Down Scenario</span>
-                                                <p className="text-xs text-slate-300 leading-snug">{analysis.openingScenarios.gapDown}</p>
+                                                <p className="text-xs text-slate-300 leading-snug">{initialData.openingScenarios.gapDown}</p>
                                             </div>
                                         </div>
                                     )}
@@ -648,7 +641,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     </button>
                                     {!isIntelFolded && (
                                         <div className="p-4 bg-slate-900 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
-                                            {Object.entries(images).map(([key, src]) => src && (
+                                            {Object.entries(currentImages).map(([key, src]) => src && (
                                                 <div key={key} className="relative group cursor-pointer" onClick={() => setPreviewImage(src as string)}>
                                                     <img src={src as string} className="w-full h-24 object-cover rounded border border-slate-700" alt={key} />
                                                     <div className="absolute bottom-0 left-0 bg-black/60 text-white text-[9px] uppercase font-bold px-1 rounded-tr">{key}</div>
@@ -677,7 +670,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                 {/* ========================== PHASE 2 VIEW ========================== */}
                 {activeView === 'phase2' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
-                        {!analysis ? (
+                        {!initialData ? (
                             <div className="bg-slate-800/50 border border-slate-700 p-8 rounded-2xl text-center flex flex-col items-center">
                                 <Lock size={48} className="text-slate-600 mb-4"/>
                                 <h3 className="text-xl font-bold text-slate-300 mb-2">Phase 2 Locked</h3>
@@ -702,7 +695,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                                 <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
                                             </div>
                                         </div>
-                                        {(liveAnalysis || liveImages.liveChart) && (
+                                        {(liveData || currentLiveImages.liveChart) && (
                                             <button onClick={handleResetPhase2} className="text-xs flex items-center gap-1 text-red-400/70 hover:text-red-400 transition" title="Clear Phase 2 Data">
                                                 <RotateCcw size={12}/> Reset
                                             </button>
@@ -710,8 +703,8 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <CompactUploadCard label="Live Chart (9:20)" icon={TrendingUp} imageSrc={liveImages.liveChart} onChange={(e: any) => handleLiveUpload(e, 'liveChart')} onClick={() => setPreviewImage(liveImages.liveChart)} />
-                                        <CompactUploadCard label="Live OI Data" icon={BarChart2} imageSrc={liveImages.liveOi} onChange={(e: any) => handleLiveUpload(e, 'liveOi')} onClick={() => setPreviewImage(liveImages.liveOi)} />
+                                        <CompactUploadCard label="Live Chart (9:20)" icon={TrendingUp} imageSrc={currentLiveImages.liveChart} onChange={(e: any) => handleLiveUpload(e, 'liveChart')} onClick={() => setPreviewImage(currentLiveImages.liveChart)} />
+                                        <CompactUploadCard label="Live OI Data" icon={BarChart2} imageSrc={currentLiveImages.liveOi} onChange={(e: any) => handleLiveUpload(e, 'liveOi')} onClick={() => setPreviewImage(currentLiveImages.liveOi)} />
                                     </div>
 
                                     {/* Error Banner */}
@@ -737,19 +730,19 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                 </div>
 
                                 {/* LIVE RESULTS */}
-                                {liveAnalysis && (
+                                {liveData && (
                                     <div className="space-y-4 animate-fade-in">
                                         {/* Status Banner */}
-                                        <div className={`p-4 rounded-xl border flex justify-between items-center ${liveAnalysis.status === 'CONFIRMED' ? 'bg-emerald-900/20 border-emerald-500/50' : liveAnalysis.status === 'INVALIDATED' ? 'bg-red-900/20 border-red-500/50' : 'bg-amber-900/20 border-amber-500/50'}`}>
+                                        <div className={`p-4 rounded-xl border flex justify-between items-center ${liveData.status === 'CONFIRMED' ? 'bg-emerald-900/20 border-emerald-500/50' : liveData.status === 'INVALIDATED' ? 'bg-red-900/20 border-red-500/50' : 'bg-amber-900/20 border-amber-500/50'}`}>
                                             <div>
                                                 <div className="text-[10px] uppercase font-bold opacity-70 mb-1">Plan Status</div>
-                                                <div className={`text-2xl font-black uppercase ${liveAnalysis.status === 'CONFIRMED' ? 'text-emerald-400' : liveAnalysis.status === 'INVALIDATED' ? 'text-red-400' : 'text-amber-400'}`}>
-                                                    {liveAnalysis.status}
+                                                <div className={`text-2xl font-black uppercase ${liveData.status === 'CONFIRMED' ? 'text-emerald-400' : liveData.status === 'INVALIDATED' ? 'text-red-400' : 'text-amber-400'}`}>
+                                                    {liveData.status}
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-[10px] uppercase font-bold opacity-70 mb-1">Updated Bias</div>
-                                                <DirectionBadge dir={liveAnalysis.updatedBias} />
+                                                <DirectionBadge dir={liveData.updatedBias} />
                                             </div>
                                         </div>
 
@@ -759,7 +752,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                                 <Activity size={14}/> Reality vs Plan
                                             </h4>
                                             <p className="text-sm text-slate-200 italic border-l-2 border-indigo-500 pl-3 leading-relaxed">
-                                                {liveAnalysis.realityCheck}
+                                                {liveData.realityCheck}
                                             </p>
                                         </div>
 
@@ -769,22 +762,22 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                                 <Zap size={14} className="text-yellow-400"/> Immediate Action (9:25-9:45)
                                             </h4>
                                             <div className="bg-slate-900 p-4 rounded-lg text-sm text-white font-medium">
-                                                {liveAnalysis.immediateAction}
+                                                {liveData.immediateAction}
                                             </div>
 
-                                            {liveAnalysis.tradeUpdate && (
+                                            {liveData.tradeUpdate && (
                                                 <div className="mt-4 grid grid-cols-3 gap-3">
                                                     <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
                                                         <span className="block text-[9px] text-slate-500 uppercase">Entry</span>
-                                                        <span className="text-sm font-bold text-white">{liveAnalysis.tradeUpdate.entryPrice}</span>
+                                                        <span className="text-sm font-bold text-white">{liveData.tradeUpdate.entryPrice}</span>
                                                     </div>
                                                     <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
                                                         <span className="block text-[9px] text-slate-500 uppercase">Stop (30pt)</span>
-                                                        <span className="text-sm font-bold text-red-400">{liveAnalysis.tradeUpdate.stopLoss}</span>
+                                                        <span className="text-sm font-bold text-red-400">{liveData.tradeUpdate.stopLoss}</span>
                                                     </div>
                                                     <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
                                                         <span className="block text-[9px] text-slate-500 uppercase">Target (35pt)</span>
-                                                        <span className="text-sm font-bold text-emerald-400">{liveAnalysis.tradeUpdate.target}</span>
+                                                        <span className="text-sm font-bold text-emerald-400">{liveData.tradeUpdate.target}</span>
                                                     </div>
                                                 </div>
                                             )}
@@ -811,7 +804,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
                                     </div>
                                 </div>
-                                {(postAnalysis || postImages.dailyChart) && (
+                                {(postData || currentPostImages.dailyChart) && (
                                     <button onClick={handleResetPhase3} className="text-xs flex items-center gap-1 text-purple-400/70 hover:text-purple-400 transition" title="Clear Phase 3 Data">
                                         <RotateCcw size={12}/> Reset
                                     </button>
@@ -819,9 +812,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                             </div>
                             
                             <div className="grid grid-cols-3 gap-3 mb-6">
-                                <CompactUploadCard label="Daily Candle" icon={Activity} imageSrc={postImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(postImages.dailyChart)} />
-                                <CompactUploadCard label="EOD 5m Chart" icon={TrendingUp} imageSrc={postImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(postImages.eodChart)} />
-                                <CompactUploadCard label="EOD OI Data" icon={BarChart2} imageSrc={postImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(postImages.eodOi)} />
+                                <CompactUploadCard label="Daily Candle" icon={Activity} imageSrc={currentPostImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(currentPostImages.dailyChart)} />
+                                <CompactUploadCard label="EOD 5m Chart" icon={TrendingUp} imageSrc={currentPostImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(currentPostImages.eodChart)} />
+                                <CompactUploadCard label="EOD OI Data" icon={BarChart2} imageSrc={currentPostImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(currentPostImages.eodOi)} />
                             </div>
 
                             {error && (
@@ -846,20 +839,20 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                         </div>
 
                         {/* RESULTS */}
-                        {postAnalysis && (
+                        {postData && (
                              <div className="space-y-4 animate-fade-in">
                                  {/* Accuracy Grade */}
                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center">
                                          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Morning Prediction</div>
-                                         <div className={`text-2xl font-black uppercase ${postAnalysis.predictionAccuracy === 'High' ? 'text-emerald-400' : postAnalysis.predictionAccuracy === 'Medium' ? 'text-amber-400' : 'text-red-400'}`}>
-                                            {postAnalysis.predictionAccuracy}
+                                         <div className={`text-2xl font-black uppercase ${postData.predictionAccuracy === 'High' ? 'text-emerald-400' : postData.predictionAccuracy === 'Medium' ? 'text-amber-400' : 'text-red-400'}`}>
+                                            {postData.predictionAccuracy}
                                          </div>
                                          <div className="text-[10px] text-slate-500 font-bold mt-1">Accuracy</div>
                                      </div>
                                      <div className="md:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700">
                                          <div className="text-[10px] text-indigo-400 font-bold uppercase mb-2">Plan vs Reality</div>
-                                         <p className="text-sm text-slate-300 italic">{postAnalysis.planVsReality?.replace(/^"|"$/g, '')}</p>
+                                         <p className="text-sm text-slate-300 italic">{postData.planVsReality?.replace(/^"|"$/g, '')}</p>
                                      </div>
                                  </div>
 
@@ -869,7 +862,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                         <Target size={14} className="text-emerald-400"/> Key Takeaway
                                      </h4>
                                      <p className="text-sm text-emerald-100 bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
-                                         {postAnalysis.keyTakeaways?.replace(/^"|"$/g, '')}
+                                         {postData.keyTakeaways?.replace(/^"|"$/g, '')}
                                      </p>
                                  </div>
 
@@ -878,24 +871,24 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ apiKey, initialDa
                                      <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest mb-4">Tomorrow's Prelude</h4>
                                      
                                      <div className="flex items-center gap-4 mb-4">
-                                         <DirectionBadge dir={postAnalysis.tomorrowOutlook?.bias || 'Neutral'} />
+                                         <DirectionBadge dir={postData.tomorrowOutlook?.bias || 'Neutral'} />
                                          <span className="text-xs text-slate-400">Early Bias</span>
                                      </div>
 
                                      <div className="grid grid-cols-2 gap-4 text-xs font-mono mb-4">
                                          <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
                                             <span className="text-red-400 font-bold block mb-1">Watch Res</span>
-                                            {postAnalysis.tomorrowOutlook?.earlyLevels?.resistance?.join(', ') || 'None'}
+                                            {postData.tomorrowOutlook?.earlyLevels?.resistance?.join(', ') || 'None'}
                                          </div>
                                          <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
                                             <span className="text-emerald-400 font-bold block mb-1">Watch Sup</span>
-                                            {postAnalysis.tomorrowOutlook?.earlyLevels?.support?.join(', ') || 'None'}
+                                            {postData.tomorrowOutlook?.earlyLevels?.support?.join(', ') || 'None'}
                                          </div>
                                      </div>
 
                                      <div className="text-sm text-slate-300 bg-slate-900 p-3 rounded border border-slate-800">
                                         <span className="text-indigo-400 font-bold uppercase text-[10px] block mb-1">Watch For</span>
-                                        {postAnalysis.tomorrowOutlook?.watchFor?.replace(/^"|"$/g, '')}
+                                        {postData.tomorrowOutlook?.watchFor?.replace(/^"|"$/g, '')}
                                      </div>
                                  </div>
                              </div>

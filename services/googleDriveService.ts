@@ -1,5 +1,5 @@
 
-import { Trade, StrategyProfile, UserProfile } from "../types";
+import { Trade, StrategyProfile, UserProfile, NewsAnalysis } from "../types";
 
 // Types for GAPI
 declare global {
@@ -25,6 +25,15 @@ export interface BackupData {
   trades: Trade[];
   strategy: StrategyProfile;
   preMarketNotes?: { date: string, notes: string };
+  // Extended State Persistence
+  preMarketAnalysis?: { date: string, data: any };
+  liveMarketAnalysis?: { date: string, data: any };
+  postMarketAnalysis?: { date: string, data: any };
+  preMarketImages?: any;
+  liveMarketImages?: any;
+  postMarketImages?: any;
+  newsAnalysis?: { date: string, data: NewsAnalysis };
+  
   lastUpdated: string; // ISO String
 }
 
@@ -151,7 +160,8 @@ export const performInitialSync = async (localTrades: Trade[], localStrategy: St
 
     let fileId = await findBackupFileId();
     
-    // Construct current local state bundle
+    // Construct current local state bundle (Basic Only - full sync happens via saveToDrive later for complex states if needed)
+    // Note: For initial creation, we usually just want basic trade data. Complex state sync happens via handleAutoConnect in App.tsx
     const currentLocalData: BackupData = {
         trades: localTrades,
         strategy: localStrategy,
@@ -177,7 +187,6 @@ export const performInitialSync = async (localTrades: Trade[], localStrategy: St
 
         // AUTO-RESTORE LOGIC:
         // On login, we prioritize the Cloud Data to ensure "Sync across devices".
-        // If I traded on Mobile, then logged in on Desktop, Desktop should show Mobile trades.
         
         // Edge Case: If Cloud is empty but Local has data (unlikely if file exists), keep local.
         if ((!cloudData.trades || cloudData.trades.length === 0) && localTrades.length > 0) {
