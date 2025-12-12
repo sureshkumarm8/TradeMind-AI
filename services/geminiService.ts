@@ -4,8 +4,9 @@ import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMark
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
-// Reasoning model for deep batch analysis (Weekly/Monthly reviews)
-const REASONING_MODEL = 'gemini-3-pro-preview';
+// Reasoning model for deep batch analysis 
+// Switched to Flash to avoid 429 Resource Exhausted errors on Free Tier
+const REASONING_MODEL = 'gemini-2.5-flash'; 
 
 const formatStrategyForAI = (profile?: StrategyProfile) => {
   if (!profile) return "Strategy: General Intraday Trading";
@@ -177,9 +178,9 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
 
     // Prepare a summary of trades for the prompt to save tokens/complexity
     const tradeSummaries = trades.map((t, i) => `
-      ${i+1}. ${t.entryTime}-${t.exitTime} | Nifty Spot: ${t.niftyEntryPrice || '?'} -> ${t.niftyExitPrice || '?'} (${t.spotPointsCaptured} pts).
-      Dir: ${t.direction}. Result: ${t.outcome} (₹${t.pnl}). Duration: ${t.tradeDurationMins}m.
-      Mistakes: ${t.mistakes?.join(', ') || 'None'}. 
+      ${i+1}. ${t.date} ${t.entryTime}: Spot ${t.niftyEntryPrice || '?'} -> ${t.niftyExitPrice || '?'}. 
+      Dir: ${t.direction}. PnL: ₹${t.pnl}. Outcome: ${t.outcome}.
+      Setup: ${t.setupName}. Mistakes: ${t.mistakes?.join(', ') || 'None'}.
     `).join('\n');
 
     const prompt = `
@@ -204,10 +205,10 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
     `;
 
     const response = await ai.models.generateContent({
-      model: REASONING_MODEL, // Gemini 3 Pro for deep thinking
+      model: REASONING_MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 32768 }, // Max thinking for deep analysis
+        // thinkingConfig: { thinkingBudget: 1024 }, // Disabled thinking for Flash model to save quota/errors
         systemInstruction: "You are an expert trading psychologist. Format your response with clear Markdown headers and emojis.",
       }
     });
@@ -828,7 +829,8 @@ export const getLiveTradeCoachResponse = async (
 
         if (!lastUserMsg) return "Standby.";
         
-        // Construct message content (text + optional images)
+        // Construct message content (text + optional images/audio)
+        // Gemini supports 'inlineData' for audio/image.
         const messageContent: any = { parts: lastUserMsg.parts };
 
         const result = await activeChat.sendMessage(messageContent);

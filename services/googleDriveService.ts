@@ -26,13 +26,13 @@ export interface BackupData {
   strategy: StrategyProfile;
   preMarketNotes?: { date: string, notes: string };
   // Extended State Persistence
-  preMarketAnalysis?: { date: string, data: any };
-  liveMarketAnalysis?: { date: string, data: any };
-  postMarketAnalysis?: { date: string, data: any };
+  preMarketAnalysis?: { date: string, timestamp?: string, data: any };
+  liveMarketAnalysis?: { date: string, timestamp?: string, data: any };
+  postMarketAnalysis?: { date: string, timestamp?: string, data: any };
   preMarketImages?: any;
   liveMarketImages?: any;
   postMarketImages?: any;
-  newsAnalysis?: { date: string, data: NewsAnalysis };
+  newsAnalysis?: { date: string, timestamp?: string, data: NewsAnalysis };
   
   lastUpdated: string; // ISO String
 }

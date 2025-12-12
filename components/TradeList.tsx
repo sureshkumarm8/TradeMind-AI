@@ -182,7 +182,12 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     const d = new Date(trade.date);
     if (isNaN(d.getTime())) return acc; 
 
-    const dateStr = d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    // Use toLocaleDateString without arguments for consistent local formatting if required, 
+    // or explicit formatting to ensure no timezone shift issues for grouping headers.
+    // Ideally, trade.date is already YYYY-MM-DD.
+    const dateObj = new Date(trade.date + 'T00:00:00'); // Force local midnight to avoid UTC shifts
+    const dateStr = dateObj.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    
     if (!acc[dateStr]) acc[dateStr] = [];
     acc[dateStr].push(trade);
     return acc;
@@ -439,12 +444,16 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
           d.setDate(startOfWeek.getDate() + i);
           weekDays.push(d);
           // Aggregate trades for whole week logic
-          const dateStr = d.toISOString().split('T')[0];
+          // Format specific YYYY-MM-DD manually to avoid UTC conversion issues
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
           weekTrades.push(...trades.filter(t => t.date === dateStr));
       }
 
       // Unique Key for this week's analysis
-      const weekKey = `week_${startOfWeek.toISOString().split('T')[0]}`;
+      const weekKey = `week_${weekDays[0].toISOString().split('T')[0]}`;
       const weeklyReport = periodReports[weekKey];
 
       return (
@@ -475,20 +484,26 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  {weekDays.map((day, idx) => {
-                      const dateStr = day.toISOString().split('T')[0];
+                  {weekDays.map((dayObj, idx) => {
+                      // Manual date string construction
+                      const year = dayObj.getFullYear();
+                      const month = String(dayObj.getMonth() + 1).padStart(2, '0');
+                      const day = String(dayObj.getDate()).padStart(2, '0');
+                      const dateStr = `${year}-${month}-${day}`;
+                      
                       const dayTrades = trades.filter(t => t.date === dateStr);
                       const dayPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
-                      const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+                      const isToday = todayStr === dateStr;
 
                       return (
                           <div key={idx} className={`bg-slate-800 rounded-xl border ${isToday ? 'border-indigo-500 shadow-indigo-500/20 shadow-lg' : 'border-slate-700'} flex flex-col h-auto min-h-[120px] md:min-h-[300px]`}>
                               <div className={`p-3 border-b ${isToday ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-slate-900/50 border-slate-700'} rounded-t-xl`}>
                                   <div className="flex justify-between items-center mb-1">
                                       <span className={`text-sm font-bold ${isToday ? 'text-indigo-400' : 'text-slate-400'}`}>
-                                          {day.toLocaleDateString(undefined, {weekday:'short'})}
+                                          {dayObj.toLocaleDateString(undefined, {weekday:'short'})}
                                       </span>
-                                      <span className="text-xs text-slate-500">{day.getDate()}</span>
+                                      <span className="text-xs text-slate-500">{dayObj.getDate()}</span>
                                   </div>
                                   <div className={`text-lg font-bold ${dayPnL > 0 ? 'text-emerald-400' : dayPnL < 0 ? 'text-red-400' : 'text-slate-500'}`}>
                                       {dayTrades.length > 0 ? `₹${dayPnL.toFixed(0)}` : '-'}
@@ -537,8 +552,10 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     
     // Get all trades for this month
     const monthTrades = trades.filter(t => {
-        const d = new Date(t.date);
-        return d.getMonth() === month && d.getFullYear() === year;
+        const d = new Date(t.date); // This treats YYYY-MM-DD as UTC midnight usually
+        // Manually parse to ensure we match the displayed month
+        const parts = t.date.split('-');
+        return parseInt(parts[1]) - 1 === month && parseInt(parts[0]) === year;
     });
 
     const days = [];
@@ -580,11 +597,17 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                     {days.map((d, idx) => {
                         if (!d) return <div key={idx} className="bg-transparent aspect-square"></div>;
                         
-                        const dateStr = d.toISOString().split('T')[0];
+                        // FIX: Generate dateStr using local year/month/day to match Trade's YYYY-MM-DD format exactly
+                        const dYear = d.getFullYear();
+                        const dMonth = String(d.getMonth() + 1).padStart(2, '0');
+                        const dDay = String(d.getDate()).padStart(2, '0');
+                        const dateStr = `${dYear}-${dMonth}-${dDay}`;
+                        
                         const dayTrades = trades.filter(t => t.date === dateStr);
                         const dayPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
                         const hasTrades = dayTrades.length > 0;
-                        const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        const isToday = todayStr === dateStr;
                         
                         let bgClass = "bg-slate-900 border-slate-800 hover:border-slate-600";
                         if (hasTrades) {

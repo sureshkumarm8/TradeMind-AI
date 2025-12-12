@@ -65,18 +65,30 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
     const [chatImage, setChatImage] = useState<string | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Voice State for Widget
+    const [isRecording, setIsRecording] = useState(false);
+    const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, [messages]);
 
-    const handleSend = async () => {
-        if (!input.trim() && !chatImage) return;
+    const handleSend = async (textOverride?: string, audioBase64?: string) => {
+        if (!textOverride && !input.trim() && !chatImage && !audioBase64) return;
         if (!apiKey || !strategyProfile) {
             alert("API Key and Strategy required.");
             return;
         }
 
-        const userMsg = { role: 'user' as const, text: input, image: chatImage || undefined };
+        // Create user message object
+        const userMsg = { 
+            role: 'user' as const, 
+            text: textOverride || input || (audioBase64 ? "🎤 Audio Message" : ""), 
+            image: chatImage || undefined 
+        };
+        
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setChatImage(null);
@@ -93,12 +105,23 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
             }));
             
             // Add current message to history payload
+            const currentParts: any[] = [];
+            
+            // Priority: Audio -> Text -> Image
+            if (audioBase64) {
+                currentParts.push({ inlineData: { mimeType: 'audio/webm', data: audioBase64 } });
+                currentParts.push({ text: "Please analyze my voice command." });
+            } else {
+                currentParts.push({ text: userMsg.text });
+            }
+            
+            if (userMsg.image) {
+                currentParts.push({ inlineData: { mimeType: 'image/jpeg', data: userMsg.image.split(',')[1] } });
+            }
+
             history.push({
                 role: 'user',
-                parts: [
-                    { text: userMsg.text },
-                    ...(userMsg.image ? [{ inlineData: { mimeType: 'image/jpeg', data: userMsg.image.split(',')[1] } }] : [])
-                ]
+                parts: currentParts
             });
 
             const response = await getLiveTradeCoachResponse(history, currentTradeData, strategyProfile, apiKey);
@@ -121,6 +144,46 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
             }
         }
     }
+
+    const startRecording = async () => {
+        if (!apiKey) { alert("API Key required"); return; }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) audioChunksRef.current.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                setIsProcessingVoice(true);
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.readAsDataURL(audioBlob);
+                reader.onloadend = async () => {
+                    const base64String = (reader.result as string).split(',')[1];
+                    // Send directly to chat
+                    handleSend(undefined, base64String);
+                    setIsProcessingVoice(false);
+                };
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (e) {
+            alert("Mic access denied");
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    };
 
     return (
         <div className="bg-slate-900 border border-indigo-500/30 rounded-xl flex flex-col h-[400px] overflow-hidden shadow-2xl relative">
@@ -161,6 +224,14 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
                     </div>
                 )}
                 <div className="flex gap-2">
+                    <button 
+                        onClick={isRecording ? stopRecording : startRecording}
+                        disabled={isProcessingVoice}
+                        className={`p-2 rounded-lg transition border border-slate-700 ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'}`}
+                        title="Voice Input"
+                    >
+                        {isProcessingVoice ? <Loader2 size={16} className="animate-spin"/> : isRecording ? <StopCircle size={16}/> : <Mic size={16}/>}
+                    </button>
                     <label className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer text-slate-400 hover:text-white transition border border-slate-700">
                         <ImageIcon size={16}/>
                         <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload}/>
@@ -172,7 +243,7 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSend()}
                     />
-                    <button onClick={handleSend} disabled={isLoading || (!input && !chatImage)} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white disabled:opacity-50">
+                    <button onClick={() => handleSend()} disabled={isLoading || (!input && !chatImage)} className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white disabled:opacity-50">
                         <Send size={16}/>
                     </button>
                 </div>

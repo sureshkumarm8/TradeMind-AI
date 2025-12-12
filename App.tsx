@@ -51,15 +51,15 @@ const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [preMarketNotes, setPreMarketNotes] = useState<{date: string, notes: string} | undefined>(undefined);
   
-  // New: AI Pre-Market Analysis State
-  const [preMarketAnalysis, setPreMarketAnalysis] = useState<{date: string, data: PreMarketAnalysis} | undefined>(undefined);
-  // New: AI Live Market Analysis State
-  const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, data: LiveMarketAnalysis} | undefined>(undefined);
-  // New: Post-Market Analysis State
-  const [postMarketAnalysis, setPostMarketAnalysis] = useState<{date: string, data: PostMarketAnalysis} | undefined>(undefined);
+  // New: AI Pre-Market Analysis State with Timestamp
+  const [preMarketAnalysis, setPreMarketAnalysis] = useState<{date: string, timestamp?: string, data: PreMarketAnalysis} | undefined>(undefined);
+  // New: AI Live Market Analysis State with Timestamp
+  const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, timestamp?: string, data: LiveMarketAnalysis} | undefined>(undefined);
+  // New: Post-Market Analysis State with Timestamp
+  const [postMarketAnalysis, setPostMarketAnalysis] = useState<{date: string, timestamp?: string, data: PostMarketAnalysis} | undefined>(undefined);
   
-  // Phase 0: News Data Persistance
-  const [newsAnalysis, setNewsAnalysis] = useState<{date: string, data: NewsAnalysis} | undefined>(undefined);
+  // Phase 0: News Data Persistance with Timestamp
+  const [newsAnalysis, setNewsAnalysis] = useState<{date: string, timestamp?: string, data: NewsAnalysis} | undefined>(undefined);
 
   // Image States (Persisted)
   const [preMarketImages, setPreMarketImages] = useState<any>(undefined);
@@ -455,7 +455,11 @@ const App: React.FC = () => {
   // Update AI Pre-Market Analysis - FIXED: Handle null data gracefully
   const handleUpdatePreMarketAnalysis = (data: PreMarketAnalysis | null) => {
       if (data) {
-          setPreMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+          setPreMarketAnalysis({ 
+              date: new Date().toISOString().split('T')[0], 
+              timestamp: new Date().toISOString(),
+              data 
+          });
       } else {
           setPreMarketAnalysis(undefined);
       }
@@ -464,7 +468,11 @@ const App: React.FC = () => {
   // Update AI Live Analysis
   const handleUpdateLiveMarketAnalysis = (data: LiveMarketAnalysis | null) => {
       if (data) {
-          setLiveMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+          setLiveMarketAnalysis({ 
+              date: new Date().toISOString().split('T')[0], 
+              timestamp: new Date().toISOString(),
+              data 
+          });
       } else {
           setLiveMarketAnalysis(undefined);
       }
@@ -473,7 +481,11 @@ const App: React.FC = () => {
   // Update AI Post-Market Analysis
   const handleUpdatePostMarketAnalysis = (data: PostMarketAnalysis | null) => {
       if (data) {
-          setPostMarketAnalysis({ date: new Date().toISOString().split('T')[0], data });
+          setPostMarketAnalysis({ 
+              date: new Date().toISOString().split('T')[0], 
+              timestamp: new Date().toISOString(),
+              data 
+          });
       } else {
           setPostMarketAnalysis(undefined);
       }
@@ -482,7 +494,11 @@ const App: React.FC = () => {
   // Update News Analysis
   const handleUpdateNewsAnalysis = (data: NewsAnalysis | null) => {
       if (data) {
-          setNewsAnalysis({ date: new Date().toISOString().split('T')[0], data });
+          setNewsAnalysis({ 
+              date: new Date().toISOString().split('T')[0], 
+              timestamp: new Date().toISOString(),
+              data 
+          });
       } else {
           setNewsAnalysis(undefined);
       }
@@ -831,6 +847,11 @@ const App: React.FC = () => {
                 liveData={liveMarketAnalysis?.data} 
                 postData={postMarketAnalysis?.data}
                 newsData={newsAnalysis?.data}
+                // TIMESTAMPS
+                newsTimestamp={newsAnalysis?.timestamp}
+                preMarketTimestamp={preMarketAnalysis?.timestamp}
+                liveTimestamp={liveMarketAnalysis?.timestamp}
+                postTimestamp={postMarketAnalysis?.timestamp}
                 // IMAGES
                 initialImages={preMarketImages} 
                 initialLiveImages={liveMarketImages}

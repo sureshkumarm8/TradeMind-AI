@@ -14,6 +14,12 @@ interface PreMarketAnalyzerProps {
     postData?: PostMarketAnalysis;
     newsData?: NewsAnalysis;
     
+    // Timestamp Props
+    newsTimestamp?: string;
+    preMarketTimestamp?: string;
+    liveTimestamp?: string;
+    postTimestamp?: string;
+    
     // Image Props
     initialImages?: any;
     initialLiveImages?: any;
@@ -39,6 +45,16 @@ const getImageSizeKB = (base64String: string): string => {
     const stringLength = base64String.length - 'data:image/jpeg;base64,'.length;
     const sizeInBytes = 4 * Math.ceil(stringLength / 3) * 0.5624896334383812;
     return (sizeInBytes / 1024).toFixed(1);
+}
+
+// Helper to format ISO timestamp
+const formatAnalysisTime = (isoString?: string) => {
+    if (!isoString) return null;
+    const date = new Date(isoString);
+    return date.toLocaleString('en-US', {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
 }
 
 // Helper: Compact Upload Card
@@ -108,6 +124,7 @@ const DirectionBadge = ({ dir }: { dir: string }) => {
 const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ 
     apiKey, 
     initialData, liveData, postData, newsData,
+    newsTimestamp, preMarketTimestamp, liveTimestamp, postTimestamp,
     initialImages, initialLiveImages, initialPostImages,
     onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onNewsAnalysisUpdate,
     onImagesUpdate, onLiveImagesUpdate, onPostImagesUpdate,
@@ -135,10 +152,6 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const [isPostAnalyzing, setIsPostAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [includeNews, setIncludeNews] = useState(true);
-
-    // Local refs to images for immediate UI updates before parent sync (optional, but good for responsiveness)
-    // Actually, we should rely on props for single source of truth to avoid de-sync.
-    // However, we need to handle the image upload -> parent update flow.
 
     // Helper to safely get image values from props
     const getImages = () => initialImages || { market: '', intraday: '', oi: '', multiStrike: '' };
@@ -348,7 +361,14 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-white uppercase tracking-wide">Global Intelligence</h3>
-                                        <p className="text-xs text-blue-400 font-bold">Real-time Web Search Scan</p>
+                                        <div className="flex flex-col">
+                                            <p className="text-xs text-blue-400 font-bold">Real-time Web Search Scan</p>
+                                            {newsTimestamp && (
+                                                <span className="text-[10px] text-slate-500 mt-1 font-mono">
+                                                    Updated: {formatAnalysisTime(newsTimestamp)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 {!isNewsAnalyzing ? (
@@ -485,7 +505,18 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                             <RotateCcw size={12}/> Reset
                                         </button>
                                     )}
-                                    {initialData && <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30"><CheckCircle size={10} className="mr-1"/> Analysis Complete</span>}
+                                    {initialData && (
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30">
+                                                <CheckCircle size={10} className="mr-1"/> Analysis Complete
+                                            </span>
+                                            {preMarketTimestamp && (
+                                                <span className="text-[8px] text-slate-500 mt-1 font-mono">
+                                                    {formatAnalysisTime(preMarketTimestamp)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             
@@ -692,7 +723,14 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                             </div>
                                             <div>
                                                 <h3 className="text-lg font-bold text-white uppercase tracking-wide">Live Combat Check</h3>
-                                                <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
+                                                <div className="flex flex-col">
+                                                    <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
+                                                    {liveTimestamp && (
+                                                        <span className="text-[8px] text-slate-500 mt-1 font-mono">
+                                                            Analyzed: {formatAnalysisTime(liveTimestamp)}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                         {(liveData || currentLiveImages.liveChart) && (
@@ -801,7 +839,14 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-white uppercase tracking-wide">Post-Market Debrief</h3>
-                                        <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
+                                        <div className="flex flex-col">
+                                            <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
+                                            {postTimestamp && (
+                                                <span className="text-[8px] text-slate-500 mt-1 font-mono">
+                                                    Recorded: {formatAnalysisTime(postTimestamp)}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 {(postData || currentPostImages.dailyChart) && (
