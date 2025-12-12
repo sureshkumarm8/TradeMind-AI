@@ -163,31 +163,31 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
     );
 
     return (
-        <div className="animate-fade-in pb-12">
+        <div className="animate-fade-in pb-20 md:pb-12">
             
             {/* Header / Nav */}
-            <div className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-indigo-500/20 px-4 py-3 mb-6 flex justify-between items-center">
+            <div className="sticky top-0 z-30 bg-slate-950/80 backdrop-blur-md border-b border-indigo-500/20 px-4 py-3 mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
                 <div className="flex items-center gap-4">
                     <button onClick={onBack} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition">
                         <ArrowLeft size={20}/>
                     </button>
                     <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <h2 className="text-lg md:text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
                             <BrainCircuit className="text-indigo-500" size={24}/> Psycho-Cybernetics
                         </h2>
-                        <p className="text-[10px] text-slate-500 font-mono hidden md:block">BEHAVIORAL PERFORMANCE AUDIT</p>
+                        <p className="text-[10px] text-slate-500 font-mono">BEHAVIORAL PERFORMANCE AUDIT</p>
                     </div>
                 </div>
-                <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700">
+                <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700 w-full md:w-auto overflow-x-auto">
                     <button 
                         onClick={() => setActiveTab('deep_dive')} 
-                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${activeTab === 'deep_dive' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'deep_dive' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                     >
                         <ShieldCheck size={14}/> Deep Dive
                     </button>
                     <button 
                         onClick={() => setActiveTab('trends')} 
-                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-2 ${activeTab === 'trends' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                        className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'trends' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
                     >
                         <TrendingUp size={14}/> Weekly Trends
                     </button>
@@ -206,7 +206,7 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-900/0 to-slate-900/0"></div>
                                 <div className="relative z-10">
                                     <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4">Discipline Index</div>
-                                    <div className="text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-lg">{psychoStats.disciplineIndex}</div>
+                                    <div className="text-5xl md:text-7xl font-black text-white mb-2 tracking-tighter drop-shadow-lg">{psychoStats.disciplineIndex}</div>
                                     <div className="inline-block px-4 py-1 bg-slate-950 rounded-full border border-slate-700 text-sm font-bold text-slate-300 uppercase shadow-inner">
                                         {psychoStats.statusLabel}
                                     </div>
@@ -280,8 +280,8 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                                     <p className="text-slate-500 text-sm mt-2">You haven't logged a discipline error in your last 5 trades.</p>
                                 </div>
                             ) : (
-                                <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-                                    <table className="w-full text-left text-sm">
+                                <div className="bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-xl overflow-x-auto">
+                                    <table className="w-full text-left text-sm whitespace-nowrap md:whitespace-normal">
                                         <thead className="bg-slate-950 text-slate-500 uppercase font-bold text-xs">
                                             <tr>
                                                 <th className="p-4">Date</th>

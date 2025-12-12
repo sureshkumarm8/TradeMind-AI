@@ -12,7 +12,7 @@ import PsychologyProfile from './components/PsychologyProfile'; // Import Psycho
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile, loadBackupData } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap, MessageSquare, Quote } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap, MessageSquare, Quote, Menu, ChevronUp } from 'lucide-react';
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
@@ -52,6 +52,9 @@ const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [preMarketNotes, setPreMarketNotes] = useState<{date: string, notes: string} | undefined>(undefined);
   
+  // Mobile Menu State
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+
   // New: AI Pre-Market Analysis State with Timestamp
   const [preMarketAnalysis, setPreMarketAnalysis] = useState<{date: string, timestamp?: string, data: PreMarketAnalysis} | undefined>(undefined);
   // New: AI Live Market Analysis State with Timestamp
@@ -667,6 +670,11 @@ const App: React.FC = () => {
      }
   }
 
+  const handleViewChange = (v: any) => {
+      setView(v);
+      setShowMobileMenu(false);
+  }
+
   // Check if Pre-Market Analysis exists for TODAY
   const hasPreMarketAnalysisToday = preMarketAnalysis?.date === new Date().toISOString().split('T')[0];
 
@@ -693,74 +701,112 @@ const App: React.FC = () => {
       )}
 
       {/* Sidebar / Navigation */}
-      <nav className="fixed bottom-0 w-full z-40 md:static md:w-64 md:h-screen bg-slate-900 border-t md:border-r border-slate-800 md:float-left flex md:flex-col justify-between p-2 md:p-4 shadow-xl">
-         <div className="hidden md:block mb-8 px-2">
+      <nav className="fixed bottom-0 w-full z-40 md:static md:w-64 md:h-screen bg-slate-900 border-t md:border-r border-slate-800 md:float-left flex md:flex-col shadow-xl">
+         <div className="hidden md:block mb-8 px-4 pt-4">
             <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent flex items-center gap-2">
                <BrainCircuit size={24} className="text-indigo-400" /> TradeMind.AI
             </h1>
             <p className="text-[10px] text-slate-500 mt-1 font-bold tracking-widest uppercase">Precision Journal</p>
          </div>
 
-         <div className="flex md:flex-col w-full justify-around md:justify-start space-x-1 md:space-x-0 md:space-y-1">
-            <button onClick={() => setView('dashboard')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <LayoutDashboard size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Dashboard</span>
+         {/* DESKTOP SIDEBAR */}
+         <div className="hidden md:flex flex-col w-full px-2 space-y-1">
+            <button onClick={() => setView('dashboard')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <LayoutDashboard size={18} /><span className="text-sm font-medium">Dashboard</span>
             </button>
-             {/* PRE-MARKET */}
-             <button onClick={() => setView('premarket')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'premarket' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <Zap size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Pre-Market</span>
+             <button onClick={() => setView('premarket')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'premarket' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <Zap size={18} /><span className="text-sm font-medium">Pre-Market</span>
             </button>
-             {/* MENTOR CHAT (WAR ROOM) */}
-            <button onClick={() => setView('mentor')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'mentor' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <MessageSquare size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Mentor</span>
+            <button onClick={() => setView('mentor')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'mentor' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <MessageSquare size={18} /><span className="text-sm font-medium">Mentor</span>
             </button>
-            <button onClick={() => setView('journal')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'journal' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <BookOpen size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Journal</span>
+            <button onClick={() => setView('journal')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'journal' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <BookOpen size={18} /><span className="text-sm font-medium">Journal</span>
             </button>
-            <button onClick={() => { setEditingTrade(null); setView('new'); }} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'new' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <PlusCircle size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Log Trade</span>
+            <button onClick={() => { setEditingTrade(null); setView('new'); }} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'new' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <PlusCircle size={18} /><span className="text-sm font-medium">Log Trade</span>
             </button>
-            <button onClick={() => setView('system')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'system' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <Target size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">My System</span>
+            <button onClick={() => setView('system')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'system' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <Target size={18} /><span className="text-sm font-medium">My System</span>
             </button>
-            <button onClick={() => setView('account')} className={`flex flex-col md:flex-row items-center md:space-x-3 p-2 md:px-4 md:py-2.5 rounded-lg transition-all duration-200 ${view === 'account' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
-              <User size={18} /><span className="text-[10px] md:text-sm font-medium mt-1 md:mt-0">Account</span>
+            <button onClick={() => setView('account')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'account' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <User size={18} /><span className="text-sm font-medium">Account</span>
             </button>
          </div>
+
+         {/* MOBILE BOTTOM NAV */}
+         <div className="md:hidden w-full flex justify-between items-center px-2 py-2 relative">
+             <button onClick={() => handleViewChange('dashboard')} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${view === 'dashboard' ? 'text-indigo-400' : 'text-slate-500'}`}>
+                 <LayoutDashboard size={20} className={view === 'dashboard' ? 'fill-current bg-indigo-900/20 p-1 box-content rounded-lg' : ''} />
+                 <span className="text-[9px] mt-1 font-bold">Home</span>
+             </button>
+             
+             <button onClick={() => handleViewChange('journal')} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${view === 'journal' ? 'text-indigo-400' : 'text-slate-500'}`}>
+                 <BookOpen size={20} className={view === 'journal' ? 'fill-current bg-indigo-900/20 p-1 box-content rounded-lg' : ''} />
+                 <span className="text-[9px] mt-1 font-bold">Journal</span>
+             </button>
+
+             {/* Highlighted Log Button */}
+             <button onClick={() => { setEditingTrade(null); handleViewChange('new'); }} className="relative -top-5 bg-indigo-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-indigo-600/30 border-4 border-slate-900">
+                 <PlusCircle size={28} />
+             </button>
+
+             <button onClick={() => handleViewChange('mentor')} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${view === 'mentor' ? 'text-indigo-400' : 'text-slate-500'}`}>
+                 <MessageSquare size={20} className={view === 'mentor' ? 'fill-current bg-indigo-900/20 p-1 box-content rounded-lg' : ''} />
+                 <span className="text-[9px] mt-1 font-bold">Mentor</span>
+             </button>
+
+             <button onClick={() => setShowMobileMenu(!showMobileMenu)} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${showMobileMenu ? 'text-white' : 'text-slate-500'}`}>
+                 {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
+                 <span className="text-[9px] mt-1 font-bold">{showMobileMenu ? 'Close' : 'More'}</span>
+             </button>
+
+             {/* MOBILE MORE MENU OVERLAY */}
+             {showMobileMenu && (
+                 <div className="absolute bottom-20 right-2 w-48 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 animate-fade-in-up flex flex-col gap-1 z-50">
+                     <button onClick={() => handleViewChange('premarket')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-700 text-slate-300 hover:text-white transition">
+                         <Zap size={18} className="text-amber-400"/> 
+                         <span className="text-sm font-bold">Pre-Market</span>
+                     </button>
+                     <button onClick={() => handleViewChange('system')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-700 text-slate-300 hover:text-white transition">
+                         <Target size={18} className="text-emerald-400"/> 
+                         <span className="text-sm font-bold">My System</span>
+                     </button>
+                     <button onClick={() => handleViewChange('account')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-700 text-slate-300 hover:text-white transition">
+                         <User size={18} className="text-blue-400"/> 
+                         <span className="text-sm font-bold">Account</span>
+                     </button>
+                     <div className="border-t border-slate-700 my-1"></div>
+                     <div className="p-2 text-center text-[10px] text-slate-500">
+                         TradeMind.AI Mobile
+                     </div>
+                 </div>
+             )}
+         </div>
          
-         <div className="hidden md:block mt-auto space-y-4">
+         {/* Desktop Footer */}
+         <div className="hidden md:block mt-auto p-4 space-y-4">
              {/* 🔮 BEAUTIFIED WISDOM CHIP */}
              <div className="relative group cursor-pointer overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 border border-slate-800 hover:border-amber-500/30 transition-all duration-500 shadow-xl">
-                 
-                 {/* Animated Glow */}
                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-0 group-hover:opacity-100 transition duration-700"></div>
-                 
                  <div className="p-5 relative z-10">
                     <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center gap-2">
                             <Sparkles size={14} className="text-amber-400 animate-pulse" />
                             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-500/80">Mindset Link</span>
                         </div>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); handleRefreshTip(); }}
-                            disabled={isLoadingTip}
-                            className="text-slate-500 hover:text-white transition transform hover:rotate-180 duration-500"
-                            title="New Transmission"
-                        >
+                        <button onClick={(e) => { e.stopPropagation(); handleRefreshTip(); }} disabled={isLoadingTip} className="text-slate-500 hover:text-white transition transform hover:rotate-180 duration-500" title="New Transmission">
                             <RefreshCw size={12} className={isLoadingTip ? "animate-spin" : ""} />
                         </button>
                     </div>
-
                     <div className="relative pl-3 border-l-2 border-amber-500/20 group-hover:border-amber-500/50 transition-colors">
                         <p className={`text-sm font-serif font-medium text-slate-200 leading-relaxed italic ${isLoadingTip ? 'opacity-50 blur-[2px]' : 'opacity-100 blur-0'} transition-all duration-300`}>
                             {dailyTip || "The market transfers money from the impatient to the patient."}
                         </p>
                     </div>
                  </div>
-                 
-                 {/* Tech Background Pattern */}
                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none"></div>
              </div>
-             
              <div className="pt-2">
                 <div className="text-[10px] text-center text-slate-700 font-medium hover:text-slate-600 transition">
                     TradeMind.AI © 2024
