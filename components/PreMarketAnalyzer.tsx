@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw, Globe, Newspaper } from 'lucide-react';
+import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw, Globe, Newspaper, Info } from 'lucide-react';
 import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection, NewsAnalysis } from '../types';
 import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine, fetchMarketNews } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
@@ -400,6 +400,15 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                     <span className="text-xs text-red-200 font-bold">{error}</span>
                                 </div>
                             )}
+                        </div>
+
+                        {/* System Link Info Banner */}
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-3 rounded-xl flex items-start md:items-center gap-3 animate-fade-in">
+                            <Info size={16} className="text-indigo-400 shrink-0 mt-0.5 md:mt-0" />
+                            <p className="text-xs text-indigo-200 leading-relaxed">
+                                <span className="font-bold text-indigo-300 uppercase tracking-wide mr-1">System Calibration:</span> 
+                                This intelligence data is used to calculate the Market Bias for your <span className="font-bold text-white bg-indigo-500/20 px-1 rounded mx-1">09:25 - 09:45 AM Attack Plan</span> in Phase 1.
+                            </p>
                         </div>
 
                         {newsData && (
