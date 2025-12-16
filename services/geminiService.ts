@@ -766,7 +766,7 @@ export const getMentorChatResponse = async (
         if (!lastUserMsg || !lastUserMsg.parts[0].text) return "Silent check.";
 
         const result = await activeChat.sendMessage({ message: lastUserMsg.parts[0].text });
-        return result.text;
+        return result.text || "";
 
     } catch (e: any) {
         console.error("Mentor Chat Error", e);
@@ -829,12 +829,11 @@ export const getLiveTradeCoachResponse = async (
 
         if (!lastUserMsg) return "Standby.";
         
-        // Construct message content (text + optional images/audio)
-        // Gemini supports 'inlineData' for audio/image.
-        const messageContent: any = { parts: lastUserMsg.parts };
-
-        const result = await activeChat.sendMessage(messageContent);
-        return result.text;
+        // Construct message content correctly for the SDK
+        // The SDK expects { message: string | Part[] } or just string/Part[] if implicit.
+        // We use { message: ... } to be safe and explicit with multi-modal content.
+        const result = await activeChat.sendMessage({ message: lastUserMsg.parts });
+        return result.text || "";
 
     } catch (e: any) {
         console.error("Live Coach Error", e);

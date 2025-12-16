@@ -96,13 +96,16 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
 
         try {
             // Construct history for API
-            const history = messages.map(m => ({
-                role: m.role,
-                parts: [
-                    { text: m.text },
-                    ...(m.image ? [{ inlineData: { mimeType: 'image/jpeg', data: m.image.split(',')[1] } }] : [])
-                ]
-            }));
+            // Filter out the initial welcome message from history payload to avoid "User role expected" error on first turn
+            const history = messages
+                .slice(1) // SKIP INITIAL MESSAGE
+                .map(m => ({
+                    role: m.role,
+                    parts: [
+                        { text: m.text },
+                        ...(m.image ? [{ inlineData: { mimeType: 'image/jpeg', data: m.image.split(',')[1] } }] : [])
+                    ]
+                }));
             
             // Add current message to history payload
             const currentParts: any[] = [];
