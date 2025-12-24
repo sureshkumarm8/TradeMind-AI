@@ -275,8 +275,18 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
       }
   }
 
-  const getAiGrade = (feedbackString?: string): { grade: number | string, color: string } | null => {
-      if (!feedbackString) return null;
+  const getAiGrade = (feedbackString?: string, manualRating?: number, isSkipped?: boolean): { grade: number | string, color: string } | null => {
+      if (!feedbackString) {
+          // Fallback to manual rating as % if skipped or manual log
+          if (manualRating) {
+              const grade = manualRating * 20;
+              if (grade >= 90) return { grade, color: 'text-emerald-400 border-emerald-500 bg-emerald-500/20' };
+              if (grade >= 75) return { grade, color: 'text-blue-400 border-blue-500 bg-blue-500/20' };
+              if (grade >= 60) return { grade, color: 'text-amber-400 border-amber-500 bg-amber-500/20' };
+              return { grade, color: 'text-red-500 border-red-500 bg-red-500/20' };
+          }
+          return null;
+      };
       try {
           const data = JSON.parse(feedbackString) as AiAnalysisResponse;
           const grade = data.grade;
@@ -499,7 +509,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                    const isWin = trade.outcome === TradeOutcome.WIN;
                    const isSkipped = trade.outcome === TradeOutcome.SKIPPED;
                    const isExpanded = expandedId === trade.id;
-                   const aiGrade = getAiGrade(trade.aiFeedback);
+                   const aiGrade = getAiGrade(trade.aiFeedback, trade.disciplineRating, isSkipped);
                    const isAnalyzing = analyzingTradeId === trade.id;
                    const roi = getRoiPercentage(trade);
                    const isRealMoney = trade.executionType === 'REAL';
@@ -522,7 +532,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
                                                {trade.optionType}
                                            </span>
                                            {isRealMoney && !isSkipped && (<span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30"><CircleDollarSign size={10} /> Real</span>)}
-                                           {aiGrade && !isExpanded && (<span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>Grade: {aiGrade.grade}{typeof aiGrade.grade === 'number' ? '%' : ''}</span>)}
+                                           {aiGrade && !isExpanded && (<span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>Score: {aiGrade.grade}{typeof aiGrade.grade === 'number' ? '%' : ''}</span>)}
                                            {isSkipped && <span className="text-[10px] font-black px-1.5 py-0.5 rounded border border-slate-600 bg-slate-700/50 text-slate-400">SKIPPED MISSION</span>}
                                        </div>
                                        <div className="flex items-center gap-2 md:gap-3 mt-1 text-slate-400 text-xs font-mono flex-wrap">

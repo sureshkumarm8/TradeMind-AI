@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote, StrategyProfile } from '../types';
-// Added ShieldCheck to imports to fix the error on line 552
 import { Save, X, AlertTriangle, CheckCircle2, ExternalLink, Clock, Target, Calculator, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Activity, Calendar, Zap, Mic, Loader2, BarChart2, StopCircle, Image as ImageIcon, UploadCloud, Trash2, Send, MessageSquare, Plus, FlaskConical, CircleDollarSign, Bot, Terminal, ChevronRight, Ban, Star, ShieldCheck } from 'lucide-react';
 import { parseVoiceCommand, getLiveTradeCoachResponse } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
@@ -347,7 +346,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
   useEffect(() => {
       if (isSkipped) {
           setField('followedSystem', true);
-          // Reward skipping with high discipline default
+          // Reward skipping with high discipline default (100% equivalent)
           if (formData.disciplineRating === 0) setField('disciplineRating', 5);
       }
   }, [isSkipped]);
@@ -553,13 +552,12 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                             <div className="p-2 bg-amber-500/20 rounded-lg text-amber-500"><ShieldCheck size={18}/></div>
                             <div>
                                 <span className="block text-xs font-bold text-amber-100 uppercase">Disciplined Avoidance</span>
-                                <span className="block text-[10px] text-amber-500/70 uppercase">Skipping bad setups is a 5-star action</span>
+                                <span className="block text-[10px] text-amber-500/70 uppercase">Skipping bad setups is a high-grade action</span>
                             </div>
                        </div>
-                       <div className="flex gap-1">
-                           {[1,2,3,4,5].map(star => (
-                               <Star key={star} size={14} className={formData.disciplineRating! >= star ? "fill-amber-400 text-amber-400" : "text-slate-600"} />
-                           ))}
+                       <div className="flex flex-col items-end">
+                           <span className="text-2xl font-black text-amber-400 font-mono">100%</span>
+                           <span className="text-[9px] text-slate-500 uppercase font-bold">Discipline Score</span>
                        </div>
                    </div>
                )}
