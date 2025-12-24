@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse } from '../types';
-import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload, X, FlaskConical, CircleDollarSign, Lightbulb, GraduationCap, Minus, Maximize2, Ban } from 'lucide-react';
+import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse, TradeNote } from '../types';
+import { ChevronDown, ChevronUp, Bot, Edit2, Trash2, ArrowUpRight, ArrowDownRight, Clock, AlertCircle, CheckCircle, Calendar, Sparkles, Target, Upload, FileSpreadsheet, FileJson, TrendingUp, Grid, List, CalendarDays, ChevronLeft, ChevronRight, Activity, ShieldAlert, Zap, ExternalLink, ThumbsUp, ThumbsDown, BarChart2, BrainCircuit, Image as ImageIcon, Share2, Loader2, Database, CloudUpload, X, FlaskConical, CircleDollarSign, Lightbulb, GraduationCap, Minus, Maximize2, Ban, History, MessageSquare, StickyNote, GitCommit, HeartPulse } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 import { exportToCSV, exportToJSON, shareBackupData } from '../services/dataService';
 import { shareElementAsImage } from '../services/shareService';
@@ -20,7 +19,7 @@ interface TradeListProps {
   readOnly?: boolean;
   onSyncPush?: () => void;
   isSyncing?: boolean;
-  highlightedTradeId?: string | null; // New prop for Deep Linking
+  highlightedTradeId?: string | null;
 }
 
 // Helper: Image Modal (Reused) - Portal Version
@@ -34,6 +33,190 @@ const ImageModal = ({ src, onClose }: { src: string | null, onClose: () => void 
             <img src={src} className="max-w-full max-h-[90vh] rounded-lg shadow-2xl border border-slate-700 object-contain" onClick={(e) => e.stopPropagation()} />
         </div>,
         document.body
+    );
+};
+
+// --- COMPONENT: Daily Timeline (The Black Box) ---
+const DailyTimeline = ({ dateStr, trades, onEdit }: { dateStr: string, trades: Trade[], onEdit: (t: Trade) => void }) => {
+    
+    // 1. Flatten Data into Events
+    interface TimelineEvent {
+        id: string;
+        type: 'TRADE_ENTRY' | 'TRADE_EXIT' | 'NOTE' | 'AI_FEEDBACK';
+        time: string; // HH:mm format for sorting
+        data: any;
+        tradeId?: string;
+    }
+
+    const events: TimelineEvent[] = [];
+
+    trades.forEach(trade => {
+        // Trade Entry
+        if (trade.entryTime) {
+            events.push({
+                id: `${trade.id}_entry`,
+                type: 'TRADE_ENTRY',
+                time: trade.entryTime,
+                data: trade,
+                tradeId: trade.id
+            });
+        }
+
+        // Notes (Thoughts)
+        if (trade.notes) {
+            trade.notes.forEach(note => {
+                // Heuristic: If note time is empty, attach to entry time
+                const time = note.timestamp?.slice(0, 5) || trade.entryTime || '00:00';
+                events.push({
+                    id: note.id,
+                    type: 'NOTE',
+                    time: time,
+                    data: note,
+                    tradeId: trade.id
+                });
+            });
+        }
+
+        // Trade Exit
+        if (trade.exitTime && trade.outcome !== TradeOutcome.OPEN && trade.outcome !== TradeOutcome.SKIPPED) {
+            events.push({
+                id: `${trade.id}_exit`,
+                type: 'TRADE_EXIT',
+                time: trade.exitTime,
+                data: trade,
+                tradeId: trade.id
+            });
+        }
+
+        // AI Feedback (Ideally show after exit)
+        if (trade.aiFeedback) {
+             const time = trade.exitTime || trade.entryTime || '23:59';
+             events.push({
+                 id: `${trade.id}_ai`,
+                 type: 'AI_FEEDBACK',
+                 time: time, // Logic: AI speaks after the trade is done
+                 data: JSON.parse(trade.aiFeedback),
+                 tradeId: trade.id
+             });
+        }
+    });
+
+    // 2. Sort Chronologically
+    const sortedEvents = events.sort((a, b) => a.time.localeCompare(b.time));
+
+    if (sortedEvents.length === 0) return <div className="text-center text-slate-500 py-8 italic">No timeline data available.</div>;
+
+    return (
+        <div className="relative pl-6 md:pl-8 space-y-8 py-6 before:absolute before:left-3 before:md:left-4 before:top-4 before:bottom-4 before:w-0.5 before:bg-gradient-to-b before:from-indigo-500 before:via-slate-700 before:to-slate-900">
+            {sortedEvents.map((ev, idx) => {
+                const isTrade = ev.type === 'TRADE_ENTRY';
+                const isExit = ev.type === 'TRADE_EXIT';
+                const isNote = ev.type === 'NOTE';
+                const isAi = ev.type === 'AI_FEEDBACK';
+                
+                return (
+                    <div key={ev.id} className="relative animate-fade-in group">
+                        {/* Dot on Timeline */}
+                        <div className={`absolute -left-[1.65rem] md:-left-[1.9rem] top-1.5 w-4 h-4 rounded-full border-2 z-10 
+                            ${isTrade ? 'bg-blue-500 border-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 
+                              isExit ? (ev.data.pnl > 0 ? 'bg-emerald-500 border-emerald-900' : 'bg-red-500 border-red-900') :
+                              isAi ? 'bg-indigo-500 border-indigo-900' : 
+                              'bg-slate-800 border-slate-600'}`}>
+                        </div>
+
+                        {/* Content Card */}
+                        <div className="flex gap-4 items-start">
+                            {/* Time */}
+                            <div className="hidden md:block w-16 pt-1 text-right text-xs font-mono text-slate-500 shrink-0">{ev.time}</div>
+
+                            {/* Event Body */}
+                            <div className="flex-1 min-w-0">
+                                {isTrade && (
+                                    <div onClick={() => onEdit(ev.data)} className="bg-slate-800 border border-blue-500/30 p-4 rounded-r-xl rounded-bl-xl shadow-lg cursor-pointer hover:border-blue-500 transition relative">
+                                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 rounded-l"></div>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                                                <Target size={14}/> Mission Start
+                                            </span>
+                                            <span className="md:hidden text-xs font-mono text-slate-500">{ev.time}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-white font-bold">
+                                            {ev.data.direction === TradeDirection.LONG ? <ArrowUpRight size={18} className="text-blue-400"/> : <ArrowDownRight size={18} className="text-amber-400"/>}
+                                            {ev.data.instrument} <span className="text-slate-500 font-normal text-xs">({ev.data.optionType})</span>
+                                        </div>
+                                        <div className="mt-2 text-xs text-slate-400">
+                                            Logic: <span className="text-slate-200">{ev.data.entryReason}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {isNote && (
+                                    <div className="flex gap-3 items-start">
+                                        <div className={`mt-1 p-1.5 rounded-lg ${ev.data.type === 'emotion' ? 'bg-purple-900/30 text-purple-400' : ev.data.type === 'market' ? 'bg-amber-900/30 text-amber-400' : 'bg-slate-800 text-slate-400'}`}>
+                                            {ev.data.type === 'emotion' ? <HeartPulse size={14}/> : ev.data.type === 'market' ? <Activity size={14}/> : <StickyNote size={14}/>}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800 text-sm text-slate-300 italic">
+                                                "{ev.data.content}"
+                                            </div>
+                                            <span className="md:hidden text-[10px] text-slate-600 font-mono mt-1 block">{ev.time}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {isExit && (
+                                    <div className={`p-4 rounded-r-xl rounded-bl-xl border shadow-lg relative bg-slate-900 ${ev.data.pnl >= 0 ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
+                                        <div className={`absolute top-0 left-0 w-1 h-full rounded-l ${ev.data.pnl >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className={`text-xs font-bold uppercase tracking-wider flex items-center gap-2 ${ev.data.pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                {ev.data.pnl >= 0 ? <CheckCircle size={14}/> : <AlertCircle size={14}/>} Mission Result
+                                            </span>
+                                            <span className="md:hidden text-xs font-mono text-slate-500">{ev.time}</span>
+                                        </div>
+                                        <div className="text-2xl font-black font-mono text-white">
+                                            {ev.data.pnl >= 0 ? '+' : ''}₹{ev.data.pnl.toFixed(0)}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 mt-1 uppercase font-bold">
+                                            {ev.data.exitReason || "Target/SL Hit"}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {isAi && (
+                                    <div className="bg-indigo-900/10 border border-indigo-500/30 p-4 rounded-xl mt-2 relative overflow-hidden group-hover:border-indigo-500/50 transition">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Bot size={16} className="text-indigo-400"/>
+                                            <span className="text-xs font-black text-indigo-300 uppercase tracking-widest">Coach's Debrief</span>
+                                        </div>
+                                        <div className="text-sm text-slate-200 leading-relaxed font-medium">
+                                            {ev.data.realityCheck}
+                                        </div>
+                                        <div className="mt-2 flex gap-2">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ev.data.grade >= 60 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                                                Grade: {ev.data.grade}
+                                            </span>
+                                            <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700">
+                                                {ev.data.strategyAudit?.rulesFollowed ? 'Rules Followed' : 'Rules Broken'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+            
+            {/* End of Day Marker */}
+            <div className="relative flex items-center gap-4 pt-4 opacity-50">
+                <div className="absolute -left-[1.65rem] md:-left-[1.9rem] w-4 h-4 rounded-full bg-slate-800 border-2 border-slate-600 z-10 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 bg-slate-500 rounded-full"></div>
+                </div>
+                <div className="h-px bg-slate-700 flex-1"></div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Session Closed</span>
+                <div className="h-px bg-slate-700 flex-1"></div>
+            </div>
+        </div>
     );
 };
 
@@ -183,7 +366,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   });
   const [isAnalyzingPeriod, setIsAnalyzingPeriod] = useState(false);
 
-  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'week'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'week' | 'timeline'>('list');
   const [currentDate, setCurrentDate] = useState(new Date()); // For Calendar/Week navigation
   
   const [isSharing, setIsSharing] = useState(false);
@@ -390,110 +573,6 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
     );
   };
 
-  const renderWeeklyView = () => {
-      const startOfWeek = getStartOfWeek(currentDate);
-      const weekDays = [];
-      const weekTrades: Trade[] = [];
-      for (let i = 0; i < 5; i++) {
-          const d = new Date(startOfWeek);
-          d.setDate(startOfWeek.getDate() + i);
-          weekDays.push(d);
-          const year = d.getFullYear();
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const day = String(d.getDate()).padStart(2, '0');
-          const dateStr = `${year}-${month}-${day}`;
-          weekTrades.push(...trades.filter(t => t.date === dateStr));
-      }
-      const weekKey = `week_${weekDays[0].toISOString().split('T')[0]}`;
-      const weeklyReport = periodReports[weekKey];
-      return (
-          <div className="animate-fade-in space-y-4">
-              <div className="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700" data-html2canvas-ignore>
-                  <button onClick={prevWeek} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20}/></button>
-                  <div className="text-center"><h3 className="text-white font-bold text-lg">{startOfWeek.toLocaleDateString(undefined, {month:'short', day:'numeric'})} - {weekDays[4].toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})}</h3><div className="flex justify-center mt-1">{!weeklyReport && weekTrades.length > 0 && (<button onClick={() => handleAnalyzePeriod(weekKey, "Weekly Performance Review", weekTrades)} disabled={isAnalyzingPeriod} className="text-[10px] text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded bg-indigo-900/10 hover:bg-indigo-900/20 transition flex items-center">{isAnalyzingPeriod ? <Loader2 size={10} className="animate-spin mr-1"/> : <Bot size={10} className="mr-1"/>}Analyze Week</button>)}{weeklyReport && (<span className="text-[10px] text-emerald-500 font-bold flex items-center"><CheckCircle size={10} className="mr-1"/> Analysis Ready</span>)}</div></div>
-                  <button onClick={nextWeek} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronRight size={20}/></button>
-              </div>
-              {weeklyReport && (<AiCoachReport report={weeklyReport} title="Weekly Coach's Report" />)}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  {weekDays.map((dayObj, idx) => {
-                      const year = dayObj.getFullYear();
-                      const month = String(dayObj.getMonth() + 1).padStart(2, '0');
-                      const day = String(dayObj.getDate()).padStart(2, '0');
-                      const dateStr = `${year}-${month}-${day}`;
-                      const dayTrades = trades.filter(t => t.date === dateStr);
-                      const dayPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
-                      const todayStr = new Date().toLocaleDateString('en-CA');
-                      const isToday = todayStr === dateStr;
-                      return (
-                          <div key={idx} className={`bg-slate-800 rounded-xl border ${isToday ? 'border-indigo-500 shadow-indigo-500/20 shadow-lg' : 'border-slate-700'} flex flex-col h-auto min-h-[120px] md:min-h-[300px]`}>
-                              <div className={`p-3 border-b ${isToday ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-slate-900/50 border-slate-700'} rounded-t-xl`}>
-                                  <div className="flex justify-between items-center mb-1"><span className={`text-sm font-bold ${isToday ? 'text-indigo-400' : 'text-slate-400'}`}>{dayObj.toLocaleDateString(undefined, {weekday:'short'})}</span><span className="text-xs text-slate-500">{dayObj.getDate()}</span></div>
-                                  <div className={`text-lg font-bold ${dayPnL > 0 ? 'text-emerald-400' : dayPnL < 0 ? 'text-red-400' : 'text-slate-500'}`}>{dayTrades.length > 0 ? `₹${dayPnL.toFixed(0)}` : '-'}</div>
-                              </div>
-                              <div className="p-2 flex-1 space-y-2 overflow-y-auto custom-scrollbar">
-                                  {dayTrades.length === 0 ? (<div className="h-full flex items-center justify-center text-slate-600 text-xs italic min-h-[50px]">No Trades</div>) : (dayTrades.map(t => (<div key={t.id} onClick={() => onEdit(t)} className="bg-slate-900 p-2 rounded border border-slate-700 hover:border-slate-500 cursor-pointer group transition"><div className="flex justify-between text-xs mb-1"><span className={t.direction === TradeDirection.LONG ? 'text-blue-400' : 'text-amber-400'}>{t.direction}</span><span className="text-slate-500">{t.entryTime}{t.exitTime ? ` - ${t.exitTime}` : ''}</span></div><div className={`font-mono font-bold text-sm ${t.outcome === TradeOutcome.SKIPPED ? 'text-slate-500' : t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{t.outcome === TradeOutcome.SKIPPED ? 'SKIPPED' : t.pnl ? `₹${t.pnl.toFixed(0)}` : 'OPEN'}</div><div className="text-[10px] text-slate-500 truncate mt-1 group-hover:text-slate-300">{t.entryReason}</div></div>)))}
-                              </div>
-                          </div>
-                      );
-                  })}
-              </div>
-          </div>
-      )
-  }
-  
-  const renderCalendar = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-    const monthKey = `month_${year}_${month}`;
-    const monthlyReport = periodReports[monthKey];
-    const monthTrades = trades.filter(t => {
-        const parts = t.date.split('-');
-        return parseInt(parts[1]) - 1 === month && parseInt(parts[0]) === year;
-    });
-    const days = [];
-    for (let i = 0; i < firstDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
-    return (
-        <div className="animate-fade-in space-y-4">
-             <div className="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700" data-html2canvas-ignore>
-                  <button onClick={prevMonth} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20}/></button>
-                  <div className="text-center"><h3 className="text-white font-bold text-lg">{monthName}</h3><div className="flex justify-center mt-1">{!monthlyReport && monthTrades.length > 0 && (<button onClick={() => handleAnalyzePeriod(monthKey, "Monthly Performance Review", monthTrades)} disabled={isAnalyzingPeriod} className="text-[10px] text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded bg-indigo-900/10 hover:bg-indigo-900/20 transition flex items-center">{isAnalyzingPeriod ? <Loader2 size={10} className="animate-spin mr-1"/> : <Bot size={10} className="mr-1"/>}Analyze Month</button>)}{monthlyReport && (<span className="text-[10px] text-emerald-500 font-bold flex items-center"><CheckCircle size={10} className="mr-1"/> Analysis Ready</span>)}</div></div>
-                  <button onClick={nextMonth} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronRight size={20}/></button>
-             </div>
-             {monthlyReport && (<AiCoachReport report={monthlyReport} title="Monthly Coach's Report" />)}
-             <div className="bg-slate-800 p-2 md:p-6 rounded-xl border border-slate-700 shadow-lg">
-                <div className="grid grid-cols-7 gap-1 md:gap-4 text-center mb-4">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (<div key={d} className="text-xs md:text-sm text-slate-400 font-bold uppercase tracking-wider">{d}</div>))}</div>
-                <div className="grid grid-cols-7 gap-1 md:gap-4">
-                    {days.map((d, idx) => {
-                        if (!d) return <div key={idx} className="bg-transparent aspect-square"></div>;
-                        const dYear = d.getFullYear();
-                        const dMonth = String(d.getMonth() + 1).padStart(2, '0');
-                        const dDay = String(d.getDate()).padStart(2, '0');
-                        const dateStr = `${dYear}-${dMonth}-${dDay}`;
-                        const dayTrades = trades.filter(t => t.date === dateStr);
-                        const dayPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
-                        const hasTrades = dayTrades.length > 0;
-                        const todayStr = new Date().toLocaleDateString('en-CA');
-                        const isToday = todayStr === dateStr;
-                        let bgClass = "bg-slate-900 border-slate-800 hover:border-slate-600";
-                        if (hasTrades) {
-                            bgClass = dayPnL > 0 ? "bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50" : dayPnL < 0 ? "bg-red-500/10 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50" : "bg-slate-700 border-slate-600";
-                            if (dayTrades.every(t => t.outcome === TradeOutcome.SKIPPED)) bgClass = "bg-slate-800 border-slate-600 opacity-60";
-                        }
-                        if (isToday) bgClass += " ring-1 ring-indigo-500";
-                        return (
-                            <div key={idx} className={`aspect-square rounded-md md:rounded-xl border flex flex-col items-center justify-center p-0.5 md:p-1 relative transition cursor-default ${bgClass}`}><span className={`text-xs md:text-sm ${hasTrades ? 'text-white font-bold' : 'text-slate-600'} ${isToday ? 'text-indigo-400' : ''}`}>{d.getDate()}</span>{hasTrades && (<span className={`text-[9px] md:text-xs font-mono font-medium mt-0.5 md:mt-1 leading-none ${dayPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{dayPnL >= 0 ? '+' : ''}{Math.abs(dayPnL) >= 1000 ? (dayPnL/1000).toFixed(1) + 'k' : dayPnL.toFixed(0)}</span>)}</div>
-                        )
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-  };
-
   if (trades.length === 0) {
       return (
           <div className="text-center py-20 animate-fade-in-up"><div className="bg-slate-800 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-slate-700 shadow-xl"><Target size={48} className="text-slate-500" /></div><h3 className="text-2xl font-bold text-white mb-2">Journal Empty</h3><p className="text-slate-400 mb-8">Start by logging your first mission or restore a backup.</p><div className="flex justify-center gap-4"><button onClick={() => onEdit({} as Trade)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-indigo-900/50 flex items-center"><Activity size={18} className="mr-2"/> Log First Trade</button></div></div>
@@ -503,67 +582,118 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
   return (
     <div className="space-y-6 pb-20 animate-fade-in">
        <ImageModal src={previewImage} onClose={() => setPreviewImage(null)} />
-       <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-14 md:top-20 z-20 flex flex-wrap gap-2 justify-between items-center shadow-lg" data-html2canvas-ignore><div className="flex bg-slate-800/50 p-1 rounded-lg"><button onClick={() => setViewMode('list')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><List size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">List</span></button><button onClick={() => setViewMode('week')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><Grid size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Week</span></button><button onClick={() => setViewMode('calendar')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><CalendarDays size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Month</span></button></div><div className="flex gap-1 md:gap-2">{onSyncPush && (<button onClick={onSyncPush} disabled={isSyncing} className="p-2 text-indigo-400 hover:text-white bg-indigo-900/20 hover:bg-indigo-900/40 rounded-lg border border-indigo-500/20 hover:border-indigo-500/50 transition disabled:opacity-50 flex items-center gap-1" title="Save to Cloud">{isSyncing ? <Loader2 size={16} className="animate-spin"/> : <CloudUpload size={16}/>}<span className="text-[10px] font-bold uppercase hidden sm:block">{isSyncing ? 'Saving' : 'Save'}</span></button>)}<button onClick={handleShareImage} disabled={isSharing} className="p-2 text-slate-400 hover:text-indigo-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-indigo-500/30 transition disabled:opacity-50" title="Share Snapshot">{isSharing ? <Loader2 size={16} className="animate-spin"/> : <Share2 size={16}/>}</button><button onClick={handleShareData} disabled={isSharing} className="p-2 text-slate-400 hover:text-purple-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-purple-500/30 transition disabled:opacity-50" title="Share Data File"><Database size={16}/></button><button onClick={handleExportCSV} className="p-2 text-slate-400 hover:text-emerald-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-emerald-500/30 transition" title="Backup (CSV)"><FileSpreadsheet size={16}/></button><button onClick={handleExportJSON} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-blue-500/30 transition" title="Backup (JSON)"><FileJson size={16}/></button></div></div>
-       <div id="journal-share-container" className="p-1 rounded-xl bg-slate-950">{viewMode === 'calendar' && renderCalendar()}{viewMode === 'week' && renderWeeklyView()}{viewMode === 'list' && (Object.entries(tradesByDate) as [string, Trade[]][]).map(([dateStr, dayTrades]) => (<div key={dateStr} className="space-y-4 mb-4"><div className="flex items-center justify-between sticky top-[6.5rem] md:top-[5.5rem] z-10 bg-slate-950/90 backdrop-blur py-2 border-b border-indigo-500/20" data-html2canvas-ignore><div className="flex items-center gap-3"><div className="w-2 h-8 bg-indigo-500 rounded-r-lg"></div><h3 className="text-white font-bold text-sm uppercase tracking-wide truncate max-w-[150px] md:max-w-none">{dateStr}</h3><span className="text-xs text-slate-500 font-mono">({dayTrades.length})</span></div><div className="flex items-center gap-2"><span className={`text-xs font-mono font-bold ${dayTrades.reduce((a,t)=>a+(t.pnl||0),0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{dayTrades.reduce((a,t)=>a+(t.pnl||0),0) >= 0 ? '+' : ''}₹{dayTrades.reduce((a,t)=>a+(t.pnl||0),0).toFixed(2)}</span>{dailyAnalysis[dateStr] ? (<button onClick={() => alert(dailyAnalysis[dateStr])} className="text-[10px] bg-emerald-900 text-emerald-300 border border-emerald-700 px-2 py-1 rounded">View Report</button>) : (<button onClick={() => handleAnalyzeDay(dateStr, dayTrades)} className="text-[10px] bg-indigo-900/50 text-indigo-300 border border-indigo-700 px-2 py-1 rounded flex items-center hover:bg-indigo-900 transition">{analyzingDay === dateStr ? <Bot size={12} className="mr-1 animate-spin"/> : <BrainCircuit size={12} className="mr-1"/>}{analyzingDay === dateStr ? 'Analyzing...' : 'Audit Day'}</button>)}</div></div>{dayTrades.map((trade) => {
-                   const isOpen = trade.outcome === TradeOutcome.OPEN;
-                   const isWin = trade.outcome === TradeOutcome.WIN;
-                   const isSkipped = trade.outcome === TradeOutcome.SKIPPED;
-                   const isExpanded = expandedId === trade.id;
-                   const aiGrade = getAiGrade(trade.aiFeedback, trade.disciplineRating, isSkipped);
-                   const isAnalyzing = analyzingTradeId === trade.id;
-                   const roi = getRoiPercentage(trade);
-                   const isRealMoney = trade.executionType === 'REAL';
-                   const stripColor = isSkipped ? 'bg-slate-600' : isOpen ? 'bg-slate-600' : isWin ? 'bg-emerald-500' : trade.outcome === TradeOutcome.BREAK_EVEN ? 'bg-amber-500' : 'bg-red-500';
-                   return (
-                     <div id={`trade-${trade.id}`} key={trade.id} className={`bg-slate-800 rounded-xl border ${isExpanded ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-slate-700'} overflow-hidden transition-all duration-300 hover:shadow-xl relative pl-2 group`}>
-                       <div className={`absolute top-0 bottom-0 left-0 w-2 ${stripColor} transition-all`}></div>
-                       <div className="p-4 cursor-pointer" onClick={() => toggleExpand(trade.id)}>
-                           <div className="flex justify-between items-start">
-                               <div className="flex items-start gap-3">
-                                   <div className={`mt-1 p-2 rounded-lg ${isSkipped ? 'bg-slate-500/10 text-slate-400' : trade.direction === TradeDirection.LONG ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                       {isSkipped ? <Ban size={20}/> : trade.direction === TradeDirection.LONG ? <ArrowUpRight size={20}/> : <ArrowDownRight size={20}/>}
-                                   </div>
-                                   <div>
-                                       <div className="flex items-center gap-2 flex-wrap">
-                                           <h4 className={`font-bold text-base ${isSkipped ? 'text-slate-400' : 'text-white'}`}>
-                                               {trade.strikePrice ? `${trade.strikePrice} ${trade.optionType}` : trade.instrument}
-                                           </h4>
-                                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${isSkipped ? 'bg-slate-700 text-slate-400' : trade.optionType === OptionType.CE ? 'bg-green-900 text-green-300' : trade.optionType === OptionType.PE ? 'bg-red-900 text-red-300' : 'bg-indigo-900 text-indigo-300'}`}>
-                                               {trade.optionType}
-                                           </span>
-                                           {isRealMoney && !isSkipped && (<span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30"><CircleDollarSign size={10} /> Real</span>)}
-                                           {aiGrade && !isExpanded && (<span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>Score: {aiGrade.grade}{typeof aiGrade.grade === 'number' ? '%' : ''}</span>)}
-                                           {isSkipped && <span className="text-[10px] font-black px-1.5 py-0.5 rounded border border-slate-600 bg-slate-700/50 text-slate-400">SKIPPED MISSION</span>}
-                                       </div>
-                                       <div className="flex items-center gap-2 md:gap-3 mt-1 text-slate-400 text-xs font-mono flex-wrap">
-                                           <span className="flex items-center"><Clock size={12} className="mr-1"/> {trade.entryTime}{trade.exitTime ? ` - ${trade.exitTime}` : ''}</span>
-                                           <span className="hidden md:inline">|</span>
-                                           {roi !== null && (<><span className={`${roi > 0 ? 'text-emerald-400' : roi < 0 ? 'text-red-400' : 'text-slate-400'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(1)}%</span><span className="hidden md:inline">|</span></>)}
-                                           {!isSkipped && <span>{trade.quantity} Qty</span>}
-                                           {!isSkipped && <span className="hidden md:inline">|</span>}
-                                           <span className={isSkipped ? 'text-slate-500' : trade.pnl && trade.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}>
-                                               {isSkipped ? 'NO TRADE' : isOpen ? 'HOLDING' : `₹${trade.pnl?.toFixed(2)}`}
-                                           </span>
-                                       </div>
-                                   </div>
-                               </div>
-                               <div className="text-right">{isAnalyzing ? (<div className="flex items-center gap-2 bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-500/30 animate-pulse"><BrainCircuit size={14} className="text-indigo-400 animate-spin"/><span className="text-[10px] font-bold text-indigo-300 uppercase hidden md:inline">Syncing...</span></div>) : (<div className="flex items-center gap-2"><div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">{trade.setupName || 'No Setup'}</div>{isExpanded ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}</div>)}</div>
+       <div className="bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700 sticky top-14 md:top-20 z-20 flex flex-wrap gap-2 justify-between items-center shadow-lg" data-html2canvas-ignore>
+           <div className="flex bg-slate-800/50 p-1 rounded-lg">
+               <button onClick={() => setViewMode('list')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><List size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">List</span></button>
+               <button onClick={() => setViewMode('timeline')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'timeline' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><History size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Timeline</span></button>
+               <button onClick={() => setViewMode('week')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'week' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><Grid size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Week</span></button>
+               <button onClick={() => setViewMode('calendar')} className={`px-3 md:px-4 py-2 rounded-md text-xs font-bold transition flex items-center ${viewMode === 'calendar' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}><CalendarDays size={14} className="mr-0 md:mr-2"/> <span className="hidden md:inline">Month</span></button>
+           </div>
+           <div className="flex gap-1 md:gap-2">
+               {onSyncPush && (<button onClick={onSyncPush} disabled={isSyncing} className="p-2 text-indigo-400 hover:text-white bg-indigo-900/20 hover:bg-indigo-900/40 rounded-lg border border-indigo-500/20 hover:border-indigo-500/50 transition disabled:opacity-50 flex items-center gap-1" title="Save to Cloud">{isSyncing ? <Loader2 size={16} className="animate-spin"/> : <CloudUpload size={16}/>}<span className="text-[10px] font-bold uppercase hidden sm:block">{isSyncing ? 'Saving' : 'Save'}</span></button>)}
+               <button onClick={handleShareImage} disabled={isSharing} className="p-2 text-slate-400 hover:text-indigo-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-indigo-500/30 transition disabled:opacity-50" title="Share Snapshot">{isSharing ? <Loader2 size={16} className="animate-spin"/> : <Share2 size={16}/>}</button>
+               <button onClick={handleShareData} disabled={isSharing} className="p-2 text-slate-400 hover:text-purple-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-purple-500/30 transition disabled:opacity-50" title="Share Data File"><Database size={16}/></button>
+               <button onClick={handleExportCSV} className="p-2 text-slate-400 hover:text-emerald-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-emerald-500/30 transition" title="Backup (CSV)"><FileSpreadsheet size={16}/></button>
+               <button onClick={handleExportJSON} className="p-2 text-slate-400 hover:text-blue-400 bg-slate-800/50 hover:bg-slate-800 rounded-lg border border-transparent hover:border-blue-500/30 transition" title="Backup (JSON)"><FileJson size={16}/></button>
+           </div>
+       </div>
+       
+       <div id="journal-share-container" className="p-1 rounded-xl bg-slate-950">
+           {viewMode === 'calendar' && renderCalendar()}
+           {viewMode === 'week' && renderWeeklyView()}
+           
+           {(viewMode === 'list' || viewMode === 'timeline') && (Object.entries(tradesByDate) as [string, Trade[]][]).map(([dateStr, dayTrades]) => (
+               <div key={dateStr} className="space-y-4 mb-4">
+                   {/* Date Header */}
+                   <div className="flex items-center justify-between sticky top-[6.5rem] md:top-[5.5rem] z-10 bg-slate-950/90 backdrop-blur py-2 border-b border-indigo-500/20" data-html2canvas-ignore>
+                       <div className="flex items-center gap-3">
+                           <div className="w-2 h-8 bg-indigo-500 rounded-r-lg"></div>
+                           <div>
+                                <h3 className="text-white font-bold text-sm uppercase tracking-wide truncate max-w-[150px] md:max-w-none">{dateStr}</h3>
+                                {viewMode === 'timeline' && <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Daily Flight Recorder</p>}
                            </div>
+                           <span className="text-xs text-slate-500 font-mono">({dayTrades.length})</span>
                        </div>
-                       {isExpanded && (
-                           <div className="bg-slate-900/50 border-t border-slate-800 p-5 space-y-6 animate-fade-in">
-                               {(trade.chartImage || trade.oiImage) && (<div className="flex gap-4 overflow-x-auto pb-2">{trade.chartImage && (<div className="relative group shrink-0 cursor-pointer" onClick={() => setPreviewImage(trade.chartImage!)}><p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">Chart</p><img src={trade.chartImage} alt="Chart" className="h-24 rounded border border-slate-700 transition hover:scale-105" /></div>)}{trade.oiImage && (<div className="relative group shrink-0 cursor-pointer" onClick={() => setPreviewImage(trade.oiImage!)}><p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">OI Data</p><img src={trade.oiImage} alt="OI" className="h-24 rounded border border-slate-700 transition hover:scale-105" /></div>)}</div>)}
-                               <div className="bg-slate-950/30 p-4 rounded-lg border border-slate-800"><p className="text-xs text-slate-400 mb-2"><span className="text-slate-500 font-bold uppercase">{isSkipped ? 'Observation Log:' : 'Log/Logic:'}</span> {trade.entryReason}</p>{trade.exitReason && <p className="text-xs text-slate-400"><span className="text-slate-500 font-bold uppercase">Exit:</span> {trade.exitReason}</p>}</div>
-                               <div className="border-t border-slate-800 pt-4">
-                                   <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2"><Sparkles size={16} className="text-indigo-400" /><h4 className="text-sm font-bold text-white uppercase tracking-wider">{isSkipped ? "Decision Audit" : "Coach's Analysis"}</h4></div><div className="flex gap-2">{trade.aiFeedback && (<button onClick={(e) => { e.stopPropagation(); toggleAiFold(trade.id); }} className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded border border-slate-700 transition" title={collapsedAi.has(trade.id) ? "Expand Report" : "Collapse Report"}>{collapsedAi.has(trade.id) ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}</button>)}{trade.aiFeedback && onDeleteAiAnalysis && (<button onClick={(e) => { e.stopPropagation(); onDeleteAiAnalysis(trade.id); }} className="p-1.5 text-slate-400 hover:text-red-400 bg-slate-800 rounded border border-slate-700 transition" title="Delete Analysis"><Trash2 size={14}/></button>)}{!trade.aiFeedback && !readOnly && (<button onClick={(e) => { e.stopPropagation(); onAnalyze(trade); }} disabled={analyzingTradeId !== null} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded font-bold transition flex items-center disabled:opacity-50 disabled:cursor-not-allowed">{analyzingTradeId === trade.id ? <Bot size={14} className="animate-spin mr-1"/> : <Bot size={14} className="mr-1"/>}{analyzingTradeId === trade.id ? 'Analyzing...' : isSkipped ? 'Audit Decision' : 'Run Reality Check'}</button>)}</div></div>
-                                   {trade.aiFeedback ? renderAiFeedback(trade.aiFeedback, collapsedAi.has(trade.id)) : (<div className="text-center py-6 bg-slate-800/30 rounded border border-dashed border-slate-700"><p className="text-xs text-slate-500 italic">{isSkipped ? "Audit your decision to see if staying out was the right move." : "No AI analysis yet. Run a check to see if you followed your rules."}</p></div>)}
+                       <div className="flex items-center gap-2">
+                           <span className={`text-xs font-mono font-bold ${dayTrades.reduce((a,t)=>a+(t.pnl||0),0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{dayTrades.reduce((a,t)=>a+(t.pnl||0),0) >= 0 ? '+' : ''}₹{dayTrades.reduce((a,t)=>a+(t.pnl||0),0).toFixed(2)}</span>
+                           {dailyAnalysis[dateStr] ? (
+                               <button onClick={() => alert(dailyAnalysis[dateStr])} className="text-[10px] bg-emerald-900 text-emerald-300 border border-emerald-700 px-2 py-1 rounded">View Report</button>
+                           ) : (
+                               <button onClick={() => handleAnalyzeDay(dateStr, dayTrades)} className="text-[10px] bg-indigo-900/50 text-indigo-300 border border-indigo-700 px-2 py-1 rounded flex items-center hover:bg-indigo-900 transition">
+                                   {analyzingDay === dateStr ? <Bot size={12} className="mr-1 animate-spin"/> : <BrainCircuit size={12} className="mr-1"/>}{analyzingDay === dateStr ? 'Analyzing...' : 'Audit Day'}
+                               </button>
+                           )}
+                       </div>
+                   </div>
+
+                   {/* Timeline View Rendering */}
+                   {viewMode === 'timeline' && (
+                       <DailyTimeline dateStr={dateStr} trades={dayTrades} onEdit={onEdit} />
+                   )}
+
+                   {/* Standard List View Rendering */}
+                   {viewMode === 'list' && dayTrades.map((trade) => {
+                       const isOpen = trade.outcome === TradeOutcome.OPEN;
+                       const isWin = trade.outcome === TradeOutcome.WIN;
+                       const isSkipped = trade.outcome === TradeOutcome.SKIPPED;
+                       const isExpanded = expandedId === trade.id;
+                       const aiGrade = getAiGrade(trade.aiFeedback, trade.disciplineRating, isSkipped);
+                       const isAnalyzing = analyzingTradeId === trade.id;
+                       const roi = getRoiPercentage(trade);
+                       const isRealMoney = trade.executionType === 'REAL';
+                       const stripColor = isSkipped ? 'bg-slate-600' : isOpen ? 'bg-slate-600' : isWin ? 'bg-emerald-500' : trade.outcome === TradeOutcome.BREAK_EVEN ? 'bg-amber-500' : 'bg-red-500';
+                       return (
+                         <div id={`trade-${trade.id}`} key={trade.id} className={`bg-slate-800 rounded-xl border ${isExpanded ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-slate-700'} overflow-hidden transition-all duration-300 hover:shadow-xl relative pl-2 group`}>
+                           <div className={`absolute top-0 bottom-0 left-0 w-2 ${stripColor} transition-all`}></div>
+                           <div className="p-4 cursor-pointer" onClick={() => toggleExpand(trade.id)}>
+                               <div className="flex justify-between items-start">
+                                   <div className="flex items-start gap-3">
+                                       <div className={`mt-1 p-2 rounded-lg ${isSkipped ? 'bg-slate-500/10 text-slate-400' : trade.direction === TradeDirection.LONG ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                           {isSkipped ? <Ban size={20}/> : trade.direction === TradeDirection.LONG ? <ArrowUpRight size={20}/> : <ArrowDownRight size={20}/>}
+                                       </div>
+                                       <div>
+                                           <div className="flex items-center gap-2 flex-wrap">
+                                               <h4 className={`font-bold text-base ${isSkipped ? 'text-slate-400' : 'text-white'}`}>
+                                                   {trade.strikePrice ? `${trade.strikePrice} ${trade.optionType}` : trade.instrument}
+                                               </h4>
+                                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${isSkipped ? 'bg-slate-700 text-slate-400' : trade.optionType === OptionType.CE ? 'bg-green-900 text-green-300' : trade.optionType === OptionType.PE ? 'bg-red-900 text-red-300' : 'bg-indigo-900 text-indigo-300'}`}>
+                                                   {trade.optionType}
+                                               </span>
+                                               {isRealMoney && !isSkipped && (<span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30"><CircleDollarSign size={10} /> Real</span>)}
+                                               {aiGrade && !isExpanded && (<span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shadow-sm ${aiGrade.color}`}>Score: {aiGrade.grade}{typeof aiGrade.grade === 'number' ? '%' : ''}</span>)}
+                                               {isSkipped && <span className="text-[10px] font-black px-1.5 py-0.5 rounded border border-slate-600 bg-slate-700/50 text-slate-400">SKIPPED MISSION</span>}
+                                           </div>
+                                           <div className="flex items-center gap-2 md:gap-3 mt-1 text-slate-400 text-xs font-mono flex-wrap">
+                                               <span className="flex items-center"><Clock size={12} className="mr-1"/> {trade.entryTime}{trade.exitTime ? ` - ${trade.exitTime}` : ''}</span>
+                                               <span className="hidden md:inline">|</span>
+                                               {roi !== null && (<><span className={`${roi > 0 ? 'text-emerald-400' : roi < 0 ? 'text-red-400' : 'text-slate-400'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(1)}%</span><span className="hidden md:inline">|</span></>)}
+                                               {!isSkipped && <span>{trade.quantity} Qty</span>}
+                                               {!isSkipped && <span className="hidden md:inline">|</span>}
+                                               <span className={isSkipped ? 'text-slate-500' : trade.pnl && trade.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                                   {isSkipped ? 'NO TRADE' : isOpen ? 'HOLDING' : `₹${trade.pnl?.toFixed(2)}`}
+                                               </span>
+                                           </div>
+                                       </div>
+                                   </div>
+                                   <div className="text-right">{isAnalyzing ? (<div className="flex items-center gap-2 bg-indigo-900/30 px-3 py-1.5 rounded-full border border-indigo-500/30 animate-pulse"><BrainCircuit size={14} className="text-indigo-400 animate-spin"/><span className="text-[10px] font-bold text-indigo-300 uppercase hidden md:inline">Syncing...</span></div>) : (<div className="flex items-center gap-2"><div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider hidden sm:block">{trade.setupName || 'No Setup'}</div>{isExpanded ? <ChevronUp size={16} className="text-slate-500"/> : <ChevronDown size={16} className="text-slate-500"/>}</div>)}</div>
                                </div>
-                               {!readOnly && (<div className="flex justify-end gap-3 border-t border-slate-800 pt-4" data-html2canvas-ignore><button onClick={(e) => { e.stopPropagation(); onEdit(trade); }} className="text-xs flex items-center text-slate-400 hover:text-white transition"><Edit2 size={14} className="mr-1"/> Edit Log</button><button onClick={(e) => { e.stopPropagation(); onDelete(trade.id); }} className="text-xs flex items-center text-red-500/70 hover:text-red-500 transition"><Trash2 size={14} className="mr-1"/> Delete</button></div>)}
                            </div>
-                       )}
-                     </div>
-                   );
-                 })}</div>))}
+                           {isExpanded && (
+                               <div className="bg-slate-900/50 border-t border-slate-800 p-5 space-y-6 animate-fade-in">
+                                   {(trade.chartImage || trade.oiImage) && (<div className="flex gap-4 overflow-x-auto pb-2">{trade.chartImage && (<div className="relative group shrink-0 cursor-pointer" onClick={() => setPreviewImage(trade.chartImage!)}><p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">Chart</p><img src={trade.chartImage} alt="Chart" className="h-24 rounded border border-slate-700 transition hover:scale-105" /></div>)}{trade.oiImage && (<div className="relative group shrink-0 cursor-pointer" onClick={() => setPreviewImage(trade.oiImage!)}><p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">OI Data</p><img src={trade.oiImage} alt="OI" className="h-24 rounded border border-slate-700 transition hover:scale-105" /></div>)}</div>)}
+                                   <div className="bg-slate-950/30 p-4 rounded-lg border border-slate-800"><p className="text-xs text-slate-400 mb-2"><span className="text-slate-500 font-bold uppercase">{isSkipped ? 'Observation Log:' : 'Log/Logic:'}</span> {trade.entryReason}</p>{trade.exitReason && <p className="text-xs text-slate-400"><span className="text-slate-500 font-bold uppercase">Exit:</span> {trade.exitReason}</p>}</div>
+                                   <div className="border-t border-slate-800 pt-4">
+                                       <div className="flex justify-between items-center mb-4"><div className="flex items-center gap-2"><Sparkles size={16} className="text-indigo-400" /><h4 className="text-sm font-bold text-white uppercase tracking-wider">{isSkipped ? "Decision Audit" : "Coach's Analysis"}</h4></div><div className="flex gap-2">{trade.aiFeedback && (<button onClick={(e) => { e.stopPropagation(); toggleAiFold(trade.id); }} className="p-1.5 text-slate-400 hover:text-white bg-slate-800 rounded border border-slate-700 transition" title={collapsedAi.has(trade.id) ? "Expand Report" : "Collapse Report"}>{collapsedAi.has(trade.id) ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}</button>)}{trade.aiFeedback && onDeleteAiAnalysis && (<button onClick={(e) => { e.stopPropagation(); onDeleteAiAnalysis(trade.id); }} className="p-1.5 text-slate-400 hover:text-red-400 bg-slate-800 rounded border border-slate-700 transition" title="Delete Analysis"><Trash2 size={14}/></button>)}{!trade.aiFeedback && !readOnly && (<button onClick={(e) => { e.stopPropagation(); onAnalyze(trade); }} disabled={analyzingTradeId !== null} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded font-bold transition flex items-center disabled:opacity-50 disabled:cursor-not-allowed">{analyzingTradeId === trade.id ? <Bot size={14} className="animate-spin mr-1"/> : <Bot size={14} className="mr-1"/>}{analyzingTradeId === trade.id ? 'Analyzing...' : isSkipped ? 'Audit Decision' : 'Run Reality Check'}</button>)}</div></div>
+                                       {trade.aiFeedback ? renderAiFeedback(trade.aiFeedback, collapsedAi.has(trade.id)) : (<div className="text-center py-6 bg-slate-800/30 rounded border border-dashed border-slate-700"><p className="text-xs text-slate-500 italic">{isSkipped ? "Audit your decision to see if staying out was the right move." : "No AI analysis yet. Run a check to see if you followed your rules."}</p></div>)}
+                                   </div>
+                                   {!readOnly && (<div className="flex justify-end gap-3 border-t border-slate-800 pt-4" data-html2canvas-ignore><button onClick={(e) => { e.stopPropagation(); onEdit(trade); }} className="text-xs flex items-center text-slate-400 hover:text-white transition"><Edit2 size={14} className="mr-1"/> Edit Log</button><button onClick={(e) => { e.stopPropagation(); onDelete(trade.id); }} className="text-xs flex items-center text-red-500/70 hover:text-red-500 transition"><Trash2 size={14} className="mr-1"/> Delete</button></div>)}
+                               </div>
+                           )}
+                         </div>
+                       );
+                     })}
+               </div>
+           ))}
        </div>
     </div>
   );
