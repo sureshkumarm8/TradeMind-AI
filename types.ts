@@ -36,56 +36,54 @@ export enum OpeningType {
 export type NotificationType = 'success' | 'error' | 'info';
 
 export interface SystemChecks {
-  analyzedPreMarket: boolean; // Prev day/month graph, S/R zones
-  waitedForOpen: boolean; // 5-15 mins wait
-  checkedSensibullOI: boolean; // OI vs Strike
-  exitTimeLimit: boolean; // Exit within 15 mins OR Re-assessed
+  analyzedPreMarket: boolean;
+  waitedForOpen: boolean;
+  checkedSensibullOI: boolean;
+  exitTimeLimit: boolean;
 }
 
 export interface AiAnalysisResponse {
-  grade: number; // Changed to number (0-100)
-  gradeColor: string; // hex or tailwind class hint
-  marketTrend: string; // "Strong Bullish", "Choppy", "Bearish Reversal"
-  realityCheck: string; // The comparison text
+  grade: number;
+  gradeColor: string;
+  marketTrend: string;
+  realityCheck: string;
   strategyAudit: {
-    timing: string; // "Perfect", "Early", "Late"
-    direction: string; // "With Trend", "Counter Trend"
+    timing: string;
+    direction: string;
     rulesFollowed: boolean;
   };
-  coachCommand: string; // The actionable advice
-  sources?: string[]; // Grounding links
+  coachCommand: string;
+  sources?: string[];
 }
 
-// --- NEWS INTELLIGENCE TYPES ---
 export interface NewsAnalysis {
   sentiment: 'Bullish' | 'Bearish' | 'Neutral' | 'Mixed';
-  sentimentScore: number; // 1-10
-  summary: string; // Executive summary
+  sentimentScore: number;
+  summary: string;
   globalCues: {
-    usMarket: string; // "Nasdaq +1.5%"
-    asianMarket: string; // "Nikkei -0.4%"
-    giftNifty: string; // "Trading at 22,100 (+50)"
+    usMarket: string;
+    asianMarket: string;
+    giftNifty: string;
   };
   keyHeadlines: string[];
-  institutionalActivity?: string; // FII/DII data summary
+  institutionalActivity?: string;
 }
 
-// --- PRE-MARKET ANALYSIS TYPES ---
 export interface PreMarketAnalysis {
   marketBias: 'Bullish' | 'Bearish' | 'Neutral' | 'Volatile';
-  confidenceScore: number; // 1-10
+  confidenceScore: number;
   keyLevels: {
     resistance: number[];
     support: number[];
   };
   coreThesis: string;
   firstHourPlan: {
-    action: string; // Tactical advice for 9:25-9:45
+    action: string;
     potentialTrade?: {
       direction: TradeDirection;
       entryZone: string;
-      stopLoss: string; // "Exactly 30 pts"
-      target: string;   // "Exactly 35 pts"
+      stopLoss: string;
+      target: string;
     }
   };
   tradeSetups: {
@@ -114,12 +112,11 @@ export interface PreMarketAnalysis {
   }
 }
 
-// --- LIVE MARKET CHECK TYPES ---
 export interface LiveMarketAnalysis {
     status: 'CONFIRMED' | 'INVALIDATED' | 'CAUTION';
     updatedBias: 'Bullish' | 'Bearish' | 'Neutral';
-    realityCheck: string; // Comparison of Pre-Market vs Live Action
-    immediateAction: string; // Specific instruction for 9:25-9:45
+    realityCheck: string;
+    immediateAction: string;
     tradeUpdate?: {
         direction: TradeDirection;
         entryPrice: string;
@@ -128,91 +125,66 @@ export interface LiveMarketAnalysis {
     }
 }
 
-// --- POST-MARKET DEBRIEF TYPES ---
 export interface PostMarketAnalysis {
     predictionAccuracy: 'High' | 'Medium' | 'Low';
-    actualTrend: string; // What actually happened today
-    planVsReality: string; // Detailed comparison
-    keyTakeaways: string; // Lesson learned
+    actualTrend: string;
+    planVsReality: string;
+    keyTakeaways: string;
     tomorrowOutlook: {
         bias: 'Bullish' | 'Bearish' | 'Neutral';
         earlyLevels: {
             support: number[];
             resistance: number[];
         };
-        watchFor: string; // What to look for at tomorrow's open
+        watchFor: string;
     }
 }
 
 export interface TradeNote {
     id: string;
-    timestamp: string; // HH:mm:ss
+    timestamp: string;
     content: string;
     type: 'logic' | 'emotion' | 'market';
 }
 
 export interface Trade {
   id: string;
-  date: string; // ISO String YYYY-MM-DD
-  entryTime?: string; // HH:mm
-  exitTime?: string; // HH:mm
-  
-  instrument: string; // Defaults to NIFTY 50
-  executionType: 'PAPER' | 'REAL'; // New Flag for Real vs Paper
-
-  // Derivative Details
+  date: string;
+  entryTime?: string;
+  exitTime?: string;
+  instrument: string;
+  executionType: 'PAPER' | 'REAL';
   optionType?: OptionType;
   strikePrice?: number;
-  
-  // Nifty Spot Details (Underlying)
   niftyEntryPrice?: number;
   niftyExitPrice?: number;
-  
   direction: TradeDirection;
-  entryPrice: number; // Option Premium Entry
-  exitPrice?: number; // Option Premium Exit
-  quantity: number; // Defaults to 75
+  entryPrice: number;
+  exitPrice?: number;
+  quantity: number;
   stopLoss?: number;
   takeProfit?: number;
-  
-  // Nifty Scalp Specifics
   openingType?: OpeningType;
-  spotPointsCaptured?: number; // Target 30
-  tradeDurationMins?: number; // Target 15-30
+  spotPointsCaptured?: number;
+  tradeDurationMins?: number;
   systemChecks?: SystemChecks;
-
-  // Intraday Context
   timeframe: Timeframe;
-  session?: string; // Morning, Mid-day, Closing
-  
-  // Analysis & Psychology
+  session?: string;
   setupName: string; 
   marketContext: string; 
   entryReason: string;
   exitReason?: string;
-  
-  // NEW: Live Commentary Timeline
   notes?: TradeNote[];
-  
-  // Visual Evidence (Base64 Strings)
   chartImage?: string;
   oiImage?: string;
-  
-  // Enhanced Tracking
-  confluences: string[]; // e.g. ["VWAP", "CPR", "20 EMA"]
-  mistakes: string[]; // e.g. ["FOMO", "Revenge", "Overtrading"]
-  
-  // Discipline tracking
+  confluences: string[];
+  mistakes: string[];
   followedSystem: boolean;
-  disciplineRating: number; // 1-5
+  disciplineRating: number;
   emotionalState: string; 
-  
-  // Result
   pnl?: number;
   outcome: TradeOutcome;
-  
-  // AI
-  aiFeedback?: string; // Stored as JSON string
+  aiFeedback?: string;
 }
 
 export interface DashboardStats {
@@ -236,13 +208,13 @@ export interface PlaybookStat {
     totalPnL: number;
 }
 
-// --- Strategy Profile Interfaces ---
-
-export interface StrategyLink {
-  label: string;
-  url: string;
+export interface StrategyProfile {
+  name: string;
   description: string;
-  icon?: string; // Icon name reference
+  tags: string[];
+  steps: StrategyStep[];
+  links: StrategyLink[];
+  rules: StrategyRule[];
 }
 
 export interface StrategyStep {
@@ -255,22 +227,11 @@ export interface StrategyRule {
   description: string;
 }
 
-export interface StrategyProfile {
-  name: string;
+export interface StrategyLink {
+  label: string;
+  url: string;
   description: string;
-  tags: string[]; // e.g. ["Target: 30 Pts", "Risk: 1:1"]
-  steps: StrategyStep[]; // The Timeline Phases
-  links: StrategyLink[]; // Tools
-  rules: StrategyRule[]; // Iron Rules
-}
-
-export interface UserSettings {
-  apiKey: string;
-  googleClientId?: string; // New: For Drive Sync
-  preMarketNotes?: {
-      date: string;
-      notes: string;
-  }
+  icon?: string;
 }
 
 export interface UserProfile {
@@ -286,7 +247,6 @@ export enum SyncStatus {
   ERROR = 'ERROR'
 }
 
-// Helper for Voice to Log
 export interface ParsedVoiceCommand {
     instrument?: string;
     optionType?: OptionType;
@@ -296,5 +256,5 @@ export interface ParsedVoiceCommand {
     quantity?: number;
     entryReason?: string;
     setupName?: string;
-    note?: string; // New: For appending notes
+    note?: string;
 }
