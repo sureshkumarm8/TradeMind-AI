@@ -8,8 +8,7 @@ export enum TradeOutcome {
   WIN = 'WIN',
   LOSS = 'LOSS',
   BREAK_EVEN = 'BREAK_EVEN',
-  OPEN = 'OPEN',
-  SKIPPED = 'SKIPPED'
+  OPEN = 'OPEN'
 }
 
 export enum OptionType {
@@ -131,7 +130,7 @@ export interface LiveMarketAnalysis {
 // --- POST-MARKET DEBRIEF TYPES ---
 export interface PostMarketAnalysis {
     predictionAccuracy: 'High' | 'Medium' | 'Low';
-    actualTrend: string; // What actually happened today
+    actualTrend: string; // What actually happened
     planVsReality: string; // Detailed comparison
     keyTakeaways: string; // Lesson learned
     tomorrowOutlook: {

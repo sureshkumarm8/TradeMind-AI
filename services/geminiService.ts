@@ -1,10 +1,11 @@
 
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis, TradeOutcome } from "../types";
+import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
 const FAST_MODEL = 'gemini-2.5-flash';
 // Reasoning model for deep batch analysis 
+// Switched to Flash to avoid 429 Resource Exhausted errors on Free Tier
 const REASONING_MODEL = 'gemini-2.5-flash'; 
 
 const formatStrategyForAI = (profile?: StrategyProfile) => {
@@ -41,90 +42,120 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
   try {
     const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
-    const isSkipped = trade.outcome === TradeOutcome.SKIPPED;
     
     // Format timeline for prompt
     const timeline = trade.notes 
         ? trade.notes.map(n => `[${n.timestamp}] ${n.content} (${n.type})`).join('\n') 
         : "No live timeline logged.";
 
-    const taskInstructions = isSkipped 
-      ? `
-      TASK: DECISION AUDIT (USER SKIPPED THE TRADE)
-      1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} during the observation window (${trade.entryTime || 'market open'} onwards).
-      2. Analyze if the user's decision to SKIP was correct. Was the market choppy, trendless, or failing to trigger the strategy rules?
-      3. If they claim "no clarity," verify if the price action was indeed noisy or range-bound.
-      4. Grade them on PATIENCE. 100/100 means they avoided a "trap" or a high-risk/low-reward scenario.
-      `
-      : `
-      TASK: EXECUTION AUDIT (USER TOOK THE TRADE)
-      1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} between ${trade.entryTime || 'market open'} and ${trade.exitTime || 'market close'}.
-      2. If a chart image is provided, analyze the visual price structure to verify the entry.
-      3. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
-      4. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
-      `;
-
     const promptText = `
       You are a strict Quantitative Trading Mentor.
       The user follows a specific system.
       ${strategyContext}
       
-      ${taskInstructions}
+      TASK:
+      1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} between ${trade.entryTime || 'market open'} and ${trade.exitTime || 'market close'}.
+      2. If a chart image is provided, analyze the visual price structure (Candles, Patterns) to verify the entry.
+      3. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
+      4. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
+      5. Analyze their "Live Mission Timeline" (below) to check emotional stability and decision making during the trade.
       
-      User's Mission Log:
-      - Status: ${isSkipped ? 'SKIPPED / ABORTED' : 'EXECUTED'}
+      User's Logged Trade:
       - Date: ${trade.date}
-      - Time Window: ${trade.entryTime} to ${trade.exitTime || 'Observation End'}
-      - Direction Watched: ${trade.direction}
+      - Time: ${trade.entryTime} to ${trade.exitTime} (${trade.tradeDurationMins} mins)
+      - Nifty Spot: Entered @ ${trade.niftyEntryPrice}, Exited @ ${trade.niftyExitPrice}
+      - Instrument: ${trade.instrument} ${trade.strikePrice || ''} ${trade.optionType || ''}
+      - Direction: ${trade.direction}
+      - Result: ${trade.outcome} (PnL: ₹${trade.pnl})
       - Logic Summary: "${trade.entryReason}"
       
-      LIVE MISSION TIMELINE (User's Thoughts):
+      LIVE MISSION TIMELINE (Thoughts during trade):
       ${timeline}
       
       Output strict JSON format ONLY. Do not output markdown code blocks.
       
       Expected JSON Structure:
       {
-        "grade": "Integer between 0 and 100. 100 is Perfect Discipline (correctly skipping a bad setup or perfectly executing a good one).",
+        "grade": "Integer between 0 and 100 representing execution score. 100 is Perfect Discipline.",
         "gradeColor": "green (80-100), yellow (50-79), or red (0-49)",
-        "marketTrend": "Short phrase (e.g. 'Volatile Sideways', 'Clear Bearish Breakout')",
-        "realityCheck": "Comparison of User's choice vs Actual Market Action. If skipped: 'Good skip, market was indeed messy' or 'Missed opportunity, setup was valid'.",
+        "marketTrend": "Short phrase describing Nifty action during trade window (e.g. 'Strong Bullish Trend', 'Choppy Range')",
+        "realityCheck": "Direct comparison of User Entry vs Actual Market Price Action found via Search",
         "strategyAudit": {
-            "timing": "${isSkipped ? 'N/A' : 'Early, Late, or Perfect'}",
-            "direction": "Aligned or Contrary",
+            "timing": "Early, Late, or Perfect",
+            "direction": "With Trend or Counter Trend",
             "rulesFollowed": true or false
         },
-        "coachCommand": "One specific command for the next session."
+        "coachCommand": "One specific, actionable command for the next trade."
       }
     `;
     
     const parts: any[] = [{ text: promptText }];
     
+    // Add Chart Image if exists (base64)
     if (trade.chartImage) {
         const base64Data = trade.chartImage.split(',')[1];
-        parts.push({ inlineData: { mimeType: "image/jpeg", data: base64Data } });
-        parts.push({ text: "Analyze the attached screenshot for technical confluence or lack thereof." });
+        parts.push({
+            inlineData: {
+                mimeType: "image/jpeg",
+                data: base64Data
+            }
+        });
+        parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
     }
 
     const response = await ai.models.generateContent({
       model: FAST_MODEL,
       contents: { parts },
       config: {
-        tools: [{ googleSearch: {} }],
-        systemInstruction: `You are a professional prop trader manager. Your goal is to enforce the user's strategy. ${isSkipped ? 'Reward the user for being patient and avoiding bad trades.' : 'Critique execution accuracy.'} Return strictly valid JSON.`,
-        temperature: 0.2,
+        tools: [{ googleSearch: {} }], // Enable Grounding
+        systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search. Return strictly valid JSON.",
+        temperature: 0.3,
       }
     });
 
     let jsonResult = response.text || "{}";
+    
+    // Clean markdown if present
     if (jsonResult.includes('```')) {
         jsonResult = jsonResult.replace(/```json/g, '').replace(/```/g, '');
     }
     
-    return jsonResult;
+    let resultObj: any = {};
+    try {
+        resultObj = JSON.parse(jsonResult);
+    } catch(e) {
+        console.error("JSON Parse Error", e, jsonResult);
+        return JSON.stringify({
+            grade: 0, 
+            gradeColor: "gray",
+            marketTrend: "Analysis Error", 
+            realityCheck: "AI returned invalid format. Please try again.", 
+            strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
+            coachCommand: "Try again."
+        });
+    }
+
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (groundingChunks) {
+      const sources = groundingChunks
+        .map((chunk: any) => chunk.web?.uri ? chunk.web.title || 'Source' : null)
+        .filter(Boolean);
+      
+      if (sources.length > 0) {
+        resultObj.sources = sources;
+      }
+    }
+    
+    // Add error field if present to handle it in UI logic if needed
+    if (resultObj.realityCheck && resultObj.realityCheck.includes("Analysis Failed")) {
+        // Just return as is
+    }
+
+    return JSON.stringify(resultObj);
 
   } catch (error: any) {
     console.error("Error analyzing trade:", error);
+    // Return actual API error message
     return JSON.stringify({
       grade: 0,
       gradeColor: "red",
@@ -145,31 +176,39 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
     const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
 
+    // Prepare a summary of trades for the prompt to save tokens/complexity
     const tradeSummaries = trades.map((t, i) => `
-      ${i+1}. ${t.date} ${t.entryTime}: ${t.outcome === TradeOutcome.SKIPPED ? 'SKIPPED' : 'EXECUTED'}. 
-      Dir: ${t.direction}. PnL: ₹${t.pnl || 0}. Setup: ${t.setupName}. Logic: ${t.entryReason}.
+      ${i+1}. ${t.date} ${t.entryTime}: Spot ${t.niftyEntryPrice || '?'} -> ${t.niftyExitPrice || '?'}. 
+      Dir: ${t.direction}. PnL: ₹${t.pnl}. Outcome: ${t.outcome}.
+      Setup: ${t.setupName}. Mistakes: ${t.mistakes?.join(', ') || 'None'}.
     `).join('\n');
 
     const prompt = `
-      Analyze this batch of missions from a ${periodDescription}.
+      Analyze this batch of trades from a ${periodDescription}.
       ${strategyContext}
 
-      Mission Log:
+      Trade Log:
       ${tradeSummaries}
 
       Output a structured "Daily Coach's Report" in Markdown. 
-      Include a section on "Disciplined Avoidance" if any trades were correctly skipped.
+      Do NOT use generic text. Be specific to the data provided and the USER STRATEGY above.
       
       Structure:
       ### 📊 Market Sync
+      (Did they trade with the trend? Did they wait for setups as per their protocol?)
+
       ### 🛡️ Execution Grade
+      (Are they following the specific time/point rules defined in the strategy? Grade A-F)
+
       ### 💡 Pro Tip
+      (One advanced concept to apply tomorrow)
     `;
 
     const response = await ai.models.generateContent({
       model: REASONING_MODEL,
       contents: prompt,
       config: {
+        // thinkingConfig: { thinkingBudget: 1024 }, // Disabled thinking for Flash model to save quota/errors
         systemInstruction: "You are an expert trading psychologist. Format your response with clear Markdown headers and emojis.",
       }
     });
@@ -199,6 +238,7 @@ export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
 };
 
 // MULTIMODAL VOICE LOGGING
+// Accepts Audio Base64 -> Returns JSON
 export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): Promise<ParsedVoiceCommand> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required");
@@ -225,11 +265,23 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
             model: FAST_MODEL,
             contents: {
               parts: [
-                { inlineData: { mimeType: "audio/webm", data: audioBase64 } },
+                {
+                   inlineData: {
+                      mimeType: "audio/webm",
+                      data: audioBase64
+                   }
+                },
                 {
                    text: `
                     Listen to this trader's voice note. Extract trading data for the Indian Nifty 50 market.
-                    If they mention skipping or aborting, extract the reason into 'entryReason'.
+                    
+                    TASK 1: IF they are dictating trade parameters (e.g. "Buy Nifty 21500 CE at 150"):
+                    - Extract Option Type (CE/PE), Strike, Entry Price, Qty.
+                    
+                    TASK 2: IF they are dictating a thought/feeling (e.g. "I am feeling nervous about this resistance"):
+                    - Put the entire text into the 'note' field.
+                    
+                    TASK 3: IF mixed, extract parameters AND put the logic/feeling into 'entryReason' or 'note'.
                    `
                 }
               ]
@@ -247,114 +299,544 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
     }
 }
 
+// NEWS INTELLIGENCE ROUTINE (PHASE 0)
 export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required for News Intelligence");
+
     const ai = new GoogleGenAI({ apiKey: key });
+    
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const promptText = `You are a Pre-Market Intelligence Officer for an Indian Stock Market trader. It is currently morning on ${today}. Use Google Search to find real-time financial news impacting the "Nifty 50" opening today. Output valid JSON.`;
+    
+    const promptText = `
+        You are a Pre-Market Intelligence Officer for an Indian Stock Market trader. It is currently morning on ${today}.
+        
+        YOUR MISSION:
+        Use Google Search to find real-time financial news impacting the "Nifty 50" opening today.
+        
+        SEARCH FOR:
+        1. "Global stock market news today" (US Close, Asian Open).
+        2. "Gift Nifty live status" (Gap Up/Down?).
+        3. "Indian stock market news today" (FII/DII data, Key Earnings).
+        4. "Crude oil price today" and "USD INR rate".
+        
+        ANALYZE & SYNTHESIZE:
+        - Determine the overall sentiment for Nifty 50 opening (Bullish/Bearish).
+        - Summarize the "Global Cues" concisely.
+        - Extract the specific status of "Gift Nifty" (points up/down).
+        - Find the latest FII/DII cash market activity if available.
+        
+        OUTPUT FORMAT:
+        Return valid JSON only. No Markdown. No code blocks.
+        JSON Structure:
+        {
+            "sentiment": "Bullish" | "Bearish" | "Neutral" | "Mixed",
+            "sentimentScore": number (1-10),
+            "summary": "string",
+            "globalCues": {
+                "usMarket": "string",
+                "asianMarket": "string",
+                "giftNifty": "string"
+            },
+            "keyHeadlines": ["string", "string"],
+            "institutionalActivity": "string"
+        }
+    `;
+
     try {
         const response = await ai.models.generateContent({
             model: FAST_MODEL,
             contents: { parts: [{ text: promptText }] },
             config: {
                 tools: [{ googleSearch: {} }],
-                systemInstruction: "You are a financial news aggregator. Return strictly valid JSON text.",
+                // Removed responseMimeType and responseSchema to be compatible with Google Search tool
+                systemInstruction: "You are a financial news aggregator. Prioritize recency. Return strictly valid JSON text.",
                 temperature: 0.1
             }
         });
+
         let jsonText = response.text || "{}";
-        if (jsonText.includes("```")) jsonText = jsonText.replace(/```json/g, "").replace(/```/g, "");
+        // Clean markdown if present
+        if (jsonText.includes("```")) {
+            jsonText = jsonText.replace(/```json/g, "").replace(/```/g, "");
+        }
         return JSON.parse(jsonText);
     } catch (e: any) {
+        console.error("News Fetch Error", e);
         throw new Error(e.message || "Failed to fetch market news.");
     }
 };
 
-export const analyzePreMarketRoutine = async (images: { market: string; intraday: string; oi: string; multiStrike: string }, newsContext: NewsAnalysis | null, apiKey?: string): Promise<PreMarketAnalysis> => {
+// PRE-MARKET ANALYZER ROUTINE
+export const analyzePreMarketRoutine = async (
+    images: { market: string; intraday: string; oi: string; multiStrike: string },
+    newsContext: NewsAnalysis | null,
+    apiKey?: string
+): Promise<PreMarketAnalysis> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required for Pre-Market Analysis");
+
     const ai = new GoogleGenAI({ apiKey: key });
+
+    // Prepare prompt parts
     const parts: any[] = [];
-    if (images.market) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.market.split(',')[1] } });
-    if (images.intraday) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.intraday.split(',')[1] } });
-    if (images.oi) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.oi.split(',')[1] } });
-    if (images.multiStrike) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.multiStrike.split(',')[1] } });
-    if (newsContext) parts.push({ text: `CONTEXT: ${JSON.stringify(newsContext)}` });
-    const promptText = `Analyze charts for Nifty 50 Battle Plan. wait for 9:25 AM. Stop Loss 30 pts. Target 35 pts. Return JSON.`;
+    
+    // Add Images with labels in text
+    if (images.market) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.market.split(',')[1] } });
+        parts.push({ text: "Image 1: Market Overview Graph" });
+    }
+    if (images.intraday) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.intraday.split(',')[1] } });
+        parts.push({ text: "Image 2: Intraday Chart (5min)" });
+    }
+    if (images.oi) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.oi.split(',')[1] } });
+        parts.push({ text: "Image 3: Total Open Interest (OI)" });
+    }
+    if (images.multiStrike) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.multiStrike.split(',')[1] } });
+        parts.push({ text: "Image 4: Multi-Strike OI Changes" });
+    }
+
+    // Add News Context if available
+    if (newsContext) {
+        parts.push({
+            text: `
+            CONTEXT FROM LIVE NEWS SCAN:
+            - Overall Sentiment: ${newsContext.sentiment} (${newsContext.sentimentScore}/10)
+            - Global Cues: US ${newsContext.globalCues.usMarket}, Asia ${newsContext.globalCues.asianMarket}, Gift Nifty ${newsContext.globalCues.giftNifty}
+            - FII/DII: ${newsContext.institutionalActivity}
+            - Headlines: ${newsContext.keyHeadlines.join(', ')}
+            - News Summary: ${newsContext.summary}
+            
+            Use this news context to validate or question the technical signals from the charts.
+            `
+        });
+    }
+
+    // Strict Schema Definition
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            marketBias: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral', 'Volatile'] },
+            confidenceScore: { type: Type.NUMBER, description: "1 to 10" },
+            keyLevels: {
+                type: Type.OBJECT,
+                properties: {
+                    resistance: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                    support: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                }
+            },
+            coreThesis: { type: Type.STRING, description: "1-2 sentence central trading hypothesis" },
+            firstHourPlan: {
+                type: Type.OBJECT,
+                properties: {
+                    action: { type: Type.STRING, description: "Tactical plan STRICTLY for the 09:25 AM to 09:45 AM window." },
+                    potentialTrade: {
+                        type: Type.OBJECT,
+                        properties: {
+                            direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                            entryZone: { type: Type.STRING },
+                            stopLoss: { type: Type.STRING, description: "Must be 'Exactly 30 pts'" },
+                            target: { type: Type.STRING, description: "Must be 'Exactly 35 pts'" }
+                        }
+                    }
+                }
+            },
+            tradeSetups: {
+                type: Type.OBJECT,
+                properties: {
+                    primary: {
+                        type: Type.OBJECT,
+                        properties: {
+                            direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                            trigger: { type: Type.STRING },
+                            target: { type: Type.NUMBER },
+                            stopLoss: { type: Type.NUMBER }
+                        }
+                    },
+                    alternate: {
+                         type: Type.OBJECT,
+                        properties: {
+                            direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                            trigger: { type: Type.STRING },
+                            target: { type: Type.NUMBER },
+                            stopLoss: { type: Type.NUMBER }
+                        }
+                    }
+                }
+            },
+            openingScenarios: {
+                type: Type.OBJECT,
+                properties: {
+                    gapUp: { type: Type.STRING },
+                    gapDown: { type: Type.STRING }
+                }
+            },
+            chartSummaries: {
+                type: Type.OBJECT,
+                properties: {
+                    marketGraph: { type: Type.STRING },
+                    intraday: { type: Type.STRING },
+                    oiData: { type: Type.STRING },
+                    multiStrike: { type: Type.STRING }
+                }
+            }
+        }
+    };
+
+    // System Instruction
+    const promptText = `
+        You are an expert Nifty 50 intraday trading strategist.
+        Analyze the provided 4 images holistically${newsContext ? ' AND the provided Market News Intelligence' : ''}.
+        
+        CRITICAL TIME CONSTRAINTS:
+        - The trader DOES NOT trade immediately at 9:15 AM.
+        - They wait for 10 minutes (9:15 - 9:25) to let the dust settle.
+        - The 'firstHourPlan' MUST focus strictly on the entry window: 09:25 AM to 09:45 AM.
+        - All advice must be for acting within this specific 20-minute slot.
+        
+        CRITICAL RISK CONSTRAINTS:
+        - For any trade recommended, the Stop Loss MUST be exactly 30 points from entry.
+        - The Target MUST be exactly 35 points from entry.
+        
+        Generate a detailed Battle Plan in JSON format based on the schema.
+        1. Identify the directional bias${newsContext ? ' (weighing chart structure vs news sentiment)' : ''}.
+        2. Extract key Support & Resistance levels.
+        3. Formulate a core thesis.
+        4. Create a specific tactical plan for the 9:25 AM - 9:45 AM window.
+        5. Define Primary and Alternate trade setups.
+        6. Provide specific advice for Gap Up and Gap Down openings.
+        7. Summarize key signals from each chart.
+    `;
+    
     parts.push({ text: promptText });
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash', 
-        contents: { parts },
-        config: { responseMimeType: "application/json", systemInstruction: "Disciplined coach. Valid JSON only.", temperature: 0.2 }
-    });
-    return JSON.parse(response.text || "{}");
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash', 
+            contents: { parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a disciplined trading coach. Be objective. Do not hallucinate data not present in charts.",
+                temperature: 0.2
+            }
+        });
+
+        return JSON.parse(response.text || "{}");
+
+    } catch (e: any) {
+        console.error("Pre-Market Analysis Error", e);
+        throw new Error(e.message || "Failed to generate Pre-Market Plan.");
+    }
 }
 
-export const analyzeLiveMarketRoutine = async (images: { liveChart: string; liveOi: string }, preMarketPlan: PreMarketAnalysis, apiKey?: string): Promise<LiveMarketAnalysis> => {
+// LIVE MARKET CHECK ROUTINE (9:20 AM)
+export const analyzeLiveMarketRoutine = async (
+    images: { liveChart: string; liveOi: string },
+    preMarketPlan: PreMarketAnalysis,
+    apiKey?: string
+): Promise<LiveMarketAnalysis> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required for Live Check");
-    const ai = new GoogleGenAI({ apiKey: key });
-    const parts: any[] = [{ text: `CONTEXT: ${JSON.stringify(preMarketPlan)}` }];
-    if (images.liveChart) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.liveChart.split(',')[1] } });
-    if (images.liveOi) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.liveOi.split(',')[1] } });
-    const promptText = `Nifty commander 9:20 AM live check. SL 30 pt, TGT 35 pt. Return JSON.`;
-    parts.push({ text: promptText });
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts },
-        config: { responseMimeType: "application/json", systemInstruction: "Real-time assistant. Sharp, decisive. Valid JSON.", temperature: 0.2 }
-    });
-    return JSON.parse(response.text || "{}");
-}
 
-export const analyzePostMarketRoutine = async (images: { dailyChart: string; eodChart: string; eodOi: string }, preMarketPlan: PreMarketAnalysis | null, apiKey?: string): Promise<PostMarketAnalysis> => {
-    const key = apiKey || process.env.API_KEY;
-    if (!key) throw new Error("API Key Required for Post-Market Analysis");
     const ai = new GoogleGenAI({ apiKey: key });
     const parts: any[] = [];
-    if (preMarketPlan) parts.push({ text: `MORNING PLAN: ${JSON.stringify(preMarketPlan)}` });
-    if (images.dailyChart) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.dailyChart.split(',')[1] } });
-    if (images.eodChart) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.eodChart.split(',')[1] } });
-    if (images.eodOi) parts.push({ inlineData: { mimeType: "image/jpeg", data: images.eodOi.split(',')[1] } });
-    const promptText = `Review full day action. Lesson learned. Return JSON.`;
+
+    // Context: Pre-Market Plan
+    const contextStr = JSON.stringify(preMarketPlan, null, 2);
+    parts.push({ text: `PRE-MARKET PLAN (Context): ${contextStr}` });
+
+    // Live Images
+    if (images.liveChart) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.liveChart.split(',')[1] } });
+        parts.push({ text: "LIVE CHART (9:20 AM)" });
+    }
+    if (images.liveOi) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.liveOi.split(',')[1] } });
+        parts.push({ text: "LIVE OI DATA (9:20 AM)" });
+    }
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            status: { type: Type.STRING, enum: ['CONFIRMED', 'INVALIDATED', 'CAUTION'] },
+            updatedBias: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral'] },
+            realityCheck: { type: Type.STRING, description: "Compare Pre-Market Thesis vs Live Price Action. Is the gap fill happening? Is support holding?" },
+            immediateAction: { type: Type.STRING, description: "Specific instruction for the 9:25 AM - 9:45 AM window." },
+            tradeUpdate: {
+                type: Type.OBJECT,
+                properties: {
+                    direction: { type: Type.STRING, enum: ['LONG', 'SHORT'] },
+                    entryPrice: { type: Type.STRING },
+                    stopLoss: { type: Type.STRING, description: "Exactly 30 pts" },
+                    target: { type: Type.STRING, description: "Exactly 35 pts" }
+                }
+            }
+        }
+    };
+
+    const promptText = `
+        You are the Nifty 50 Commander. It is now 9:20 AM (5 mins after open).
+        
+        TASK:
+        1. Compare the LIVE charts against the PRE-MARKET PLAN context provided.
+        2. Did the market open as expected (Gap Up/Down)?
+        3. Is the Core Thesis still valid?
+        
+        DECISION FOR 9:25 AM - 9:45 AM WINDOW:
+        - Should we enter as planned? Or abort?
+        - If entering, confirm the levels.
+        - Constraints: Stop Loss = 30 pts, Target = 35 pts.
+        
+        Output valid JSON.
+    `;
+    
     parts.push({ text: promptText });
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: { parts },
-        config: { responseMimeType: "application/json", systemInstruction: "Retrospective analysis. Educational. Valid JSON.", temperature: 0.3 }
-    });
-    return JSON.parse(response.text || "{}");
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a real-time trading assistant. Be sharp and decisive.",
+                temperature: 0.2
+            }
+        });
+        return JSON.parse(response.text || "{}");
+    } catch (e: any) {
+        console.error("Live Check Error", e);
+        throw new Error(e.message || "Failed Live Check.");
+    }
 }
 
-export const getMentorChatResponse = async (chatHistory: any[], trades: Trade[], strategyProfile: StrategyProfile, apiKey?: string): Promise<string> => {
+// POST-MARKET DEBRIEF ROUTINE (End of Day)
+export const analyzePostMarketRoutine = async (
+    images: { dailyChart: string; eodChart: string; eodOi: string },
+    preMarketPlan: PreMarketAnalysis | null,
+    apiKey?: string
+): Promise<PostMarketAnalysis> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required for Post-Market Analysis");
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const parts: any[] = [];
+
+    // Context: Morning Plan
+    if (preMarketPlan) {
+        const contextStr = JSON.stringify(preMarketPlan, null, 2);
+        parts.push({ text: `MORNING PLAN (For Reference): ${contextStr}` });
+    } else {
+        parts.push({ text: "NO MORNING PLAN WAS CREATED. Analyze purely on EOD data." });
+    }
+
+    // EOD Images
+    if (images.dailyChart) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.dailyChart.split(',')[1] } });
+        parts.push({ text: "Image 1: Daily Timeframe Chart (High Level)" });
+    }
+    if (images.eodChart) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.eodChart.split(',')[1] } });
+        parts.push({ text: "Image 2: Intraday 5m Chart (Full Day Action)" });
+    }
+    if (images.eodOi) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: images.eodOi.split(',')[1] } });
+        parts.push({ text: "Image 3: End of Day OI Data" });
+    }
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            predictionAccuracy: { type: Type.STRING, enum: ['High', 'Medium', 'Low'] },
+            actualTrend: { type: Type.STRING, description: "What actually happened today? (e.g. 'Gap up and trended higher')" },
+            planVsReality: { type: Type.STRING, description: "Detailed critique: Did the morning plan work? Where did it fail or succeed?" },
+            keyTakeaways: { type: Type.STRING, description: "One major lesson from today's price action." },
+            tomorrowOutlook: {
+                type: Type.OBJECT,
+                properties: {
+                    bias: { type: Type.STRING, enum: ['Bullish', 'Bearish', 'Neutral'] },
+                    earlyLevels: {
+                        type: Type.OBJECT,
+                        properties: {
+                            support: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                            resistance: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                        }
+                    },
+                    watchFor: { type: Type.STRING, description: "Specific setup to watch for at tomorrow's open." }
+                }
+            }
+        }
+    };
+
+    const promptText = `
+        You are the Head Risk Manager. The trading day is over.
+        
+        TASK:
+        1. Review today's full price action (Intraday Chart).
+        2. Compare it against the Morning Plan (if provided). Did we predict the bias correctly?
+        3. Analyze the Daily Candle structure. What does it signal for TOMORROW?
+        4. Provide early Support/Resistance levels for the next trading session.
+        
+        Output structured JSON. Be critical and educational.
+    `;
+    
+    parts.push({ text: promptText });
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                systemInstruction: "You are a retrospective trading analyst. Your goal is to learn from today to prepare for tomorrow.",
+                temperature: 0.3
+            }
+        });
+        return JSON.parse(response.text || "{}");
+    } catch (e: any) {
+        console.error("Post-Market Analysis Error", e);
+        throw new Error(e.message || "Failed Post-Market Analysis.");
+    }
+}
+
+// --- MENTOR CHAT ROUTINE ---
+// This enables a conversational interface with the full context of the user's trading history.
+export const getMentorChatResponse = async (
+    chatHistory: { role: string, parts: { text: string }[] }[],
+    trades: Trade[],
+    strategyProfile: StrategyProfile,
+    apiKey?: string
+): Promise<string> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required for Mentor Chat");
+
     const ai = new GoogleGenAI({ apiKey: key });
-    const historyForInit = [...chatHistory];
-    const lastUserMsg = historyForInit.pop(); 
-    const activeChat = ai.chats.create({
-        model: 'gemini-2.5-flash',
-        config: { systemInstruction: `War Room Mentor. Access to trades and strategy. Direct, no fluff. CITING SKIPPED MISSIONS AS POSITIVE IF JUSTIFIED.`, },
-        history: historyForInit as any
-    });
-    if (!lastUserMsg) return "Silent check.";
-    const result = await activeChat.sendMessage({ message: lastUserMsg.parts[0].text });
-    return result.text || "";
+
+    // 1. Summarize History for Context (Last 50 trades)
+    // We don't send full objects to save tokens, just key metrics
+    const recentHistory = trades
+        .slice(0, 50)
+        .map(t => `${t.date}: ${t.direction} ${t.instrument}. Res: ${t.outcome} (${t.pnl}). Setup: ${t.setupName}. Mistakes: ${t.mistakes?.join(',') || 'None'}`)
+        .join('\n');
+
+    const strategyContext = formatStrategyForAI(strategyProfile);
+
+    // 2. Define System Instruction (Persona)
+    const systemInstruction = `
+        You are "The War Room Mentor", a battle-hardened, professional trading psychologist and risk manager.
+        
+        CONTEXT:
+        You have access to the user's Trading Strategy and their last 50 trades.
+        
+        USER STRATEGY:
+        ${strategyContext}
+        
+        RECENT TRADE LOG (Last 50):
+        ${recentHistory}
+        
+        YOUR MISSION:
+        - Answer the user's questions about their performance, psychology, or strategy.
+        - Be direct, concise, and professional. No fluff.
+        - Cite specific trades from their history if relevant (e.g., "Look at your loss on 2024-03-12...").
+        - If they show signs of "Tilt" (emotional trading), shut them down gently but firmly.
+        - Use emojis sparingly, only for emphasis (🛡️, 📉, 💡).
+        - Format responses in Markdown.
+    `;
+
+    try {
+        // Initialize Chat with System Instruction
+        // Pop the last message (current user prompt) to send it via sendMessage
+        // The rest is history.
+        const historyForInit = [...chatHistory];
+        const lastUserMsg = historyForInit.pop(); 
+        
+        const activeChat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: {
+                systemInstruction: systemInstruction,
+            },
+            history: historyForInit as any
+        });
+
+        if (!lastUserMsg || !lastUserMsg.parts[0].text) return "Silent check.";
+
+        const result = await activeChat.sendMessage({ message: lastUserMsg.parts[0].text });
+        return result.text || "";
+
+    } catch (e: any) {
+        console.error("Mentor Chat Error", e);
+        return `SIGNAL INTERRUPTED. API Error: ${e.message || "Unknown Connection Failure"}. Check Key and Quota.`;
+    }
 }
 
-export const getLiveTradeCoachResponse = async (chatHistory: any[], currentTradeData: any, strategyProfile: StrategyProfile, apiKey: string): Promise<string> => {
+// --- LIVE TRADE COACH ROUTINE (New) ---
+// Focused on the current trade being logged
+export const getLiveTradeCoachResponse = async (
+    chatHistory: { role: string, parts: { text?: string, inlineData?: any }[] }[],
+    currentTradeData: any, // The formData
+    strategyProfile: StrategyProfile,
+    apiKey: string
+): Promise<string> => {
     const key = apiKey || process.env.API_KEY;
     if (!key) throw new Error("API Key Required");
+
     const ai = new GoogleGenAI({ apiKey: key });
-    const historyForInit = [...chatHistory];
-    const lastUserMsg = historyForInit.pop();
-    const activeChat = ai.chats.create({
-        model: 'gemini-2.5-flash',
-        config: { systemInstruction: `AI Co-pilot in cockpit. Handle executed or skipped missions tactically.`, },
-        history: historyForInit as any
-    });
-    if (!lastUserMsg) return "Standby.";
-    const result = await activeChat.sendMessage({ message: lastUserMsg.parts });
-    return result.text || "";
+
+    const strategyContext = formatStrategyForAI(strategyProfile);
+    
+    // Format live timeline
+    const timeline = currentTradeData.notes 
+        ? currentTradeData.notes.map((n: any) => `[${n.timestamp}] ${n.content} (${n.type})`).join('\n') 
+        : "No live notes yet.";
+
+    const systemInstruction = `
+        You are an AI Co-Pilot for a live trader. You are situated INSIDE the cockpit.
+        
+        CURRENT TRADE DATA:
+        Instrument: ${currentTradeData.instrument || 'Nifty'} ${currentTradeData.strikePrice || ''} ${currentTradeData.optionType || ''}
+        Direction: ${currentTradeData.direction}
+        Entry: ${currentTradeData.entryPrice || 0}
+        Qty: ${currentTradeData.quantity || 0}
+        Reason: ${currentTradeData.entryReason || 'Not specified'}
+        
+        LIVE MISSION TIMELINE (User's Thoughts):
+        ${timeline}
+        
+        USER STRATEGY:
+        ${strategyContext}
+        
+        YOUR MISSION:
+        - Provide immediate, tactical advice based on the user's strategy.
+        - Check their emotional state from the timeline. If they seem tilted, tell them to stop.
+        - If they upload a chart image, analyze it for the specific setup they claim to be trading.
+        - Keep responses SHORT and PUNCHY. You are on the radio.
+    `;
+
+    try {
+        const historyForInit = [...chatHistory];
+        const lastUserMsg = historyForInit.pop();
+
+        const activeChat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: { systemInstruction },
+            history: historyForInit as any
+        });
+
+        if (!lastUserMsg) return "Standby.";
+        
+        // Construct message content correctly for the SDK
+        // The SDK expects { message: string | Part[] } or just string/Part[] if implicit.
+        // We use { message: ... } to be safe and explicit with multi-modal content.
+        const result = await activeChat.sendMessage({ message: lastUserMsg.parts });
+        return result.text || "";
+
+    } catch (e: any) {
+        console.error("Live Coach Error", e);
+        return `COMM LINK OFFLINE: ${e.message}`;
+    }
 }
