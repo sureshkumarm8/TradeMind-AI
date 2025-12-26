@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Trade, TradeOutcome, TradeDirection, OptionType, StrategyProfile, AiAnalysisResponse, TradeNote } from '../types';
@@ -91,13 +92,16 @@ const DailyTimeline = ({ dateStr, trades, onEdit }: { dateStr: string, trades: T
         // AI Feedback (Ideally show after exit)
         if (trade.aiFeedback) {
              const time = trade.exitTime || trade.entryTime || '23:59';
-             events.push({
-                 id: `${trade.id}_ai`,
-                 type: 'AI_FEEDBACK',
-                 time: time, // Logic: AI speaks after the trade is done
-                 data: JSON.parse(trade.aiFeedback),
-                 tradeId: trade.id
-             });
+             try {
+                 const parsed = JSON.parse(trade.aiFeedback);
+                 events.push({
+                     id: `${trade.id}_ai`,
+                     type: 'AI_FEEDBACK',
+                     time: time,
+                     data: parsed,
+                     tradeId: trade.id
+                 });
+             } catch(e) {}
         }
     });
 
@@ -189,7 +193,7 @@ const DailyTimeline = ({ dateStr, trades, onEdit }: { dateStr: string, trades: T
                                             <span className="text-xs font-black text-indigo-300 uppercase tracking-widest">Coach's Debrief</span>
                                         </div>
                                         <div className="text-sm text-slate-200 leading-relaxed font-medium">
-                                            {ev.data.realityCheck}
+                                            {ev.data.realityCheck || "Analysis Available"}
                                         </div>
                                         <div className="mt-2 flex gap-2">
                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ev.data.grade >= 60 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
@@ -293,7 +297,7 @@ const AiCoachReport = ({ report, title }: { report: string, title: string }) => 
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 relative z-10">
                         {sections.map((section, idx) => {
                             const lines = section.trim().split('\n');
-                            const rawTitle = lines[0].trim();
+                            const rawTitle = lines[0]?.trim() || "Insight";
                             const content = lines.slice(1).join('\n').trim();
                             
                             // Determine Styling based on content content
@@ -548,7 +552,7 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
             <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                      <span className={`text-xs font-black uppercase px-2 py-0.5 rounded border ${gradeStyle}`}>Grade: {data.grade}{typeof data.grade === 'number' ? '%' : ''}</span>
-                     <span className="text-xs text-slate-400 font-medium truncate max-w-[200px] md:max-w-md">{data.marketTrend} • {data.strategyAudit.rulesFollowed ? 'Rules OK' : 'Rules Broken'}</span>
+                     <span className="text-xs text-slate-400 font-medium truncate max-w-[200px] md:max-w-md">{data.marketTrend} • {data.strategyAudit?.rulesFollowed ? 'Rules OK' : 'Rules Broken'}</span>
                 </div>
                 <span className="text-[10px] text-slate-500 uppercase font-bold hidden sm:block">Click chevron to expand</span>
             </div>
@@ -561,10 +565,15 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
               {data.marketTrend && (<div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-slate-700"><Activity size={12} className="text-slate-400"/><span className="text-[10px] font-bold text-slate-300 uppercase">{data.marketTrend}</span></div>)}
            </div>
            <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-               <div className="lg:col-span-3 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800 pb-6 lg:pb-0 lg:pr-6"><span className="text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Execution Score</span><div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 ${gradeStyle} shadow-lg mb-2 relative`}><span className="text-4xl font-black">{data.grade}</span>{typeof data.grade === 'number' && <span className="text-xs font-bold opacity-70">%</span>}</div><div className="flex gap-2 text-[10px] font-bold uppercase mt-2"><span className={`px-2 py-0.5 rounded ${data.strategyAudit.rulesFollowed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{data.strategyAudit.rulesFollowed ? 'Rules OK' : 'Rules Broken'}</span></div></div>
+               <div className="lg:col-span-3 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-800 pb-6 lg:pb-0 lg:pr-6"><span className="text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Execution Score</span><div className={`w-28 h-28 rounded-full flex flex-col items-center justify-center border-4 ${gradeStyle} shadow-lg mb-2 relative`}><span className="text-4xl font-black">{data.grade}</span>{typeof data.grade === 'number' && <span className="text-xs font-bold opacity-70">%</span>}</div><div className="flex gap-2 text-[10px] font-bold uppercase mt-2"><span className={`px-2 py-0.5 rounded ${data.strategyAudit?.rulesFollowed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>{data.strategyAudit?.rulesFollowed ? 'Rules OK' : 'Rules Broken'}</span></div></div>
                <div className="lg:col-span-9 space-y-5">
-                   <div><h5 className="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase mb-2"><TrendingUp size={14}/> Reality Check</h5><p className="text-sm text-slate-300 bg-blue-900/10 border-l-2 border-blue-500 p-3 rounded-r-lg italic leading-relaxed">{data.realityCheck.replace(/^"|"$/g, '')}</p></div>
-                   <div className="grid grid-cols-2 gap-4"><div className="bg-slate-800/50 p-3 rounded border border-slate-700/50"><span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Timing</span><div className="flex items-center gap-2"><Clock size={14} className={data.strategyAudit.timing === 'Perfect' ? 'text-emerald-400' : 'text-amber-400'}/><span className="text-sm font-medium text-white">{data.strategyAudit.timing}</span></div></div><div className="bg-slate-800/50 p-3 rounded border border-slate-700/50"><span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Direction</span><div className="flex items-center gap-2"><Target size={14} className={data.strategyAudit.direction === 'With Trend' ? 'text-emerald-400' : 'text-amber-400'}/><span className="text-sm font-medium text-white">{data.strategyAudit.direction}</span></div></div></div>
+                   <div>
+                       <h5 className="flex items-center gap-2 text-xs font-bold text-blue-400 uppercase mb-2"><TrendingUp size={14}/> Reality Check</h5>
+                       <p className="text-sm text-slate-300 bg-blue-900/10 border-l-2 border-blue-500 p-3 rounded-r-lg italic leading-relaxed">
+                           {data.realityCheck ? data.realityCheck.replace(/^"|"$/g, '') : "No detailed analysis provided."}
+                       </p>
+                   </div>
+                   <div className="grid grid-cols-2 gap-4"><div className="bg-slate-800/50 p-3 rounded border border-slate-700/50"><span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Timing</span><div className="flex items-center gap-2"><Clock size={14} className={data.strategyAudit?.timing === 'Perfect' ? 'text-emerald-400' : 'text-amber-400'}/><span className="text-sm font-medium text-white">{data.strategyAudit?.timing || '-'}</span></div></div><div className="bg-slate-800/50 p-3 rounded border border-slate-700/50"><span className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Direction</span><div className="flex items-center gap-2"><Target size={14} className={data.strategyAudit?.direction === 'With Trend' ? 'text-emerald-400' : 'text-amber-400'}/><span className="text-sm font-medium text-white">{data.strategyAudit?.direction || '-'}</span></div></div></div>
                    <div><h5 className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase mb-2"><Zap size={14}/> Coach's Command</h5><div className="text-sm text-emerald-100 bg-emerald-900/20 border border-emerald-500/20 p-3 rounded-lg flex items-start gap-3"><ShieldAlert size={18} className="shrink-0 mt-0.5 text-emerald-500"/><span className="font-medium">{data.coachCommand}</span></div></div>
                    {data.sources && data.sources.length > 0 && (<div className="flex gap-2 flex-wrap mt-2">{data.sources.map((src, i) => (<span key={i} className="text-[10px] flex items-center bg-slate-800 text-slate-500 px-2 py-1 rounded border border-slate-700"><ExternalLink size={10} className="mr-1"/> {src}</span>))}</div>)}
                </div>
@@ -578,6 +587,127 @@ const TradeList: React.FC<TradeListProps> = ({ trades, strategyProfile, apiKey, 
           <div className="text-center py-20 animate-fade-in-up"><div className="bg-slate-800 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-slate-700 shadow-xl"><Target size={48} className="text-slate-500" /></div><h3 className="text-2xl font-bold text-white mb-2">Journal Empty</h3><p className="text-slate-400 mb-8">Start by logging your first mission or restore a backup.</p><div className="flex justify-center gap-4"><button onClick={() => onEdit({} as Trade)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-indigo-900/50 flex items-center"><Activity size={18} className="mr-2"/> Log First Trade</button></div></div>
       )
   }
+
+  const renderCalendar = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDayOfWeek = firstDay.getDay(); // 0 = Sunday
+
+    const days = [];
+    for (let i = 0; i < startDayOfWeek; i++) {
+        days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+        days.push(new Date(year, month, i));
+    }
+
+    const monthName = currentDate.toLocaleString('default', { month: 'long' });
+
+    return (
+        <div className="animate-fade-in mb-8">
+            <div className="flex justify-between items-center mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <button onClick={prevMonth} className="p-2 hover:bg-slate-800 rounded-lg transition"><ChevronLeft size={20} /></button>
+                <h3 className="text-lg font-bold text-white uppercase tracking-widest">{monthName} {year}</h3>
+                <button onClick={nextMonth} className="p-2 hover:bg-slate-800 rounded-lg transition"><ChevronRight size={20} /></button>
+            </div>
+            <div className="grid grid-cols-7 gap-2 mb-2 text-center">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                    <div key={d} className="text-xs font-bold text-slate-500 uppercase">{d}</div>
+                ))}
+            </div>
+            <div className="grid grid-cols-7 gap-2 auto-rows-fr">
+                {days.map((date, idx) => {
+                    if (!date) return <div key={idx} className="bg-slate-900/30 rounded-lg min-h-[100px]"></div>;
+                    
+                    const dateStr = date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    const dayTrades = tradesByDate[dateStr] || [];
+                    const dailyPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
+                    const winCount = dayTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
+                    const lossCount = dayTrades.filter(t => t.outcome === TradeOutcome.LOSS).length;
+
+                    return (
+                        <div key={idx} className={`bg-slate-900 border ${dayTrades.length > 0 ? (dailyPnL >= 0 ? 'border-emerald-900/50 bg-emerald-900/5' : 'border-red-900/50 bg-red-900/5') : 'border-slate-800'} rounded-lg p-2 min-h-[100px] flex flex-col relative group transition hover:border-indigo-500/50`}>
+                            <div className="flex justify-between items-start mb-1">
+                                <span className={`text-xs font-bold ${dayTrades.length > 0 ? 'text-white' : 'text-slate-600'}`}>{date.getDate()}</span>
+                                {dayTrades.length > 0 && <span className={`text-[10px] font-bold ${dailyPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{Math.abs(dailyPnL).toFixed(0)}</span>}
+                            </div>
+                            <div className="flex-1 flex flex-col justify-end gap-1">
+                                {dayTrades.slice(0, 3).map((t, i) => (
+                                    <div key={i} className={`h-1.5 rounded-full w-full ${t.outcome === TradeOutcome.WIN ? 'bg-emerald-500' : t.outcome === TradeOutcome.LOSS ? 'bg-red-500' : 'bg-slate-500'}`} title={`${t.instrument}: ₹${t.pnl}`}></div>
+                                ))}
+                                {dayTrades.length > 3 && <div className="text-[9px] text-slate-500 text-center">+{dayTrades.length - 3} more</div>}
+                            </div>
+                            {dayTrades.length > 0 && (
+                                <div className="mt-1 flex justify-between text-[9px] text-slate-500">
+                                    <span>{winCount}W</span>
+                                    <span>{lossCount}L</span>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+  };
+
+  const renderWeeklyView = () => {
+    const startOfWeek = getStartOfWeek(currentDate);
+    const weekDays = [];
+    for(let i=0; i<7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(d.getDate() + i);
+        weekDays.push(d);
+    }
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 6);
+
+    const weekLabel = `${startOfWeek.toLocaleDateString(undefined, {month:'short', day:'numeric'})} - ${endOfWeek.toLocaleDateString(undefined, {month:'short', day:'numeric'})}`;
+
+    return (
+        <div className="animate-fade-in mb-8">
+             <div className="flex justify-between items-center mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <button onClick={prevWeek} className="p-2 hover:bg-slate-800 rounded-lg transition"><ChevronLeft size={20} /></button>
+                <h3 className="text-lg font-bold text-white uppercase tracking-widest">{weekLabel}</h3>
+                <button onClick={nextWeek} className="p-2 hover:bg-slate-800 rounded-lg transition"><ChevronRight size={20} /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+                {weekDays.map((date, idx) => {
+                     const dateStr = date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                     const dayTrades = tradesByDate[dateStr] || [];
+                     const dailyPnL = dayTrades.reduce((acc, t) => acc + (t.pnl || 0), 0);
+                     const isToday = new Date().toDateString() === date.toDateString();
+
+                     return (
+                         <div key={idx} className={`flex flex-col gap-2 min-h-[300px] rounded-xl border ${isToday ? 'border-indigo-500 bg-slate-900' : 'border-slate-800 bg-slate-900/50'} p-3`}>
+                            <div className="text-center pb-2 border-b border-slate-800">
+                                <div className="text-xs font-bold text-slate-500 uppercase">{date.toLocaleDateString(undefined, {weekday: 'short'})}</div>
+                                <div className="text-lg font-black text-white">{date.getDate()}</div>
+                                {dayTrades.length > 0 && <div className={`text-xs font-mono font-bold ${dailyPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{dailyPnL >= 0 ? '+' : ''}₹{dailyPnL.toFixed(0)}</div>}
+                            </div>
+                            <div className="flex-1 space-y-2 overflow-y-auto custom-scrollbar max-h-[400px]">
+                                {dayTrades.map(t => (
+                                    <div key={t.id} onClick={() => onEdit(t)} className={`p-2 rounded border cursor-pointer hover:scale-[1.02] transition ${t.outcome === TradeOutcome.WIN ? 'bg-emerald-900/20 border-emerald-500/30' : t.outcome === TradeOutcome.LOSS ? 'bg-red-900/20 border-red-500/30' : 'bg-slate-800 border-slate-700'}`}>
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-[10px] font-bold text-slate-300">{t.instrument}</span>
+                                            <span className={`text-[10px] font-mono ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : t.pnl && t.pnl < 0 ? 'text-red-400' : 'text-slate-400'}`}>{t.outcome === TradeOutcome.SKIPPED ? 'SKIP' : `₹${t.pnl?.toFixed(0)}`}</span>
+                                        </div>
+                                        <div className="text-[9px] text-slate-500 truncate">{t.setupName || 'No Setup'}</div>
+                                    </div>
+                                ))}
+                                {dayTrades.length === 0 && <div className="text-[10px] text-slate-600 text-center italic mt-4">No Data</div>}
+                            </div>
+                         </div>
+                     );
+                })}
+            </div>
+        </div>
+    );
+  };
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in">
