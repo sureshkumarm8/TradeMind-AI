@@ -299,6 +299,65 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
     }
 }
 
+// NEW: PATTERN RECOGNITION (Edge Lab)
+export interface EdgeInsight {
+    type: 'strength' | 'weakness' | 'opportunity';
+    title: string;
+    description: string;
+    actionable: string;
+}
+
+export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<EdgeInsight[]> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required");
+
+    // Filter closed trades and map to lightweight format
+    const data = trades
+        .filter(t => t.outcome !== 'OPEN')
+        .map(t => `${t.date} ${t.entryTime} | ${t.setupName || 'NoSetup'} | ${t.outcome} (PnL: ${t.pnl}) | Mistakes: ${t.mistakes?.join(',') || 'None'} | Mood: ${t.emotionalState || 'Neutral'}`)
+        .join('\n');
+
+    const prompt = `
+        Analyze this raw trade log for Hidden Statistical Patterns.
+        
+        DATA:
+        ${data}
+        
+        TASK:
+        Find 3 deep correlations.
+        1. STRENGTH: When does the user win most? (Time of day, specific setup, or emotional state).
+        2. LEAK: Where is the money being lost? (Specific mistake, day of week, or "revenge" patterns).
+        3. OPPORTUNITY / SIMULATION: "If you had eliminated X (e.g. FOMO trades), your PnL would likely be Y% higher."
+        
+        OUTPUT JSON ARRAY:
+        [
+            { "type": "strength", "title": "e.g. The 10 AM Sniper", "description": "...", "actionable": "..." },
+            { "type": "weakness", "title": "e.g. The Mid-Day Slump", "description": "...", "actionable": "..." },
+            { "type": "opportunity", "title": "e.g. Revenge Tax Refund", "description": "...", "actionable": "..." }
+        ]
+    `;
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: REASONING_MODEL,
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                // schema: ... (optional, but prompt is usually enough for array)
+            }
+        });
+        
+        return JSON.parse(response.text || "[]");
+    } catch (e) {
+        console.error("Edge Pattern Error", e);
+        return [
+            { type: 'strength', title: 'Data Insufficient', description: 'Log more trades to unlock patterns.', actionable: 'Keep logging.' }
+        ];
+    }
+}
+
 // NEWS INTELLIGENCE ROUTINE (PHASE 0)
 export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> => {
     const key = apiKey || process.env.API_KEY;

@@ -7,12 +7,13 @@ import TradeList from './components/TradeList';
 import MySystem from './components/MySystem';
 import AccountModal from './components/AccountModal'; 
 import PreMarketAnalyzer from './components/PreMarketAnalyzer'; 
-import MentorChat from './components/MentorChat'; // Import Mentor Chat
-import PsychologyProfile from './components/PsychologyProfile'; // Import Psychology Profile
+import MentorChat from './components/MentorChat'; 
+import PsychologyProfile from './components/PsychologyProfile'; 
+import EdgeLab from './components/EdgeLab'; // Import Edge Lab
 import { analyzeTradeWithAI, getDailyCoachTip } from './services/geminiService';
 import { initGoogleDrive, loginToGoogle, performInitialSync, saveToDrive, getUserProfile, loadBackupData } from './services/googleDriveService';
 import { exportToCSV, exportToJSON, importData } from './services/dataService';
-import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap, MessageSquare, Quote, Menu, ChevronUp } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, Key, X, Code, Mail, ExternalLink, ShieldAlert, Cloud, Loader2, CheckCircle2, AlertCircle, Save, User, Sparkles, RefreshCw, Zap, MessageSquare, Quote, Menu, ChevronUp, FlaskConical } from 'lucide-react';
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
@@ -45,8 +46,8 @@ const DEFAULT_STRATEGY: StrategyProfile = {
 };
 
 const App: React.FC = () => {
-  // Added 'mentor' and 'psychology' to view state type
-  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket' | 'mentor' | 'psychology'>('dashboard');
+  // Added 'edgelab' to view state type
+  const [view, setView] = useState<'dashboard' | 'journal' | 'new' | 'system' | 'account' | 'premarket' | 'mentor' | 'psychology' | 'edgelab'>('dashboard');
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategyProfile, setStrategyProfile] = useState<StrategyProfile>(DEFAULT_STRATEGY);
   const [apiKey, setApiKey] = useState<string>('');
@@ -664,8 +665,9 @@ const App: React.FC = () => {
         case 'system': return 'My System';
         case 'new': return editingTrade ? 'Edit Trade' : 'Log Trade';
         case 'account': return 'Account & Settings';
-        case 'mentor': return 'The War Room'; // New Title
-        case 'psychology': return 'Psychology Profile'; // New View
+        case 'mentor': return 'The War Room'; 
+        case 'psychology': return 'Psychology Profile';
+        case 'edgelab': return 'Edge Lab'; // New Title
         default: return 'TradeMind.AI';
      }
   }
@@ -726,6 +728,9 @@ const App: React.FC = () => {
             <button onClick={() => { setEditingTrade(null); setView('new'); }} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'new' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <PlusCircle size={18} /><span className="text-sm font-medium">Log Trade</span>
             </button>
+            <button onClick={() => setView('edgelab')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'edgelab' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
+              <FlaskConical size={18} /><span className="text-sm font-medium">Edge Lab</span>
+            </button>
             <button onClick={() => setView('system')} className={`flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${view === 'system' ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>
               <Target size={18} /><span className="text-sm font-medium">My System</span>
             </button>
@@ -751,9 +756,9 @@ const App: React.FC = () => {
                  <PlusCircle size={28} />
              </button>
 
-             <button onClick={() => handleViewChange('mentor')} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${view === 'mentor' ? 'text-indigo-400' : 'text-slate-500'}`}>
-                 <MessageSquare size={20} className={view === 'mentor' ? 'fill-current bg-indigo-900/20 p-1 box-content rounded-lg' : ''} />
-                 <span className="text-[9px] mt-1 font-bold">Mentor</span>
+             <button onClick={() => handleViewChange('edgelab')} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${view === 'edgelab' ? 'text-indigo-400' : 'text-slate-500'}`}>
+                 <FlaskConical size={20} className={view === 'edgelab' ? 'fill-current bg-indigo-900/20 p-1 box-content rounded-lg' : ''} />
+                 <span className="text-[9px] mt-1 font-bold">Edge Lab</span>
              </button>
 
              <button onClick={() => setShowMobileMenu(!showMobileMenu)} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl transition ${showMobileMenu ? 'text-white' : 'text-slate-500'}`}>
@@ -764,6 +769,10 @@ const App: React.FC = () => {
              {/* MOBILE MORE MENU OVERLAY */}
              {showMobileMenu && (
                  <div className="absolute bottom-20 right-2 w-48 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 animate-fade-in-up flex flex-col gap-1 z-50">
+                     <button onClick={() => handleViewChange('mentor')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-700 text-slate-300 hover:text-white transition">
+                         <MessageSquare size={18} className="text-purple-400"/> 
+                         <span className="text-sm font-bold">Mentor</span>
+                     </button>
                      <button onClick={() => handleViewChange('premarket')} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-700 text-slate-300 hover:text-white transition">
                          <Zap size={18} className="text-amber-400"/> 
                          <span className="text-sm font-bold">Pre-Market</span>
@@ -827,6 +836,7 @@ const App: React.FC = () => {
                     {view === 'journal' && <BookOpen size={18} className="mr-2 text-indigo-400"/>}
                     {view === 'account' && <User size={18} className="mr-2 text-indigo-400"/>}
                     {view === 'psychology' && <BrainCircuit size={18} className="mr-2 text-indigo-400"/>}
+                    {view === 'edgelab' && <FlaskConical size={18} className="mr-2 text-indigo-400"/>}
                     {getPageTitle()}
                 </h2>
                 {userProfile && (
@@ -935,6 +945,13 @@ const App: React.FC = () => {
                   trades={trades} 
                   onBack={() => setView('dashboard')}
                   onViewTrade={(id) => handleViewTrade(id)}
+              />
+          )}
+          {/* EDGE LAB VIEW */}
+          {view === 'edgelab' && (
+              <EdgeLab 
+                  trades={trades} 
+                  apiKey={apiKey}
               />
           )}
           {view === 'account' && (
