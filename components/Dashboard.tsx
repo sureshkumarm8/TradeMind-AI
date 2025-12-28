@@ -179,13 +179,23 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         last5Sessions: []
     };
 
+    // Unified Discipline Scorer (1-5 Scale)
+    // If AI Rating exists (>0), use it. Else fallback to Manual System Check (True=5, False=1).
+    const getTradeScore = (t: Trade) => {
+        if (t.disciplineRating && t.disciplineRating > 0) return t.disciplineRating;
+        return t.followedSystem ? 5 : 1;
+    };
+
+    // Helper: Is trade considered "Disciplined"? (Score >= 3 i.e., 60%)
+    const isDisciplined = (t: Trade) => getTradeScore(t) >= 3;
+
     // 1. Discipline Index (0-100)
-    // Formula: Average of (DisciplineRating * 20)
-    const totalDisciplinePoints = closedTrades.reduce((acc, t) => acc + (t.disciplineRating || 0), 0);
+    // Formula: Average of (Score * 20)
+    const totalDisciplinePoints = closedTrades.reduce((acc, t) => acc + getTradeScore(t), 0);
     const avgDiscipline = totalDisciplinePoints / closedTrades.length; // 1-5
     const disciplineIndex = Math.round(avgDiscipline * 20); // Scale to 100
 
-    // 2. System Adherence %
+    // 2. System Adherence % (Explicit Boolean Check)
     const followedCount = closedTrades.filter(t => t.followedSystem).length;
     const systemAdherence = Math.round((followedCount / closedTrades.length) * 100);
 
@@ -203,14 +213,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
 
     let streak = 0;
     let totalDisciplined = 0;
-
-    // Helper: Check if trade is "Disciplined" (>50% rating i.e. >=3, or boolean flag if no rating)
-    const isDisciplined = (t: Trade) => {
-        if (t.disciplineRating !== undefined && t.disciplineRating !== 0) {
-            return t.disciplineRating >= 3; // 3/5 is 60%, 2/5 is 40%. Break on <= 50%.
-        }
-        return t.followedSystem;
-    };
 
     // Count Streak (Backwards from Newest)
     for (const t of sortedTrades) {
@@ -236,7 +238,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     
     const last5Sessions = sortedDates.slice(0, 5).map(date => {
         const dayTrades = tradesByDate[date];
-        const totalDisc = dayTrades.reduce((acc, t) => acc + (t.disciplineRating || 0), 0);
+        // Use Unified Scorer here too
+        const totalDisc = dayTrades.reduce((acc, t) => acc + getTradeScore(t), 0);
         const avg = totalDisc / dayTrades.length;
         const score = Math.round(avg * 20); // 0-100
         return { date: new Date(date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}), score };
@@ -495,7 +498,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                    <div className="flex justify-between items-center mb-2">
                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Last 5 Sessions (Trend)</span>
                    </div>
-                   <div className="flex gap-2 h-8 items-end">
+                   <div className="flex gap-2 h-10 items-end">
                        {psychoStats.last5Sessions.length > 0 ? psychoStats.last5Sessions.map((sess, idx) => (
                            <div key={idx} className="group/sess flex-1 flex flex-col items-center relative">
                                {/* Tooltip */}
@@ -503,7 +506,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                                    {sess.date}: {sess.score}%
                                </div>
                                {/* Bar */}
-                               <div className={`w-full rounded-t-sm transition-all hover:opacity-80 ${sess.score >= 80 ? 'bg-emerald-500' : sess.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ height: `${Math.max(15, sess.score)}%` }}></div>
+                               <div className={`w-full rounded-t-sm transition-all hover:opacity-80 ${sess.score >= 80 ? 'bg-emerald-500' : sess.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ height: `${Math.max(10, sess.score)}%` }}></div>
                            </div>
                        )) : (
                            <div className="w-full text-center text-[9px] text-slate-600 italic mt-2">Log trades to see trend</div>
