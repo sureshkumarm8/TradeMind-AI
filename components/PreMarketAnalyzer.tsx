@@ -183,10 +183,10 @@ const LiveCheckCard = ({ checkData, timestamp, isFoldable = false }: { checkData
     if (!isFoldable) return content;
 
     return (
-        <div className="border border-slate-700 rounded-xl overflow-hidden mb-4">
+        <div className="border border-slate-700 rounded-xl overflow-hidden mb-4 bg-slate-800/30">
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex justify-between items-center p-3 bg-slate-800 hover:bg-slate-700 transition"
+                className="w-full flex justify-between items-center p-3 hover:bg-slate-800 transition"
             >
                 <div className="flex items-center gap-3">
                     <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded">{new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
@@ -194,7 +194,7 @@ const LiveCheckCard = ({ checkData, timestamp, isFoldable = false }: { checkData
                         {checkData.status}
                     </span>
                 </div>
-                {isOpen ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                {isOpen ? <ChevronUp size={14} className="text-slate-500"/> : <ChevronDown size={14} className="text-slate-500"/>}
             </button>
             {isOpen && (
                 <div className="p-4 bg-slate-900/50 border-t border-slate-700">

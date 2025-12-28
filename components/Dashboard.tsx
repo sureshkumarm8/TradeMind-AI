@@ -193,7 +193,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     const emotionalStability = Math.round((stableCount / closedTrades.length) * 100);
 
     // 4. Iron Streak (Consecutive trades following system, working backwards)
-    // Precise sorting by Date AND Time
+    // Precise sorting by Date AND Time to ensure intraday streak is accurate
     const sortedTrades = [...closedTrades].sort((a, b) => {
         const timeA = a.entryTime || '00:00';
         const timeB = b.entryTime || '00:00';
@@ -213,16 +213,17 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         tradesByDate[t.date].push(t);
     });
     
-    // Sort dates descending
+    // Sort dates descending (Newest to Oldest)
     const sortedDates = Object.keys(tradesByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
     
+    // Take top 5, calculate avg score, then reverse for display (Oldest -> Newest)
     const last5Sessions = sortedDates.slice(0, 5).map(date => {
         const dayTrades = tradesByDate[date];
         const totalDisc = dayTrades.reduce((acc, t) => acc + (t.disciplineRating || 0), 0);
         const avg = totalDisc / dayTrades.length;
         const score = Math.round(avg * 20); // 0-100
         return { date: new Date(date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}), score };
-    }).reverse(); // Order Oldest -> Newest for left-to-right reading
+    }).reverse(); 
 
     // Status Label
     let statusLabel = "Rookie";
@@ -472,7 +473,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                   </div>
                </div>
 
-               {/* Last 5 Sessions Discipline */}
+               {/* Last 5 Sessions Discipline Trend */}
                <div className="pt-2">
                    <div className="flex justify-between items-center mb-2">
                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Last 5 Sessions (Trend)</span>
@@ -488,7 +489,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                                <div className={`w-full rounded-t-sm transition-all hover:opacity-80 ${sess.score >= 80 ? 'bg-emerald-500' : sess.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ height: `${Math.max(15, sess.score)}%` }}></div>
                            </div>
                        )) : (
-                           <div className="w-full text-center text-[9px] text-slate-600 italic mt-2">Log trades to see session trends</div>
+                           <div className="w-full text-center text-[9px] text-slate-600 italic mt-2">Log trades to see trend</div>
                        )}
                    </div>
                </div>
@@ -905,7 +906,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                 </div>
             </div>
         </div>
-      )}
+    )}
 
     </div>
   );

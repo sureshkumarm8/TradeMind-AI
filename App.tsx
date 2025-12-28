@@ -545,7 +545,8 @@ const App: React.FC = () => {
               if (prev && prev.date === today) {
                   return {
                       date: today,
-                      history: [...prev.history, newEntry]
+                      // Ensure prev.history is an array, handle legacy data where it might be missing
+                      history: [...(prev.history || []), newEntry]
                   };
               }
               // Else start new history
