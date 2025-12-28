@@ -10,14 +10,14 @@ interface PreMarketAnalyzerProps {
     apiKey: string;
     // Data Props
     initialData?: PreMarketAnalysis;
-    liveData?: LiveMarketAnalysis;
+    liveHistory?: { timestamp: string, data: LiveMarketAnalysis }[]; // UPDATED: Accepts History Array
     postData?: PostMarketAnalysis;
     newsData?: NewsAnalysis;
     
     // Timestamp Props
     newsTimestamp?: string;
     preMarketTimestamp?: string;
-    liveTimestamp?: string;
+    // Live Timestamp is inside history items now
     postTimestamp?: string;
     
     // Image Props
@@ -121,10 +121,94 @@ const DirectionBadge = ({ dir }: { dir: string }) => {
     return <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${color}`}>{dir}</span>;
 };
 
+// --- NEW HELPER: Live Check Result Card (Foldable) ---
+const LiveCheckCard = ({ checkData, timestamp, isFoldable = false }: { checkData: LiveMarketAnalysis, timestamp: string, isFoldable?: boolean }) => {
+    const [isOpen, setIsOpen] = useState(!isFoldable);
+
+    const content = (
+        <div className="space-y-4 animate-fade-in">
+            {/* Status Banner */}
+            <div className={`p-4 rounded-xl border flex justify-between items-center ${checkData.status === 'CONFIRMED' ? 'bg-emerald-900/20 border-emerald-500/50' : checkData.status === 'INVALIDATED' ? 'bg-red-900/20 border-red-500/50' : 'bg-amber-900/20 border-amber-500/50'}`}>
+                <div>
+                    <div className="text-[10px] uppercase font-bold opacity-70 mb-1">Plan Status</div>
+                    <div className={`text-2xl font-black uppercase ${checkData.status === 'CONFIRMED' ? 'text-emerald-400' : checkData.status === 'INVALIDATED' ? 'text-red-400' : 'text-amber-400'}`}>
+                        {checkData.status}
+                    </div>
+                </div>
+                <div className="text-right">
+                    <div className="text-[10px] uppercase font-bold opacity-70 mb-1">Updated Bias</div>
+                    <DirectionBadge dir={checkData.updatedBias} />
+                </div>
+            </div>
+
+            {/* Reality Check */}
+            <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
+                    <Activity size={14}/> Reality vs Plan
+                </h4>
+                <p className="text-sm text-slate-200 italic border-l-2 border-indigo-500 pl-3 leading-relaxed">
+                    {checkData.realityCheck}
+                </p>
+            </div>
+
+            {/* Immediate Action */}
+            <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
+                    <Zap size={14} className="text-yellow-400"/> Immediate Action
+                </h4>
+                <div className="bg-slate-900 p-4 rounded-lg text-sm text-white font-medium">
+                    {checkData.immediateAction}
+                </div>
+
+                {checkData.tradeUpdate && (
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                            <span className="block text-[9px] text-slate-500 uppercase">Entry</span>
+                            <span className="text-sm font-bold text-white">{checkData.tradeUpdate.entryPrice}</span>
+                        </div>
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                            <span className="block text-[9px] text-slate-500 uppercase">Stop (30pt)</span>
+                            <span className="text-sm font-bold text-red-400">{checkData.tradeUpdate.stopLoss}</span>
+                        </div>
+                        <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
+                            <span className="block text-[9px] text-slate-500 uppercase">Target (35pt)</span>
+                            <span className="text-sm font-bold text-emerald-400">{checkData.tradeUpdate.target}</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    if (!isFoldable) return content;
+
+    return (
+        <div className="border border-slate-700 rounded-xl overflow-hidden mb-4">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex justify-between items-center p-3 bg-slate-800 hover:bg-slate-700 transition"
+            >
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded">{new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className={`text-xs font-bold uppercase ${checkData.status === 'CONFIRMED' ? 'text-emerald-400' : 'text-slate-300'}`}>
+                        {checkData.status}
+                    </span>
+                </div>
+                {isOpen ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+            </button>
+            {isOpen && (
+                <div className="p-4 bg-slate-900/50 border-t border-slate-700">
+                    {content}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({ 
     apiKey, 
-    initialData, liveData, postData, newsData,
-    newsTimestamp, preMarketTimestamp, liveTimestamp, postTimestamp,
+    initialData, liveHistory, postData, newsData,
+    newsTimestamp, preMarketTimestamp, postTimestamp,
     initialImages, initialLiveImages, initialPostImages,
     onAnalysisUpdate, onLiveAnalysisUpdate, onPostAnalysisUpdate, onNewsAnalysisUpdate,
     onImagesUpdate, onLiveImagesUpdate, onPostImagesUpdate,
@@ -157,6 +241,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const getImages = () => initialImages || { market: '', intraday: '', oi: '', multiStrike: '' };
     const getLiveImages = () => initialLiveImages || { liveChart: '', liveOi: '' };
     const getPostImages = () => initialPostImages || { dailyChart: '', eodChart: '', eodOi: '' };
+
+    // Get checks sorted (Newest first)
+    const sortedLiveChecks = liveHistory ? [...liveHistory].reverse() : [];
+    const latestLiveCheck = sortedLiveChecks[0];
+    const previousLiveChecks = sortedLiveChecks.slice(1);
 
     // Persist Checklist
     useEffect(() => {
@@ -258,6 +347,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
         setIsLiveAnalyzing(true);
         try {
             const result = await analyzeLiveMarketRoutine(lImages, initialData, apiKey);
+            // Parent handles appending to history
             if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(result);
         } catch(e: any) {
             setError(e.message || "Live check failed.");
@@ -301,7 +391,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     };
 
     const handleResetPhase2 = () => {
-        if(!window.confirm("Clear Live Check data?")) return;
+        if(!window.confirm("Clear ALL Live Check history?")) return;
         if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(null);
         if (onLiveImagesUpdate) onLiveImagesUpdate({ liveChart: '', liveOi: '' });
     };
@@ -746,16 +836,16 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                                 <h3 className="text-lg font-bold text-white uppercase tracking-wide">Live Combat Check</h3>
                                                 <div className="flex flex-col">
                                                     <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
-                                                    {liveTimestamp && (
+                                                    {latestLiveCheck && (
                                                         <span className="text-[8px] text-slate-500 mt-1 font-mono">
-                                                            Analyzed: {formatAnalysisTime(liveTimestamp)}
+                                                            Last Scan: {formatAnalysisTime(latestLiveCheck.timestamp)}
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
                                         </div>
-                                        {(liveData || currentLiveImages.liveChart) && (
-                                            <button onClick={handleResetPhase2} className="text-xs flex items-center gap-1 text-red-400/70 hover:text-red-400 transition" title="Clear Phase 2 Data">
+                                        {(latestLiveCheck || currentLiveImages.liveChart) && (
+                                            <button onClick={handleResetPhase2} className="text-xs flex items-center gap-1 text-red-400/70 hover:text-red-400 transition" title="Clear ALL Phase 2 Data">
                                                 <RotateCcw size={12}/> Reset
                                             </button>
                                         )}
@@ -788,58 +878,30 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                     )}
                                 </div>
 
-                                {/* LIVE RESULTS */}
-                                {liveData && (
+                                {/* LATEST LIVE RESULT */}
+                                {latestLiveCheck && (
                                     <div className="space-y-4 animate-fade-in">
-                                        {/* Status Banner */}
-                                        <div className={`p-4 rounded-xl border flex justify-between items-center ${liveData.status === 'CONFIRMED' ? 'bg-emerald-900/20 border-emerald-500/50' : liveData.status === 'INVALIDATED' ? 'bg-red-900/20 border-red-500/50' : 'bg-amber-900/20 border-amber-500/50'}`}>
-                                            <div>
-                                                <div className="text-[10px] uppercase font-bold opacity-70 mb-1">Plan Status</div>
-                                                <div className={`text-2xl font-black uppercase ${liveData.status === 'CONFIRMED' ? 'text-emerald-400' : liveData.status === 'INVALIDATED' ? 'text-red-400' : 'text-amber-400'}`}>
-                                                    {liveData.status}
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] uppercase font-bold opacity-70 mb-1">Updated Bias</div>
-                                                <DirectionBadge dir={liveData.updatedBias} />
-                                            </div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="h-1 flex-1 bg-red-900/30 rounded-full"></div>
+                                            <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Latest Scan</span>
+                                            <div className="h-1 flex-1 bg-red-900/30 rounded-full"></div>
                                         </div>
+                                        
+                                        <LiveCheckCard checkData={latestLiveCheck.data} timestamp={latestLiveCheck.timestamp} />
+                                    </div>
+                                )}
 
-                                        {/* Reality Check */}
-                                        <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
-                                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
-                                                <Activity size={14}/> Reality vs Plan
-                                            </h4>
-                                            <p className="text-sm text-slate-200 italic border-l-2 border-indigo-500 pl-3 leading-relaxed">
-                                                {liveData.realityCheck}
-                                            </p>
+                                {/* PAST CHECKS (Foldable History) */}
+                                {previousLiveChecks.length > 0 && (
+                                    <div className="mt-8">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Layers size={14} className="text-slate-500"/>
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mission History ({previousLiveChecks.length})</h4>
                                         </div>
-
-                                        {/* Immediate Action (9:25-9:45) */}
-                                        <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
-                                            <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
-                                                <Zap size={14} className="text-yellow-400"/> Immediate Action (9:25-9:45)
-                                            </h4>
-                                            <div className="bg-slate-900 p-4 rounded-lg text-sm text-white font-medium">
-                                                {liveData.immediateAction}
-                                            </div>
-
-                                            {liveData.tradeUpdate && (
-                                                <div className="mt-4 grid grid-cols-3 gap-3">
-                                                    <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
-                                                        <span className="block text-[9px] text-slate-500 uppercase">Entry</span>
-                                                        <span className="text-sm font-bold text-white">{liveData.tradeUpdate.entryPrice}</span>
-                                                    </div>
-                                                    <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
-                                                        <span className="block text-[9px] text-slate-500 uppercase">Stop (30pt)</span>
-                                                        <span className="text-sm font-bold text-red-400">{liveData.tradeUpdate.stopLoss}</span>
-                                                    </div>
-                                                    <div className="bg-slate-900 p-2 rounded border border-slate-800 text-center">
-                                                        <span className="block text-[9px] text-slate-500 uppercase">Target (35pt)</span>
-                                                        <span className="text-sm font-bold text-emerald-400">{liveData.tradeUpdate.target}</span>
-                                                    </div>
-                                                </div>
-                                            )}
+                                        <div className="space-y-2">
+                                            {previousLiveChecks.map((item, idx) => (
+                                                <LiveCheckCard key={idx} checkData={item.data} timestamp={item.timestamp} isFoldable={true} />
+                                            ))}
                                         </div>
                                     </div>
                                 )}

@@ -27,7 +27,15 @@ export interface BackupData {
   preMarketNotes?: { date: string, notes: string };
   // Extended State Persistence
   preMarketAnalysis?: { date: string, timestamp?: string, data: any };
-  liveMarketAnalysis?: { date: string, timestamp?: string, data: any };
+  
+  // Updated Live Analysis to support History
+  liveMarketAnalysis?: { 
+      date: string, 
+      timestamp?: string, // Legacy field
+      data?: any, // Legacy field
+      history?: { timestamp: string, data: any }[] // New History Array
+  };
+  
   postMarketAnalysis?: { date: string, timestamp?: string, data: any };
   preMarketImages?: any;
   liveMarketImages?: any;

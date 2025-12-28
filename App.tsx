@@ -58,8 +58,13 @@ const App: React.FC = () => {
 
   // New: AI Pre-Market Analysis State with Timestamp
   const [preMarketAnalysis, setPreMarketAnalysis] = useState<{date: string, timestamp?: string, data: PreMarketAnalysis} | undefined>(undefined);
-  // New: AI Live Market Analysis State with Timestamp
-  const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{date: string, timestamp?: string, data: LiveMarketAnalysis} | undefined>(undefined);
+  
+  // UPDATED: Live Market Analysis State with History Array
+  const [liveMarketAnalysis, setLiveMarketAnalysis] = useState<{
+      date: string, 
+      history: { timestamp: string, data: LiveMarketAnalysis }[] 
+  } | undefined>(undefined);
+
   // New: Post-Market Analysis State with Timestamp
   const [postMarketAnalysis, setPostMarketAnalysis] = useState<{date: string, timestamp?: string, data: PostMarketAnalysis} | undefined>(undefined);
   
@@ -133,7 +138,27 @@ const App: React.FC = () => {
             if (parsed && parsed.data) setPreMarketAnalysis(parsed); 
         } catch(e) {};
     }
-    if (savedLiveMarketAnalysis) try { setLiveMarketAnalysis(JSON.parse(savedLiveMarketAnalysis)); } catch(e) {};
+    
+    // LIVE MARKET MIGRATION LOGIC (Single Obj -> History Array)
+    if (savedLiveMarketAnalysis) {
+        try { 
+            const parsed = JSON.parse(savedLiveMarketAnalysis);
+            if (parsed) {
+                // If it's the old format (single data object)
+                if (parsed.data && !Array.isArray(parsed.data) && !parsed.history) {
+                    setLiveMarketAnalysis({
+                        date: parsed.date,
+                        history: [{ timestamp: parsed.timestamp || new Date().toISOString(), data: parsed.data }]
+                    });
+                } 
+                // New format
+                else if (parsed.history) {
+                    setLiveMarketAnalysis(parsed);
+                }
+            }
+        } catch(e) {};
+    }
+
     if (savedPostMarketAnalysis) try { setPostMarketAnalysis(JSON.parse(savedPostMarketAnalysis)); } catch(e) {};
     if (savedNewsAnalysis) try { setNewsAnalysis(JSON.parse(savedNewsAnalysis)); } catch(e) {};
 
@@ -183,7 +208,20 @@ const App: React.FC = () => {
                   
                   // Sync Extended Data if available in cloud
                   if (data.preMarketAnalysis) setPreMarketAnalysis(data.preMarketAnalysis);
-                  if (data.liveMarketAnalysis) setLiveMarketAnalysis(data.liveMarketAnalysis);
+                  
+                  // LIVE MARKET MIGRATION (Cloud -> App)
+                  if (data.liveMarketAnalysis) {
+                      const lma: any = data.liveMarketAnalysis;
+                      if (lma.data && !lma.history) {
+                          setLiveMarketAnalysis({
+                              date: lma.date,
+                              history: [{ timestamp: lma.timestamp || new Date().toISOString(), data: lma.data }]
+                          });
+                      } else {
+                          setLiveMarketAnalysis(lma);
+                      }
+                  }
+
                   if (data.postMarketAnalysis) setPostMarketAnalysis(data.postMarketAnalysis);
                   if (data.newsAnalysis) setNewsAnalysis(data.newsAnalysis);
                   if (data.preMarketImages) setPreMarketImages(data.preMarketImages);
@@ -341,7 +379,20 @@ const App: React.FC = () => {
              if (data.preMarketNotes) setPreMarketNotes(data.preMarketNotes);
              // Sync extended
              if (data.preMarketAnalysis) setPreMarketAnalysis(data.preMarketAnalysis);
-             if (data.liveMarketAnalysis) setLiveMarketAnalysis(data.liveMarketAnalysis);
+             
+             // Migration for incoming sync
+             if (data.liveMarketAnalysis) {
+                 const lma: any = data.liveMarketAnalysis;
+                 if (lma.data && !lma.history) {
+                     setLiveMarketAnalysis({
+                         date: lma.date,
+                         history: [{ timestamp: lma.timestamp || new Date().toISOString(), data: lma.data }]
+                     });
+                 } else {
+                     setLiveMarketAnalysis(lma);
+                 }
+             }
+
              if (data.postMarketAnalysis) setPostMarketAnalysis(data.postMarketAnalysis);
              if (data.newsAnalysis) setNewsAnalysis(data.newsAnalysis);
              if (data.preMarketImages) setPreMarketImages(data.preMarketImages);
@@ -387,7 +438,20 @@ const App: React.FC = () => {
               if (cloudData.preMarketNotes) setPreMarketNotes(cloudData.preMarketNotes);
               
               if (cloudData.preMarketAnalysis) setPreMarketAnalysis(cloudData.preMarketAnalysis);
-              if (cloudData.liveMarketAnalysis) setLiveMarketAnalysis(cloudData.liveMarketAnalysis);
+              
+              // Manual Sync Migration
+              if (cloudData.liveMarketAnalysis) {
+                 const lma: any = cloudData.liveMarketAnalysis;
+                 if (lma.data && !lma.history) {
+                     setLiveMarketAnalysis({
+                         date: lma.date,
+                         history: [{ timestamp: lma.timestamp || new Date().toISOString(), data: lma.data }]
+                     });
+                 } else {
+                     setLiveMarketAnalysis(lma);
+                 }
+              }
+
               if (cloudData.postMarketAnalysis) setPostMarketAnalysis(cloudData.postMarketAnalysis);
               if (cloudData.newsAnalysis) setNewsAnalysis(cloudData.newsAnalysis);
               if (cloudData.preMarketImages) setPreMarketImages(cloudData.preMarketImages);
@@ -470,13 +534,25 @@ const App: React.FC = () => {
       }
   };
 
-  // Update AI Live Analysis
+  // UPDATED: Handle Live Market Analysis (Append to History)
   const handleUpdateLiveMarketAnalysis = (data: LiveMarketAnalysis | null) => {
       if (data) {
-          setLiveMarketAnalysis({ 
-              date: new Date().toISOString().split('T')[0], 
-              timestamp: new Date().toISOString(),
-              data 
+          setLiveMarketAnalysis(prev => {
+              const today = new Date().toISOString().split('T')[0];
+              const newEntry = { timestamp: new Date().toISOString(), data };
+              
+              // If previous data exists for TODAY, append
+              if (prev && prev.date === today) {
+                  return {
+                      date: today,
+                      history: [...prev.history, newEntry]
+                  };
+              }
+              // Else start new history
+              return {
+                  date: today,
+                  history: [newEntry]
+              };
           });
       } else {
           setLiveMarketAnalysis(undefined);
@@ -906,13 +982,13 @@ const App: React.FC = () => {
                 apiKey={apiKey} 
                 // DATA
                 initialData={preMarketAnalysis?.data} 
-                liveData={liveMarketAnalysis?.data} 
+                liveHistory={liveMarketAnalysis?.history} // Pass History instead of single data
                 postData={postMarketAnalysis?.data}
                 newsData={newsAnalysis?.data}
                 // TIMESTAMPS
                 newsTimestamp={newsAnalysis?.timestamp}
                 preMarketTimestamp={preMarketAnalysis?.timestamp}
-                liveTimestamp={liveMarketAnalysis?.timestamp}
+                // Live timestamp is now inside history items
                 postTimestamp={postMarketAnalysis?.timestamp}
                 // IMAGES
                 initialImages={preMarketImages} 
