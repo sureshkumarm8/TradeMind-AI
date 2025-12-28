@@ -170,6 +170,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         disciplineIndex: 0,
         systemAdherence: 0,
         streak: 0,
+        totalDisciplined: 0,
         emotionalStability: 0,
         statusLabel: "Rookie",
         recentOffenses: [],
@@ -193,7 +194,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     const emotionalStability = Math.round((stableCount / closedTrades.length) * 100);
 
     // 4. Iron Streak (Consecutive trades following system, working backwards)
-    // Precise sorting by Date AND Time to ensure intraday streak is accurate
+    // Precise sorting by Date AND Time
     const sortedTrades = [...closedTrades].sort((a, b) => {
         const timeA = a.entryTime || '00:00';
         const timeB = b.entryTime || '00:00';
@@ -201,10 +202,27 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     });
 
     let streak = 0;
+    let totalDisciplined = 0;
+
+    // Helper: Check if trade is "Disciplined" (>50% rating i.e. >=3, or boolean flag if no rating)
+    const isDisciplined = (t: Trade) => {
+        if (t.disciplineRating !== undefined && t.disciplineRating !== 0) {
+            return t.disciplineRating >= 3; // 3/5 is 60%, 2/5 is 40%. Break on <= 50%.
+        }
+        return t.followedSystem;
+    };
+
+    // Count Streak (Backwards from Newest)
     for (const t of sortedTrades) {
-        if (t.followedSystem) streak++;
-        else break;
+        if (isDisciplined(t)) {
+            streak++;
+        } else {
+            break; // Break streak immediately on first indiscipline
+        }
     }
+
+    // Count Total Disciplined
+    totalDisciplined = closedTrades.filter(t => isDisciplined(t)).length;
 
     // 5. Last 5 Sessions Discipline
     const tradesByDate: Record<string, Trade[]> = {};
@@ -213,17 +231,16 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         tradesByDate[t.date].push(t);
     });
     
-    // Sort dates descending (Newest to Oldest)
+    // Sort dates descending
     const sortedDates = Object.keys(tradesByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
     
-    // Take top 5, calculate avg score, then reverse for display (Oldest -> Newest)
     const last5Sessions = sortedDates.slice(0, 5).map(date => {
         const dayTrades = tradesByDate[date];
         const totalDisc = dayTrades.reduce((acc, t) => acc + (t.disciplineRating || 0), 0);
         const avg = totalDisc / dayTrades.length;
         const score = Math.round(avg * 20); // 0-100
         return { date: new Date(date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}), score };
-    }).reverse(); 
+    }).reverse(); // Order Oldest -> Newest for left-to-right reading
 
     // Status Label
     let statusLabel = "Rookie";
@@ -234,7 +251,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     else if (disciplineIndex > 0) statusLabel = "Tilted";
     else statusLabel = "Rookie";
 
-    return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel, last5Sessions };
+    return { disciplineIndex, systemAdherence, streak, totalDisciplined, emotionalStability, statusLabel, last5Sessions };
   }, [trades]);
 
   const stats: DashboardStats = useMemo(() => {
@@ -495,15 +512,15 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                </div>
             </div>
 
-            {/* 3. Streak */}
+            {/* 3. Streak & Stats */}
             <div className="md:col-span-3 flex flex-col items-center justify-center bg-indigo-900/10 rounded-xl p-4 border border-indigo-500/20 backdrop-blur-sm group-hover:bg-indigo-900/20 transition-colors">
-               <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-2">Iron Streak</span>
-               <div className="flex items-center gap-1">
+               <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-1">Iron Streak</span>
+               <div className="flex items-center gap-1 mb-1">
                   <Flame size={32} className={`${psychoStats.streak > 0 ? 'text-orange-500 animate-pulse filter drop-shadow-[0_0_8px_rgba(249,115,22,0.6)]' : 'text-slate-700'}`} />
                   <span className="text-4xl font-black text-white">{psychoStats.streak}</span>
                </div>
-               <span className="text-[10px] text-slate-500 font-medium uppercase mt-1 text-center">
-                  Consecutive Trades<br/>Following Rules
+               <span className="text-[10px] text-slate-500 font-medium uppercase mt-1 text-center border-t border-indigo-500/20 pt-1 w-full">
+                  Total Disciplined: <span className="text-emerald-400 font-bold">{psychoStats.totalDisciplined}</span>
                </span>
             </div>
          </div>
