@@ -113,7 +113,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
   const [reportPeriod, setReportPeriod] = useState<'week' | 'fortnight' | 'month'>('week');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
-  // REMOVED showScoreDetails state as we now navigate to full page
   
   // Interactive Filters
   const [selectedFilter, setSelectedFilter] = useState<{ type: string, value: string | number } | null>(null);
@@ -175,7 +174,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         statusLabel: "Rookie",
         recentOffenses: [],
         costOfIndiscipline: 0,
-        winRateVariance: 0
+        winRateVariance: 0,
+        last5Sessions: []
     };
 
     // 1. Discipline Index (0-100)
@@ -193,12 +193,36 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     const emotionalStability = Math.round((stableCount / closedTrades.length) * 100);
 
     // 4. Iron Streak (Consecutive trades following system, working backwards)
+    // Precise sorting by Date AND Time
+    const sortedTrades = [...closedTrades].sort((a, b) => {
+        const timeA = a.entryTime || '00:00';
+        const timeB = b.entryTime || '00:00';
+        return new Date(`${b.date}T${timeB}`).getTime() - new Date(`${a.date}T${timeA}`).getTime();
+    });
+
     let streak = 0;
-    const sortedTrades = [...closedTrades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     for (const t of sortedTrades) {
         if (t.followedSystem) streak++;
         else break;
     }
+
+    // 5. Last 5 Sessions Discipline
+    const tradesByDate: Record<string, Trade[]> = {};
+    closedTrades.forEach(t => {
+        if (!tradesByDate[t.date]) tradesByDate[t.date] = [];
+        tradesByDate[t.date].push(t);
+    });
+    
+    // Sort dates descending
+    const sortedDates = Object.keys(tradesByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    
+    const last5Sessions = sortedDates.slice(0, 5).map(date => {
+        const dayTrades = tradesByDate[date];
+        const totalDisc = dayTrades.reduce((acc, t) => acc + (t.disciplineRating || 0), 0);
+        const avg = totalDisc / dayTrades.length;
+        const score = Math.round(avg * 20); // 0-100
+        return { date: new Date(date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}), score };
+    }).reverse(); // Order Oldest -> Newest for left-to-right reading
 
     // Status Label
     let statusLabel = "Rookie";
@@ -209,7 +233,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     else if (disciplineIndex > 0) statusLabel = "Tilted";
     else statusLabel = "Rookie";
 
-    return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel };
+    return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel, last5Sessions };
   }, [trades]);
 
   const stats: DashboardStats = useMemo(() => {
@@ -423,8 +447,8 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                 </div>
             </div>
 
-            {/* 2. Metrics */}
-            <div className="md:col-span-5 space-y-6">
+            {/* 2. Metrics & Trend */}
+            <div className="md:col-span-5 space-y-5">
                <div>
                   <div className="flex justify-between items-center mb-1">
                      <span className="text-xs font-bold text-slate-400 uppercase flex items-center">
@@ -446,6 +470,27 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                   <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
                      <div className={`h-full rounded-full shadow-[0_0_10px_currentColor] ${psychoStats.emotionalStability === 0 ? 'bg-slate-600 text-slate-600' : psychoStats.emotionalStability > 80 ? 'bg-emerald-500 text-emerald-500' : 'bg-amber-500 text-amber-500'}`} style={{ width: `${psychoStats.emotionalStability}%` }}></div>
                   </div>
+               </div>
+
+               {/* Last 5 Sessions Discipline */}
+               <div className="pt-2">
+                   <div className="flex justify-between items-center mb-2">
+                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Last 5 Sessions (Trend)</span>
+                   </div>
+                   <div className="flex gap-2 h-8 items-end">
+                       {psychoStats.last5Sessions.length > 0 ? psychoStats.last5Sessions.map((sess, idx) => (
+                           <div key={idx} className="group/sess flex-1 flex flex-col items-center relative">
+                               {/* Tooltip */}
+                               <div className="absolute -top-8 bg-slate-900 border border-slate-700 text-[9px] text-white px-2 py-1 rounded opacity-0 group-hover/sess:opacity-100 transition-opacity z-20 pointer-events-none whitespace-nowrap">
+                                   {sess.date}: {sess.score}%
+                               </div>
+                               {/* Bar */}
+                               <div className={`w-full rounded-t-sm transition-all hover:opacity-80 ${sess.score >= 80 ? 'bg-emerald-500' : sess.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ height: `${Math.max(15, sess.score)}%` }}></div>
+                           </div>
+                       )) : (
+                           <div className="w-full text-center text-[9px] text-slate-600 italic mt-2">Log trades to see session trends</div>
+                       )}
+                   </div>
                </div>
             </div>
 
