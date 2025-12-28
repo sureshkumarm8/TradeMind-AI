@@ -358,6 +358,61 @@ export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<
     }
 }
 
+// NEW: SEMANTIC ARCHIVE SEARCH
+export const queryTradeArchives = async (query: string, trades: Trade[], apiKey: string): Promise<{ matchingIds: string[], answer: string }> => {
+    const key = apiKey || process.env.API_KEY;
+    if (!key) throw new Error("API Key Required");
+
+    // Create a lightweight index for the prompt
+    // We include ID, Date, Outcome, PnL, Mistakes, and most importantly, NOTES.
+    const tradeDocs = trades.map(t => {
+        const notesText = t.notes?.map(n => n.content).join(" ");
+        return `ID: ${t.id}
+        Date: ${t.date}
+        Outcome: ${t.outcome} (PnL: ${t.pnl})
+        Setup: ${t.setupName}
+        Mistakes: ${t.mistakes?.join(', ')}
+        Notes/Emotions: ${t.entryReason} ${t.exitReason} ${t.emotionalState} ${notesText}`;
+    }).join('\n---\n');
+
+    const prompt = `
+        You are a database administrator for a high-performance trading journal.
+        The user is querying their past trades using natural language.
+        
+        USER QUERY: "${query}"
+        
+        DATABASE (Trade Logs):
+        ${tradeDocs}
+        
+        TASK:
+        1. Identify which trades match the semantic meaning of the user's query.
+           (e.g., if they ask "When did I hesitate?", look for keywords like "hesitated", "waited too long", "scared", "late entry" in notes).
+        2. Return the list of matching Trade IDs.
+        3. Provide a very brief (1 sentence) summary of what you found common in these trades.
+        
+        OUTPUT JSON:
+        {
+            "matchingIds": ["id1", "id2"],
+            "answer": "Found 3 trades where you mentioned hesitation; all were losing trades."
+        }
+    `;
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash', // Use flash for speed
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        
+        return JSON.parse(response.text || '{"matchingIds": [], "answer": "No matches found."}');
+    } catch (e) {
+        console.error("Archive Query Error", e);
+        return { matchingIds: [], answer: "AI Error during search." };
+    }
+}
+
 // NEWS INTELLIGENCE ROUTINE (PHASE 0)
 export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> => {
     const key = apiKey || process.env.API_KEY;
@@ -426,6 +481,7 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
     }
 };
 
+// ... (Rest of existing code remains unchanged)
 // PRE-MARKET ANALYZER ROUTINE
 export const analyzePreMarketRoutine = async (
     images: { market: string; intraday: string; oi: string; multiStrike: string },

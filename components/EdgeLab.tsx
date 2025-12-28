@@ -5,15 +5,15 @@ import {
     Zap, AlertTriangle, Clock, Target, CalendarDays,
     ArrowRight, BrainCircuit, Loader2, Filter, RotateCcw,
     MousePointer2, Hourglass, LayoutList, FileText, Search,
-    ChevronRight, Grip, Bot, Grid3X3, Skull, Divide
+    ChevronRight, Grip, Bot, Grid3X3, Skull, Divide, MessageSquare, Activity, Ghost
 } from 'lucide-react';
 import { 
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
     CartesianGrid, Tooltip, Cell, AreaChart, Area,
-    ScatterChart, Scatter, ZAxis, ReferenceLine, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+    ScatterChart, Scatter, ZAxis, ReferenceLine, LineChart, Line, ComposedChart
 } from 'recharts';
 import { Trade, TradeOutcome } from '../types';
-import { getEdgePatterns, EdgeInsight } from '../services/geminiService';
+import { getEdgePatterns, EdgeInsight, queryTradeArchives } from '../services/geminiService';
 
 interface EdgeLabProps {
     trades: Trade[];
@@ -67,6 +67,9 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
 
     // --- ARCHIVE STATE ---
     const [searchTerm, setSearchTerm] = useState('');
+    const [askInput, setAskInput] = useState('');
+    const [isAsking, setIsAsking] = useState(false);
+    const [aiSearchResults, setAiSearchResults] = useState<{matchingIds: string[], answer: string} | null>(null);
     const [selectedReport, setSelectedReport] = useState<{title: string, content: string} | null>(null);
 
     // --- WHAT-IF SIMULATOR STATE ---
@@ -85,13 +88,75 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
     }, []);
 
     const filteredArchiveTrades = useMemo(() => {
+        // 1. AI Search Priority
+        if (aiSearchResults) {
+            return trades.filter(t => aiSearchResults.matchingIds.includes(t.id));
+        }
+
+        // 2. Keyword Search
         return trades.filter(t => 
             t.instrument.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (t.setupName && t.setupName.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (t.notes && t.notes.some(n => n.content.toLowerCase().includes(searchTerm.toLowerCase()))) ||
             (t.aiFeedback && t.aiFeedback.toLowerCase().includes(searchTerm.toLowerCase()))
         ).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [trades, searchTerm]);
+    }, [trades, searchTerm, aiSearchResults]);
+
+    // NEW: Archive Intelligence Metrics (Saboteur & Mood)
+    const archiveMetrics = useMemo(() => {
+        // Calculate Saboteur (Mistake Frequency) in current filtered view
+        const mistakeCounts: Record<string, number> = {};
+        filteredArchiveTrades.forEach(t => {
+            t.mistakes?.forEach(m => {
+                mistakeCounts[m] = (mistakeCounts[m] || 0) + 1;
+            });
+        });
+        const saboteurData = Object.entries(mistakeCounts)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a,b) => b.count - a.count)
+            .slice(0, 5);
+
+        // Calculate Mood vs PnL Correlation
+        const moodData = filteredArchiveTrades
+            .filter(t => t.outcome !== TradeOutcome.OPEN && t.emotionalState)
+            .slice(0, 20) // Last 20 relevant trades
+            .reverse() // Chronological for line chart
+            .map(t => {
+                // Convert emotion to simplistic score: Calm/Neutral = 1, Nervous/FOMO = -1
+                let moodScore = 0;
+                const e = t.emotionalState?.toLowerCase() || '';
+                if (['calm', 'focused', 'neutral', 'confident'].some(k => e.includes(k))) moodScore = 1;
+                else if (['nervous', 'fear', 'fomo', 'angry', 'revenge', 'tilted'].some(k => e.includes(k))) moodScore = -1;
+                
+                return {
+                    date: t.date.slice(5),
+                    pnl: t.pnl || 0,
+                    mood: moodScore
+                };
+            });
+
+        return { saboteurData, moodData };
+    }, [filteredArchiveTrades]);
+
+    const handleAskOracle = async () => {
+        if (!askInput.trim()) return;
+        if (!apiKey) { alert("API Key Required for Oracle Search"); return; }
+        setIsAsking(true);
+        try {
+            const result = await queryTradeArchives(askInput, trades, apiKey);
+            setAiSearchResults(result);
+        } catch (e) {
+            console.error(e);
+            alert("Oracle is offline. Try again.");
+        } finally {
+            setIsAsking(false);
+        }
+    };
+
+    const clearOracle = () => {
+        setAiSearchResults(null);
+        setAskInput('');
+    };
 
     // --- DATA PREP: PATTERNS & ANALYTICS ---
 
@@ -617,23 +682,104 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                         </div>
                     </div>
 
-                    {/* Right: Tactical Log Table */}
+                    {/* Right: Tactical Log Table & Intelligence */}
                     <div className="lg:col-span-3 bg-slate-800 rounded-2xl border border-slate-700 flex flex-col overflow-hidden h-full relative">
-                        {/* Search Header */}
-                        <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex flex-wrap gap-4 items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <LayoutList size={16} className="text-emerald-400"/>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Mission Logs & Neural Feedback</h3>
+                        {/* Search & Ask Header */}
+                        <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex flex-col gap-4">
+                            <div className="flex flex-wrap gap-4 items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <LayoutList size={16} className="text-emerald-400"/>
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Mission Logs</h3>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="relative">
+                                        <Search size={14} className="absolute left-3 top-2.5 text-slate-500"/>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search by keyword..." 
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="bg-slate-900 border border-slate-700 rounded-full pl-9 pr-4 py-2 text-xs text-white focus:border-indigo-500 outline-none w-48 transition-all focus:w-64"
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="relative">
-                                <Search size={14} className="absolute left-3 top-2.5 text-slate-500"/>
+
+                            {/* ASK THE ORACLE (Deep Search) */}
+                            <div className="flex items-center gap-2 bg-indigo-900/10 p-1.5 rounded-xl border border-indigo-500/20">
+                                <div className="p-2 bg-indigo-600 rounded-lg text-white shrink-0">
+                                    {isAsking ? <Loader2 size={16} className="animate-spin"/> : <MessageSquare size={16}/>}
+                                </div>
                                 <input 
                                     type="text" 
-                                    placeholder="Search instrument, setup, or notes..." 
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="bg-slate-900 border border-slate-700 rounded-full pl-9 pr-4 py-2 text-xs text-white focus:border-indigo-500 outline-none w-64"
+                                    value={askInput}
+                                    onChange={(e) => setAskInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAskOracle()}
+                                    placeholder='Ask the Archive: "Show me trades where I hesitated but won..."' 
+                                    className="flex-1 bg-transparent text-sm text-white placeholder-indigo-300/50 outline-none px-2"
                                 />
+                                {aiSearchResults && (
+                                    <button onClick={clearOracle} className="p-2 text-indigo-400 hover:text-white transition">
+                                        <RotateCcw size={14}/>
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={handleAskOracle}
+                                    disabled={!askInput || isAsking}
+                                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition disabled:opacity-50"
+                                >
+                                    Ask Oracle
+                                </button>
+                            </div>
+                            
+                            {aiSearchResults && (
+                                <div className="bg-indigo-900/30 p-3 rounded-lg border border-indigo-500/30 text-xs text-indigo-200 flex items-start gap-2 animate-fade-in">
+                                    <Bot size={16} className="mt-0.5 shrink-0"/>
+                                    <p><span className="font-bold uppercase">Oracle:</span> {aiSearchResults.answer} <span className="opacity-50">({filteredArchiveTrades.length} matches found)</span></p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ARCHIVE INTELLIGENCE WIDGETS (Saboteur & Mood) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border-b border-slate-700 bg-slate-900/20">
+                            {/* Saboteur Radar */}
+                            <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex flex-col h-32">
+                                <h4 className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                    <Ghost size={12}/> The Saboteur Radar (Mistakes in View)
+                                </h4>
+                                <div className="flex-1 w-full text-[10px]">
+                                    {archiveMetrics.saboteurData.length > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={archiveMetrics.saboteurData} layout="vertical" margin={{left: 0, right: 10}}>
+                                                <XAxis type="number" hide />
+                                                <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 9, fill: '#64748b'}} axisLine={false} tickLine={false} />
+                                                <Tooltip contentStyle={{background: '#0f172a', border: '1px solid #334155', fontSize: '10px'}} cursor={{fill: 'transparent'}}/>
+                                                <Bar dataKey="count" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={12} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-slate-600 italic">No recurring mistakes found in filter.</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Psycho-PnL Correlation */}
+                            <div className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex flex-col h-32">
+                                <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                                    <Activity size={12}/> Mood vs PnL (Last 20)
+                                </h4>
+                                <div className="flex-1 w-full text-[10px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ComposedChart data={archiveMetrics.moodData}>
+                                            <XAxis dataKey="date" hide />
+                                            <YAxis yAxisId="left" orientation="left" hide domain={['dataMin', 'dataMax']} />
+                                            <YAxis yAxisId="right" orientation="right" hide domain={[-1.5, 1.5]} />
+                                            <Tooltip contentStyle={{background: '#0f172a', border: '1px solid #334155', fontSize: '10px'}} />
+                                            <Bar yAxisId="left" dataKey="pnl" fill="#3b82f6" opacity={0.3} barSize={6} />
+                                            <Line yAxisId="right" type="monotone" dataKey="mood" stroke="#a855f7" strokeWidth={2} dot={false} />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
                             </div>
                         </div>
 
@@ -668,7 +814,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-700/50">
                                     {filteredArchiveTrades.length === 0 ? (
-                                        <tr><td colSpan={3} className="p-8 text-center text-slate-500 text-sm">No missions found.</td></tr>
+                                        <tr><td colSpan={3} className="p-8 text-center text-slate-500 text-sm">No missions found matching query.</td></tr>
                                     ) : (
                                         filteredArchiveTrades.map(trade => (
                                             <tr key={trade.id} className="hover:bg-slate-800/50 transition group">
