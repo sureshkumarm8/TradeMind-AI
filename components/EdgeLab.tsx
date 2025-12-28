@@ -5,12 +5,12 @@ import {
     Zap, AlertTriangle, Clock, Target, CalendarDays,
     ArrowRight, BrainCircuit, Loader2, Filter, RotateCcw,
     MousePointer2, Hourglass, LayoutList, FileText, Search,
-    ChevronRight, Grip, Bot
+    ChevronRight, Grip, Bot, Grid3X3, Skull, Divide
 } from 'lucide-react';
 import { 
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
     CartesianGrid, Tooltip, Cell, AreaChart, Area,
-    ScatterChart, Scatter, ZAxis, ReferenceLine
+    ScatterChart, Scatter, ZAxis, ReferenceLine, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
 } from 'recharts';
 import { Trade, TradeOutcome } from '../types';
 import { getEdgePatterns, EdgeInsight } from '../services/geminiService';
@@ -27,8 +27,8 @@ const LabTooltip = ({ active, payload, label }: any) => {
             <div className="bg-slate-900 border border-slate-700 p-2 rounded shadow-xl z-50">
                 <p className="text-slate-400 text-[10px] font-bold uppercase">{label}</p>
                 {payload.map((p: any, i: number) => (
-                    <p key={i} className={`text-sm font-black ${p.name === 'PnL' ? (p.value >= 0 ? 'text-emerald-400' : 'text-red-400') : 'text-white'}`}>
-                        {p.name}: {p.name === 'PnL' ? `₹${p.value}` : p.value}
+                    <p key={i} className={`text-sm font-black ${p.name.includes('Loss') || p.value < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {p.name}: {typeof p.value === 'number' && (p.name.includes('PnL') || p.name.includes('Cost')) ? `₹${Math.abs(p.value)}` : p.value}
                     </p>
                 ))}
             </div>
@@ -78,14 +78,12 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
     });
 
     // --- DATA PREP: ARCHIVES ---
-    // Load Period Reports from LocalStorage
     const periodReports = useMemo(() => {
         try {
             return JSON.parse(localStorage.getItem('tradeMind_periodReports') || '{}');
         } catch { return {}; }
     }, []);
 
-    // Filter trades for Archive
     const filteredArchiveTrades = useMemo(() => {
         return trades.filter(t => 
             t.instrument.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,43 +93,9 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         ).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [trades, searchTerm]);
 
-    // --- DATA PREP: PATTERNS ---
+    // --- DATA PREP: PATTERNS & ANALYTICS ---
 
-    // 1. Hourly Performance Data
-    const hourlyData = useMemo(() => {
-        const hours: Record<string, number> = {};
-        for(let i=9; i<=15; i++) hours[i] = 0;
-
-        trades.forEach(t => {
-            if(t.outcome === TradeOutcome.OPEN || !t.entryTime) return;
-            const hour = parseInt(t.entryTime.split(':')[0]);
-            if(hours[hour] !== undefined) {
-                hours[hour] += (t.pnl || 0);
-            }
-        });
-
-        return Object.entries(hours).map(([hour, pnl]) => ({
-            hour: `${hour}:00`,
-            pnl: Math.round(pnl)
-        }));
-    }, [trades]);
-
-    // 2. Setup Performance Data
-    const setupData = useMemo(() => {
-        const setups: Record<string, number> = {};
-        trades.forEach(t => {
-            if(t.outcome === TradeOutcome.OPEN || !t.setupName) return;
-            const name = t.setupName.trim() || 'Unlabeled';
-            if(!setups[name]) setups[name] = 0;
-            setups[name] += (t.pnl || 0);
-        });
-        return Object.entries(setups)
-            .map(([name, pnl]) => ({ name, pnl: Math.round(pnl) }))
-            .sort((a,b) => b.pnl - a.pnl)
-            .slice(0, 5); // Top 5
-    }, [trades]);
-
-    // 3. Scatter Data (Duration vs PnL)
+    // 1. Scatter Data (Duration vs PnL)
     const scatterData = useMemo(() => {
         return trades
             .filter(t => t.outcome !== TradeOutcome.OPEN && t.tradeDurationMins && t.pnl)
@@ -140,11 +104,11 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                 pnl: t.pnl || 0,
                 date: t.date,
                 instrument: t.instrument,
-                size: Math.abs(t.pnl || 0) // For bubble size (optional visual)
+                size: Math.abs(t.pnl || 0) // For bubble size
             }));
     }, [trades]);
 
-    // 4. Simulator Logic
+    // 2. Simulator Logic
     const simulatorData = useMemo(() => {
         const sortedTrades = [...trades]
             .filter(t => t.outcome !== TradeOutcome.OPEN)
@@ -159,16 +123,13 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
             
             // Check Exclusion Criteria
             let isExcluded = false;
-            
             if (simFilters.excludeMistakes && t.mistakes && t.mistakes.length > 0) isExcluded = true;
             if (simFilters.excludeFridays && dateObj.getDay() === 5) isExcluded = true;
             if (simFilters.excludeShortDuration && (t.tradeDurationMins || 0) < 5) isExcluded = true;
             if (simFilters.excludeAfter2PM && hour >= 14) isExcluded = true;
 
             currentEquity += (t.pnl || 0);
-            if (!isExcluded) {
-                simEquity += (t.pnl || 0);
-            }
+            if (!isExcluded) simEquity += (t.pnl || 0);
 
             return {
                 date: t.date,
@@ -178,7 +139,6 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         });
     }, [trades, simFilters]);
 
-    // Calculate Optimization Delta
     const optimizationStats = useMemo(() => {
         if (simulatorData.length === 0) return { delta: 0, pct: 0, actual: 0, sim: 0 };
         const final = simulatorData[simulatorData.length - 1];
@@ -187,10 +147,94 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         return { delta, pct, actual: final.actual, sim: final.simulated };
     }, [simulatorData]);
 
+    // 3. LEAK DETECTOR (Cost of Mistakes)
+    const mistakeData = useMemo(() => {
+        const mistakeMap: Record<string, number> = {};
+        trades.forEach(t => {
+            if (t.outcome === TradeOutcome.LOSS && t.mistakes && t.mistakes.length > 0) {
+                // If multiple mistakes, split the loss evenly among them for fair weight
+                const lossPerMistake = Math.abs(t.pnl || 0) / t.mistakes.length;
+                t.mistakes.forEach(m => {
+                    if (!mistakeMap[m]) mistakeMap[m] = 0;
+                    mistakeMap[m] += lossPerMistake;
+                });
+            }
+        });
+        return Object.entries(mistakeMap)
+            .map(([name, cost]) => ({ name, cost: Math.round(cost) }))
+            .sort((a,b) => b.cost - a.cost)
+            .slice(0, 5);
+    }, [trades]);
+
+    // 4. CHRONO-HEATMAP (Day vs Hour)
+    const heatmapData = useMemo(() => {
+        // Grid: 5 Days (Mon-Fri) x 7 Hours (9-15)
+        const grid: Record<string, number> = {}; 
+        const counts: Record<string, number> = {};
+
+        trades.forEach(t => {
+            if (t.outcome === TradeOutcome.OPEN || !t.entryTime) return;
+            const date = new Date(t.date);
+            const day = date.getDay(); // 1=Mon, 5=Fri
+            const hour = parseInt(t.entryTime.split(':')[0]);
+            
+            if (day >= 1 && day <= 5 && hour >= 9 && hour <= 15) {
+                const key = `${day}-${hour}`;
+                if (!grid[key]) { grid[key] = 0; counts[key] = 0; }
+                grid[key] += (t.pnl || 0);
+                counts[key]++;
+            }
+        });
+
+        const cells = [];
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+        for(let d=1; d<=5; d++) {
+            for(let h=9; h<=15; h++) {
+                const key = `${d}-${h}`;
+                cells.push({
+                    day: days[d-1],
+                    hour: h,
+                    pnl: grid[key] || 0,
+                    count: counts[key] || 0
+                });
+            }
+        }
+        return cells;
+    }, [trades]);
+
+    // 5. WIN vs LOSS DNA
+    const dnaData = useMemo(() => {
+        const winners = trades.filter(t => t.outcome === TradeOutcome.WIN);
+        const losers = trades.filter(t => t.outcome === TradeOutcome.LOSS);
+
+        const avg = (arr: Trade[], key: keyof Trade) => arr.length ? arr.reduce((a,b) => a + (Number(b[key]) || 0), 0) / arr.length : 0;
+
+        return [
+            { metric: 'Avg Duration (Min)', winners: avg(winners, 'tradeDurationMins'), losers: avg(losers, 'tradeDurationMins') },
+            { metric: 'Discipline Score (0-5)', winners: avg(winners, 'disciplineRating'), losers: avg(losers, 'disciplineRating') },
+            { metric: 'Quantity Size', winners: avg(winners, 'quantity'), losers: avg(losers, 'quantity') },
+        ];
+    }, [trades]);
+
+    // 6. SETUP PnL DISTRIBUTION
+    const setupData = useMemo(() => {
+        const setupMap: Record<string, number> = {};
+        trades.forEach(t => {
+            if (t.outcome !== TradeOutcome.OPEN && t.setupName) {
+                const name = t.setupName.trim();
+                if (!setupMap[name]) setupMap[name] = 0;
+                setupMap[name] += (t.pnl || 0);
+            }
+        });
+        return Object.entries(setupMap)
+            .map(([name, pnl]) => ({ name, pnl: Math.round(pnl) }))
+            .sort((a,b) => b.pnl - a.pnl)
+            .slice(0, 8); // Top 8 by PnL
+    }, [trades]);
+
     const runPatternScan = async () => {
         if(!apiKey) { alert("API Key Required"); return; }
         if(trades.length < 5) { alert("Need at least 5 trades to scan for patterns."); return; }
-        
         setIsScanning(true);
         try {
             const results = await getEdgePatterns(trades, apiKey);
@@ -203,7 +247,6 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         }
     };
 
-    // Helper to render AI JSON in table
     const renderAiCell = (jsonStr: string | undefined) => {
         if(!jsonStr) return <span className="text-slate-600 text-xs italic">Pending Analysis</span>;
         try {
@@ -216,9 +259,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                         </span>
                         <span className="text-[10px] text-slate-400 font-medium">{data.marketTrend}</span>
                     </div>
-                    <p className="text-xs text-slate-300 leading-snug border-l-2 border-indigo-500 pl-2">
-                        {data.realityCheck}
-                    </p>
+                    <p className="text-xs text-slate-300 leading-snug border-l-2 border-indigo-500 pl-2">{data.realityCheck}</p>
                     <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
                         <p className="text-[10px] text-indigo-300 font-bold uppercase mb-1 flex items-center gap-1"><BrainCircuit size={10}/> Coach:</p>
                         <p className="text-xs text-slate-400 italic">"{data.coachCommand}"</p>
@@ -234,16 +275,12 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         <div className="animate-fade-in-up pb-20">
             {/* Header */}
             <div className="bg-gradient-to-r from-cyan-900/20 to-indigo-900/20 border-b border-cyan-500/20 p-6 mb-6 rounded-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                    <FlaskConical size={120} className="text-cyan-400"/>
-                </div>
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><FlaskConical size={120} className="text-cyan-400"/></div>
                 <div className="relative z-10">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
-                                <div className="bg-cyan-500/20 p-2 rounded-lg text-cyan-400">
-                                    <FlaskConical size={24} />
-                                </div>
+                                <div className="bg-cyan-500/20 p-2 rounded-lg text-cyan-400"><FlaskConical size={24} /></div>
                                 <div>
                                     <h2 className="text-2xl font-black text-white tracking-tight uppercase">Edge Lab</h2>
                                     <p className="text-xs text-cyan-400 font-mono tracking-widest">QUANTITATIVE PATTERN RECOGNITION</p>
@@ -253,19 +290,11 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                                 Detect hidden statistical anomalies and review your Neural Archives.
                             </p>
                         </div>
-                        
-                        {/* Tab Switcher */}
                         <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-700">
-                            <button 
-                                onClick={() => setActiveTab('patterns')}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'patterns' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                            >
+                            <button onClick={() => setActiveTab('patterns')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'patterns' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                                 <Sparkles size={14} /> Pattern Scout
                             </button>
-                            <button 
-                                onClick={() => setActiveTab('archives')}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'archives' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                            >
+                            <button onClick={() => setActiveTab('archives')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${activeTab === 'archives' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                                 <LayoutList size={14} /> Neural Archives
                             </button>
                         </div>
@@ -279,12 +308,8 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                     {/* AI Action */}
                     <div className="flex justify-center">
                         {!isScanning ? (
-                            <button 
-                                onClick={runPatternScan}
-                                className="group relative inline-flex items-center justify-center px-8 py-4 font-black text-white transition-all duration-200 bg-cyan-600 font-lg rounded-xl hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-600 shadow-lg shadow-cyan-900/50 hover:shadow-cyan-500/30 hover:-translate-y-1"
-                            >
-                                <Sparkles className="w-5 h-5 mr-2 animate-pulse" />
-                                IGNITE PATTERN SCOUT
+                            <button onClick={runPatternScan} className="group relative inline-flex items-center justify-center px-8 py-4 font-black text-white transition-all duration-200 bg-cyan-600 font-lg rounded-xl hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-600 shadow-lg shadow-cyan-900/50 hover:shadow-cyan-500/30 hover:-translate-y-1">
+                                <Sparkles className="w-5 h-5 mr-2 animate-pulse" /> IGNITE PATTERN SCOUT
                                 <div className="absolute -inset-3 rounded-xl bg-cyan-400 opacity-20 group-hover:opacity-40 blur transition duration-200"></div>
                             </button>
                         ) : (
@@ -303,17 +328,9 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                             {insights.map((insight, idx) => {
                                 let colors = "border-slate-700 bg-slate-800";
                                 let icon = <BrainCircuit size={20}/>;
-                                
-                                if(insight.type === 'strength') {
-                                    colors = "border-emerald-500/50 bg-emerald-900/10 shadow-[0_0_20px_rgba(16,185,129,0.1)]";
-                                    icon = <TrendingUp className="text-emerald-400" size={24}/>;
-                                } else if(insight.type === 'weakness') {
-                                    colors = "border-red-500/50 bg-red-900/10 shadow-[0_0_20px_rgba(239,68,68,0.1)]";
-                                    icon = <AlertTriangle className="text-red-400" size={24}/>;
-                                } else {
-                                    colors = "border-amber-500/50 bg-amber-900/10 shadow-[0_0_20px_rgba(245,158,11,0.1)]";
-                                    icon = <Zap className="text-amber-400" size={24}/>;
-                                }
+                                if(insight.type === 'strength') { colors = "border-emerald-500/50 bg-emerald-900/10 shadow-[0_0_20px_rgba(16,185,129,0.1)]"; icon = <TrendingUp className="text-emerald-400" size={24}/>; } 
+                                else if(insight.type === 'weakness') { colors = "border-red-500/50 bg-red-900/10 shadow-[0_0_20px_rgba(239,68,68,0.1)]"; icon = <AlertTriangle className="text-red-400" size={24}/>; } 
+                                else { colors = "border-amber-500/50 bg-amber-900/10 shadow-[0_0_20px_rgba(245,158,11,0.1)]"; icon = <Zap className="text-amber-400" size={24}/>; }
 
                                 return (
                                     <div key={idx} className={`p-6 rounded-2xl border ${colors} relative overflow-hidden group hover:scale-[1.02] transition-transform`}>
@@ -332,9 +349,108 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                         </div>
                     )}
 
-                    {/* THE OPTIMIZER ("What-If") */}
+                    {/* NEW SECTION: Deep Correlator */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        
+                        {/* 1. LEAK DETECTOR (Cost of Mistakes) */}
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                            <h3 className="text-xs font-black text-red-400 uppercase tracking-widest mb-6 flex items-center">
+                                <Skull size={14} className="mr-2"/> The Leak Detector (Cost of Mistakes)
+                            </h3>
+                            <div className="h-[250px] w-full">
+                                {mistakeData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={mistakeData} layout="vertical" margin={{ left: 20 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                                            <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
+                                            <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} width={80} />
+                                            <Tooltip content={<LabTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
+                                            <Bar dataKey="cost" name="Cost of Mistake" radius={[0, 4, 4, 0]} barSize={20}>
+                                                {mistakeData.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill="#EF4444" fillOpacity={0.8} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-slate-500 text-xs italic">
+                                        No mistakes logged in losses yet.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 2. WIN vs LOSS DNA */}
+                        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                            <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6 flex items-center">
+                                <Grid3X3 size={14} className="mr-2"/> Win vs Loss DNA
+                            </h3>
+                            <div className="space-y-4">
+                                {dnaData.map((d, idx) => (
+                                    <div key={idx} className="bg-slate-900/50 p-3 rounded-xl border border-slate-700">
+                                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-2">
+                                            <span>Winners</span>
+                                            <span>{d.metric}</span>
+                                            <span>Losers</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden flex justify-end">
+                                                <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, (d.winners / (d.winners + d.losers)) * 100) || 0}%` }}></div>
+                                            </div>
+                                            <div className="text-xs font-black text-white w-12 text-center">vs</div>
+                                            <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                                                <div className="bg-red-500 h-full rounded-full" style={{ width: `${Math.min(100, (d.losers / (d.winners + d.losers)) * 100) || 0}%` }}></div>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between text-xs font-mono font-bold mt-1 text-white">
+                                            <span className="text-emerald-400">{d.winners.toFixed(1)}</span>
+                                            <span className="text-red-400">{d.losers.toFixed(1)}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 3. CHRONO-HEATMAP */}
+                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <CalendarDays size={14} className="text-blue-400"/> Chrono-Edge Heatmap (Trading Hours)
+                        </h3>
+                        <div className="overflow-x-auto">
+                            <div className="min-w-[600px] grid grid-cols-8 gap-1 text-center">
+                                <div className="text-[10px] font-bold text-slate-500"></div>
+                                {[9, 10, 11, 12, 13, 14, 15].map(h => <div key={h} className="text-[10px] font-bold text-slate-500">{h}:00</div>)}
+                                
+                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => (
+                                    <React.Fragment key={day}>
+                                        <div className="text-[10px] font-bold text-slate-400 self-center uppercase">{day}</div>
+                                        {[9, 10, 11, 12, 13, 14, 15].map(hour => {
+                                            const cell = heatmapData.find(c => c.day === day && c.hour === hour);
+                                            const pnl = cell ? cell.pnl : 0;
+                                            // Determine color intensity
+                                            let bg = 'bg-slate-900';
+                                            if (pnl > 0) bg = pnl > 5000 ? 'bg-emerald-500' : pnl > 2000 ? 'bg-emerald-500/70' : 'bg-emerald-500/30';
+                                            if (pnl < 0) bg = pnl < -5000 ? 'bg-red-500' : pnl < -2000 ? 'bg-red-500/70' : 'bg-red-500/30';
+                                            
+                                            return (
+                                                <div key={hour} className={`h-12 rounded flex flex-col items-center justify-center transition hover:scale-105 border border-slate-800 ${bg}`}>
+                                                    {pnl !== 0 && (
+                                                        <>
+                                                            <span className="text-[10px] font-bold text-white">{pnl > 0 ? '+' : ''}{Math.abs(pnl) > 999 ? (pnl/1000).toFixed(1)+'k' : pnl}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* EXISTING: THE OPTIMIZER */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* 1. Simulator Controls */}
                         <div className="bg-slate-800 rounded-2xl border border-indigo-500/30 shadow-xl overflow-hidden flex flex-col">
                             <div className="p-5 border-b border-indigo-500/20 bg-indigo-900/10">
                                 <div className="flex items-center gap-2 mb-2">
@@ -381,7 +497,6 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                             </div>
                         </div>
 
-                        {/* 2. Simulator Chart */}
                         <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                                 <TrendingUp size={14} className="text-emerald-400"/> Equity Curve Simulation
@@ -411,10 +526,8 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                         </div>
                     </div>
 
-                    {/* Static Analytics Grid */}
+                    {/* EXISTING: Static Analytics Grid */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        
-                        {/* 1. Duration vs PnL (Scatter) */}
                         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center">
                                 <Hourglass size={14} className="mr-2 text-indigo-400"/> Patience Analysis (Duration vs PnL)
@@ -442,7 +555,6 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                             </div>
                         </div>
 
-                        {/* 2. Setup Performance (Bar) */}
                         <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center">
                                 <Target size={14} className="mr-2 text-purple-400"/> Setup PnL Distribution
