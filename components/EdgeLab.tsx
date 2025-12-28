@@ -4,8 +4,8 @@ import {
     FlaskConical, Sparkles, TrendingUp, TrendingDown, 
     Zap, AlertTriangle, Clock, Target, CalendarDays,
     ArrowRight, BrainCircuit, Loader2, Filter, RotateCcw,
-    MousePointer2, Hourglass, Search, FileText, Bot, 
-    MessageSquare, ChevronRight, LayoutList, Grip
+    MousePointer2, Hourglass, LayoutList, FileText, Search,
+    ChevronRight, Grip, Bot
 } from 'lucide-react';
 import { 
     ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
@@ -77,8 +77,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         excludeAfter2PM: false
     });
 
-    // --- DATA PREP ---
-
+    // --- DATA PREP: ARCHIVES ---
     // Load Period Reports from LocalStorage
     const periodReports = useMemo(() => {
         try {
@@ -96,7 +95,9 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         ).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [trades, searchTerm]);
 
-    // --- 1. Hourly Performance Data ---
+    // --- DATA PREP: PATTERNS ---
+
+    // 1. Hourly Performance Data
     const hourlyData = useMemo(() => {
         const hours: Record<string, number> = {};
         for(let i=9; i<=15; i++) hours[i] = 0;
@@ -115,7 +116,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         }));
     }, [trades]);
 
-    // --- 2. Setup Performance Data ---
+    // 2. Setup Performance Data
     const setupData = useMemo(() => {
         const setups: Record<string, number> = {};
         trades.forEach(t => {
@@ -130,7 +131,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
             .slice(0, 5); // Top 5
     }, [trades]);
 
-    // --- 3. Scatter Data (Duration vs PnL) ---
+    // 3. Scatter Data (Duration vs PnL)
     const scatterData = useMemo(() => {
         return trades
             .filter(t => t.outcome !== TradeOutcome.OPEN && t.tradeDurationMins && t.pnl)
@@ -143,7 +144,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
             }));
     }, [trades]);
 
-    // --- 4. Simulator Logic ---
+    // 4. Simulator Logic
     const simulatorData = useMemo(() => {
         const sortedTrades = [...trades]
             .filter(t => t.outcome !== TradeOutcome.OPEN)
@@ -202,7 +203,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
         }
     };
 
-    // Helper to render AI JSON
+    // Helper to render AI JSON in table
     const renderAiCell = (jsonStr: string | undefined) => {
         if(!jsonStr) return <span className="text-slate-600 text-xs italic">Pending Analysis</span>;
         try {
