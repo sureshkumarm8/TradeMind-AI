@@ -21,18 +21,18 @@ const getModels = () => {
 // --- ROBUST API WRAPPER ---
 /**
  * Wraps Gemini API calls with:
- * 1. Retry logic for 429 (Rate Limit) / 503 (Server Overload).
- * 2. Automatic fallback from PRO to FLASH model if quota is exhausted.
+ * 1. Immediate Fallback for Pro model quotas (429/Resource Exhausted).
+ * 2. Retry logic for Fast model transient errors.
  */
 const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, params: any): Promise<any> => {
-    let currentModel = preferredModel;
     const models = getModels();
     
-    // Attempt sequence: 
-    // 1. Preferred Model
-    // 2. Preferred Model (Retry after delay)
-    // 3. Fallback Model (if preferred was REASONING and different from FAST)
-    
+    // Helper to detect quota issues robustly
+    const isQuotaError = (e: any) => {
+        const msg = JSON.stringify(e);
+        return msg.includes('429') || msg.includes('Quota') || msg.includes('RESOURCE_EXHAUSTED') || e.status === 429 || e.status === 503;
+    };
+
     const execute = async (model: string) => {
         return await ai.models.generateContent({
             model: model,
@@ -41,24 +41,27 @@ const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, para
     };
 
     try {
-        return await execute(currentModel);
+        // Attempt 1: Preferred Model
+        return await execute(preferredModel);
     } catch (e: any) {
-        const isQuotaError = e.status === 429 || e.message?.includes('429') || e.message?.includes('Quota') || e.status === 503;
-        
-        if (isQuotaError) {
-            console.warn(`Gemini 429/503 on ${currentModel}. Retrying...`);
-            // Wait 4 seconds (backoff)
-            await new Promise(r => setTimeout(r, 4000));
+        if (isQuotaError(e)) {
+            console.warn(`Gemini Quota Hit on ${preferredModel}.`);
             
-            try {
-                return await execute(currentModel);
-            } catch (retryError: any) {
-                // If retry fails and we are using reasoning model, fallback to fast model if different
-                if (currentModel === models.reasoning && models.reasoning !== models.fast) {
-                    console.warn(`Gemini Pro Quota Exhausted. Falling back to ${models.fast}.`);
+            // STRATEGY: If using Pro/Reasoning and it fails, switch to Fast immediately.
+            // Do not retry Pro on free tier as it has very low RPM (Requests Per Minute).
+            if (preferredModel === models.reasoning && models.reasoning !== models.fast) {
+                console.warn(`Falling back to ${models.fast} immediately.`);
+                try {
                     return await execute(models.fast);
+                } catch (fallbackError: any) {
+                    // If fallback also fails, it's a hard stop.
+                    throw fallbackError;
                 }
-                throw retryError;
+            } else {
+                // If we are already on Fast model, wait a bit and retry once.
+                console.warn("Retrying Fast model after delay...");
+                await new Promise(r => setTimeout(r, 2000));
+                return await execute(preferredModel);
             }
         }
         throw e;
@@ -213,14 +216,39 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 
   } catch (error: any) {
     console.error("Error analyzing trade:", error);
-    // Return actual API error message
+    
+    // Parse error for better display
+    let cleanMsg = "Unknown API Error";
+    try {
+        // Attempt to parse JSON error message from Google
+        const errStr = typeof error === 'string' ? error : error.message;
+        if (errStr && errStr.includes('{')) {
+             // Extract JSON part if mixed with text
+             const start = errStr.indexOf('{');
+             const end = errStr.lastIndexOf('}');
+             if (start !== -1 && end !== -1) {
+                 const jsonPart = JSON.parse(errStr.substring(start, end + 1));
+                 cleanMsg = jsonPart.error?.message || jsonPart.message || cleanMsg;
+             } else {
+                 cleanMsg = errStr;
+             }
+        } else {
+            cleanMsg = errStr;
+        }
+    } catch (e) { cleanMsg = String(error); }
+
+    // Friendly message for Quota issues
+    if (cleanMsg.includes('429') || cleanMsg.includes('Quota') || cleanMsg.includes('exhausted')) {
+        cleanMsg = "Gemini Quota Exceeded. Please wait a moment or switch to 'Flash Lite' model in Settings.";
+    }
+
     return JSON.stringify({
       grade: 0,
       gradeColor: "red",
-      marketTrend: "API Error",
-      realityCheck: `Analysis Failed: ${error.message || "Unknown API Error"}`,
+      marketTrend: "Analysis Failed",
+      realityCheck: cleanMsg,
       strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
-      coachCommand: "Check API Key and Quota."
+      coachCommand: "Check Settings > AI Model"
     });
   }
 };
