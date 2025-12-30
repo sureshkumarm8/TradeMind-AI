@@ -8,7 +8,8 @@ export enum TradeOutcome {
   WIN = 'WIN',
   LOSS = 'LOSS',
   BREAK_EVEN = 'BREAK_EVEN',
-  OPEN = 'OPEN'
+  OPEN = 'OPEN',
+  SKIPPED = 'SKIPPED'
 }
 
 export enum OptionType {
