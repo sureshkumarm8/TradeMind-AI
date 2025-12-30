@@ -17,31 +17,46 @@ import { LayoutDashboard, PlusCircle, BookOpen, BrainCircuit, Target, Settings, 
 import Toast from './components/Toast';
 
 const DEFAULT_STRATEGY: StrategyProfile = {
-  name: "Intraday Trend System (Template)",
-  description: "A disciplined approach to following market trends. Define your edge, wait for the setup, and execute with precision. Import your personal strategy file to customize.",
-  tags: ["Trend Following", "Risk: 1:2", "Discipline"],
+  name: "Nifty Sniper: The Office Protocol",
+  description: "A precision system designed to capture 30 points between 09:25 AM and 10:15 AM. We exploit the initial market waves (Support/Resistance interactions) and exit before the mid-morning chop to focus on office work.",
+  tags: ["Time: 9:25-10:15", "Target: 30 Pts", "Zone Play"],
   steps: [
     {
-      title: "Phase 1: Analysis",
-      items: ["Analyze higher timeframe trends (Daily/Hourly)", "Identify key support & resistance levels", "Check economic calendar for events"]
+      title: "09:15 - 09:25 (The Download)",
+      items: [
+        "DO NOT TRADE. Watch the Open.",
+        "Mark the 5-min High & Low.",
+        "Identify immediate Support/Resistance zones.",
+        "Assess Open Type: Gap Up (Profit Booking?) or Flat?"
+      ]
     },
     {
-      title: "Phase 2: Execution",
-      items: ["Wait for price action confirmation at key levels", "Verify risk-to-reward ratio is at least 1:2", "Enter trade with defined Stop Loss"]
+      title: "09:25 - 09:45 (The Entry Window)",
+      items: [
+        "Market participation increases. Look for the setup.",
+        "Buy at Support (Call) or Sell at Resistance (Put).",
+        "Wait for a candle close confirmation.",
+        "Entry must align with the immediate trend."
+      ]
     },
     {
-      title: "Phase 3: Management",
-      items: ["Trail Stop Loss to breakeven when possible", "Book partial profits at targets", "Log trade details immediately after exit"]
+      title: "10:15 AM (The Hard Stop)",
+      items: [
+        "Target is 30 points. Take it and leave.",
+        "If target is not hit by 10:15 AM, EXIT at market.",
+        "Close terminal. Shift focus to Office Work.",
+        "NO SETUP = NO TRADE. Do not force it."
+      ]
     }
   ],
   links: [
-    { label: "TradingView", url: "https://www.tradingview.com", description: "Charting Platform" },
-    { label: "Economic Calendar", url: "https://www.investing.com/economic-calendar/", description: "Key Market Events" }
+    { label: "Sensibull OI", url: "https://web.sensibull.com/open-interest", description: "Check 22000/22500 levels" },
+    { label: "Nifty Spot Chart", url: "https://kite.zerodha.com", description: "5 Minute Timeframe" }
   ],
   rules: [
-    { title: "PROTECT CAPITAL", description: "Never risk more than 1-2% of total capital on a single trade." },
-    { title: "NO EMOTIONS", description: "Trade the chart, not your feelings. If you feel tilted, stop trading." },
-    { title: "FOLLOW THE PLAN", description: "Execution is the only thing you control. Outcome is probability." }
+    { title: "OFFICE HARD STOP", description: "At 10:15 AM, the trading day ends. Win, Loss, or Breakeven. My job is priority #1 after this time." },
+    { title: "30 POINTS OR NOTHING", description: "The goal is precise. Don't be greedy for 100 points. Get the chunk and get out." },
+    { title: "NO SETUP = NO TRADE", description: "If the market is choppy or confusing by 09:45, simply close the laptop. Preserving capital is a win." }
   ]
 };
 

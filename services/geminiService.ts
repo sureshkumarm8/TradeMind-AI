@@ -753,6 +753,7 @@ export const analyzePreMarketRoutine = async (
         - They wait for 10 minutes (9:15 - 9:25) to let the dust settle.
         - The 'firstHourPlan' MUST focus strictly on the entry window: 09:25 AM to 09:45 AM.
         - All advice must be for acting within this specific 20-minute slot.
+        - CRITICAL RULE: "10:15 AM HARD STOP". If no setup is clear for the 9:25-9:45 window, state "NO TRADE" explicitly.
         
         CRITICAL RISK CONSTRAINTS:
         - For any trade recommended, the Stop Loss MUST be exactly 30 points from entry.
@@ -847,6 +848,7 @@ export const analyzeLiveMarketRoutine = async (
         - Should we enter as planned? Or abort?
         - If entering, confirm the levels.
         - Constraints: Stop Loss = 30 pts, Target = 35 pts.
+        - REMEMBER: 10:15 AM Hard Stop. If volatility is too low, advise "NO TRADE".
         
         Output valid JSON.
     `;
