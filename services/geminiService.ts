@@ -7,6 +7,52 @@ const FAST_MODEL = 'gemini-3-flash-preview';
 // Reasoning model for deep batch analysis & chart reading
 const REASONING_MODEL = 'gemini-3-pro-preview'; 
 
+// --- ROBUST API WRAPPER ---
+/**
+ * Wraps Gemini API calls with:
+ * 1. Retry logic for 429 (Rate Limit) / 503 (Server Overload).
+ * 2. Automatic fallback from PRO to FLASH model if quota is exhausted.
+ */
+const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, params: any): Promise<any> => {
+    let currentModel = preferredModel;
+    
+    // Attempt sequence: 
+    // 1. Preferred Model
+    // 2. Preferred Model (Retry after delay)
+    // 3. Fallback Model (if preferred was PRO)
+    
+    const execute = async (model: string) => {
+        return await ai.models.generateContent({
+            model: model,
+            ...params
+        });
+    };
+
+    try {
+        return await execute(currentModel);
+    } catch (e: any) {
+        const isQuotaError = e.status === 429 || e.message?.includes('429') || e.message?.includes('Quota') || e.status === 503;
+        
+        if (isQuotaError) {
+            console.warn(`Gemini 429/503 on ${currentModel}. Retrying...`);
+            // Wait 4 seconds (backoff)
+            await new Promise(r => setTimeout(r, 4000));
+            
+            try {
+                return await execute(currentModel);
+            } catch (retryError: any) {
+                // If retry fails and we are using PRO, fallback to FLASH
+                if (currentModel === REASONING_MODEL) {
+                    console.warn("Gemini Pro Quota Exhausted. Falling back to Flash.");
+                    return await execute(FAST_MODEL);
+                }
+                throw retryError;
+            }
+        }
+        throw e;
+    }
+};
+
 const formatStrategyForAI = (profile?: StrategyProfile) => {
   if (!profile) return "Strategy: General Intraday Trading";
 
@@ -102,8 +148,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
     }
 
-    const response = await ai.models.generateContent({
-      model: FAST_MODEL,
+    const response = await generateContentSafe(ai, FAST_MODEL, {
       contents: { parts },
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
@@ -203,11 +248,9 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
       (One advanced concept to apply tomorrow)
     `;
 
-    const response = await ai.models.generateContent({
-      model: REASONING_MODEL,
+    const response = await generateContentSafe(ai, REASONING_MODEL, {
       contents: prompt,
       config: {
-        // thinkingConfig: { thinkingBudget: 1024 }, // Disabled thinking for Flash model to save quota/errors
         systemInstruction: "You are an expert trading psychologist. Format your response with clear Markdown headers and emojis.",
       }
     });
@@ -226,8 +269,7 @@ export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
   
   try {
     const ai = new GoogleGenAI({ apiKey: key });
-    const response = await ai.models.generateContent({
-      model: FAST_MODEL,
+    const response = await generateContentSafe(ai, FAST_MODEL, {
       contents: "Give me ONE powerful, ultra-short trading aphorism (MAX 15 WORDS). Focus on patience, risk, or discipline. Tone: Sun Tzu / Marcus Aurelius. No generic advice.",
     });
     return response.text?.trim() || "The market transfers money from the impatient to the patient.";
@@ -260,8 +302,7 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
             }
         };
 
-        const response = await ai.models.generateContent({
-            model: FAST_MODEL,
+        const response = await generateContentSafe(ai, FAST_MODEL, {
             contents: {
               parts: [
                 {
@@ -339,8 +380,7 @@ export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<
     const ai = new GoogleGenAI({ apiKey: key });
     
     try {
-        const response = await ai.models.generateContent({
-            model: REASONING_MODEL,
+        const response = await generateContentSafe(ai, REASONING_MODEL, {
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -399,8 +439,7 @@ export const queryTradeArchives = async (query: string, trades: Trade[], apiKey:
     const ai = new GoogleGenAI({ apiKey: key });
     
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview', // Use flash for speed
+        const response = await generateContentSafe(ai, FAST_MODEL, {
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -457,8 +496,7 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: FAST_MODEL,
+        const response = await generateContentSafe(ai, FAST_MODEL, {
             contents: { parts: [{ text: promptText }] },
             config: {
                 tools: [{ googleSearch: {} }],
@@ -639,8 +677,7 @@ export const analyzePreMarketRoutine = async (
     parts.push({ text: promptText });
 
     try {
-        const response = await ai.models.generateContent({
-            model: REASONING_MODEL, // UPGRADED to gemini-3-pro-preview for better vision
+        const response = await generateContentSafe(ai, REASONING_MODEL, {
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -722,8 +759,7 @@ export const analyzeLiveMarketRoutine = async (
     parts.push({ text: promptText });
 
     try {
-        const response = await ai.models.generateContent({
-            model: FAST_MODEL, // Using Flash 3 for speed in live environment
+        const response = await generateContentSafe(ai, FAST_MODEL, {
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -812,8 +848,7 @@ export const analyzePostMarketRoutine = async (
     parts.push({ text: promptText });
 
     try {
-        const response = await ai.models.generateContent({
-            model: REASONING_MODEL, // Using Pro 3 for deep reflection
+        const response = await generateContentSafe(ai, REASONING_MODEL, {
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
