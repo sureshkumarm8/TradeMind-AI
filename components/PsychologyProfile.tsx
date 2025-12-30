@@ -4,7 +4,8 @@ import {
     X, BrainCircuit, ShieldCheck, HeartPulse, Target, 
     ArrowLeft, Calendar, TrendingUp, AlertTriangle, 
     Wallet, Scale, Calculator, ChevronUp, ChevronDown, 
-    ArrowUpRight, Percent, Info, Sparkles 
+    ArrowUpRight, Percent, Info, Sparkles, Ban, Repeat, 
+    Flame, Skull, CheckCircle2 
 } from 'lucide-react';
 import { 
     ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, 
@@ -92,6 +93,51 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
         else if (disciplineIndex > 0) statusLabel = "Tilted";
 
         return { disciplineIndex, systemAdherence, streak, emotionalStability, statusLabel, recentOffenses, costOfIndiscipline, winRateVariance };
+    }, [trades]);
+
+    // --- BEHAVIORAL AUDIT (Stop vs Continue) ---
+    const behavioralAudit = useMemo(() => {
+        const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
+        if(closedTrades.length === 0) return { stopActions: [], continueActions: [] };
+
+        // 1. Analyze "Stop" (Mistakes correlated with Loss)
+        const mistakeMap: Record<string, { count: number, loss: number }> = {};
+        closedTrades.forEach(t => {
+            if (t.mistakes && t.mistakes.length > 0) {
+                // If trade was a loss, attribute it to the mistake
+                const impact = t.pnl && t.pnl < 0 ? Math.abs(t.pnl) : 0;
+                t.mistakes.forEach(m => {
+                    if(!mistakeMap[m]) mistakeMap[m] = { count: 0, loss: 0 };
+                    mistakeMap[m].count++;
+                    mistakeMap[m].loss += impact;
+                });
+            }
+        });
+
+        // 2. Analyze "Continue" (Confluences correlated with Wins)
+        const confluenceMap: Record<string, { count: number, profit: number }> = {};
+        closedTrades.forEach(t => {
+            if (t.confluences && t.confluences.length > 0) {
+                const impact = t.pnl && t.pnl > 0 ? t.pnl : 0;
+                t.confluences.forEach(c => {
+                    if(!confluenceMap[c]) confluenceMap[c] = { count: 0, profit: 0 };
+                    confluenceMap[c].count++;
+                    confluenceMap[c].profit += impact;
+                });
+            }
+        });
+
+        const stopActions = Object.entries(mistakeMap)
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a,b) => b.loss - a.loss) // Sort by most expensive mistakes
+            .slice(0, 4);
+
+        const continueActions = Object.entries(confluenceMap)
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a,b) => b.profit - a.profit) // Sort by most profitable confluences
+            .slice(0, 4);
+
+        return { stopActions, continueActions };
     }, [trades]);
 
     // --- Weekly Trends Calculation ---
@@ -260,8 +306,87 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                             </div>
                         </div>
 
+                        {/* NEW: BEHAVIORAL MODIFICATION PROTOCOL */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                            
+                            {/* Actions to STOP */}
+                            <div className="bg-slate-900 rounded-2xl border border-red-500/30 overflow-hidden shadow-xl">
+                                <div className="p-5 bg-red-950/20 border-b border-red-900/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Ban size={20} className="text-red-500"/>
+                                        <h3 className="text-sm font-black text-red-200 uppercase tracking-wide">Actions to Stop</h3>
+                                    </div>
+                                    <span className="text-[10px] font-bold bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/30 uppercase">Toxic Habits</span>
+                                </div>
+                                <div className="p-5 space-y-4">
+                                    {behavioralAudit.stopActions.length > 0 ? (
+                                        behavioralAudit.stopActions.map((action, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 font-bold text-xs border border-red-500/20">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">{action.name}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase">Frequency: {action.count}x</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-black text-red-400">-₹{Math.round(action.loss)}</div>
+                                                    <p className="text-[9px] text-slate-600 uppercase font-bold">Cost</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-8 text-slate-500 text-xs italic">
+                                            <CheckCircle2 size={32} className="mx-auto mb-2 opacity-30 text-emerald-500"/>
+                                            No recurring mistakes detected. Clean execution.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Actions to CONTINUE */}
+                            <div className="bg-slate-900 rounded-2xl border border-emerald-500/30 overflow-hidden shadow-xl">
+                                <div className="p-5 bg-emerald-950/20 border-b border-emerald-900/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Repeat size={20} className="text-emerald-500"/>
+                                        <h3 className="text-sm font-black text-emerald-200 uppercase tracking-wide">Actions to Continue</h3>
+                                    </div>
+                                    <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded border border-emerald-500/30 uppercase">Superpowers</span>
+                                </div>
+                                <div className="p-5 space-y-4">
+                                    {behavioralAudit.continueActions.length > 0 ? (
+                                        behavioralAudit.continueActions.map((action, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 font-bold text-xs border border-emerald-500/20">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-white">{action.name}</p>
+                                                        <p className="text-[10px] text-slate-500 uppercase">Frequency: {action.count}x</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs font-black text-emerald-400">+₹{Math.round(action.profit)}</div>
+                                                    <p className="text-[9px] text-slate-600 uppercase font-bold">Yield</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-8 text-slate-500 text-xs italic">
+                                            <Flame size={32} className="mx-auto mb-2 opacity-30 text-amber-500"/>
+                                            Log winning trades with 'Confluences' to see data here.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                        </div>
+
                         {/* Coach Diagnosis */}
-                        <div className="bg-indigo-900/10 border border-indigo-500/30 p-6 rounded-2xl flex items-start gap-5 shadow-lg relative overflow-hidden">
+                        <div className="bg-indigo-900/10 border border-indigo-500/30 p-6 rounded-2xl flex items-start gap-5 shadow-lg relative overflow-hidden mt-6">
                             <div className="absolute -right-10 -top-10 text-indigo-500/10"><Sparkles size={150}/></div>
                             <div className="bg-indigo-500/20 p-3 rounded-full text-indigo-400 shrink-0 relative z-10"><Sparkles size={24}/></div>
                             <div className="relative z-10">
