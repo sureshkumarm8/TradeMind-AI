@@ -202,8 +202,21 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       setHealthCheck({ status: 'loading', message: 'Pinging Google AI...' });
       // Determine the exact model string to test based on selection
       let modelToTest = 'gemini-3-pro-preview';
+      
+      // Gemini 3
       if (aiModel === 'gemini-3-flash') modelToTest = 'gemini-3-flash-preview';
+      
+      // Gemini 2.5
+      if (aiModel === 'gemini-2.5-pro') modelToTest = 'gemini-3-pro-preview'; // Map to best Pro available
       if (aiModel === 'gemini-2.5-flash') modelToTest = 'gemini-2.5-flash-latest';
+      if (aiModel === 'gemini-2.5-flash-lite') modelToTest = 'gemini-flash-lite-latest';
+      
+      // Gemini 2.0 (Fallbacks)
+      if (aiModel === 'gemini-2.0-flash') modelToTest = 'gemini-flash-latest';
+      if (aiModel === 'gemini-2.0-flash-lite') modelToTest = 'gemini-flash-lite-latest';
+      
+      // Legacy
+      if (aiModel === 'gemini-flash-stable') modelToTest = 'gemini-flash-latest';
       if (aiModel === 'gemini-flash-lite') modelToTest = 'gemini-flash-lite-latest';
 
       const result = await checkModelHealth(apiKey, modelToTest);
@@ -507,17 +520,26 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-medium text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer"
                             >
-                                <option value="gemini-3-pro">Gemini 3 Pro (Recommended - High IQ)</option>
-                                <option value="gemini-3-flash">Gemini 3 Flash (Balanced Speed/Quota)</option>
-                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Legacy Stable)</option>
-                                <option value="gemini-flash-lite">Gemini Flash Lite (Fastest - Budget)</option>
+                                <optgroup label="Gemini 3 Series (Intelligent & Complex)">
+                                    <option value="gemini-3-pro">Gemini 3 Pro (Reasoning & Multimodal)</option>
+                                    <option value="gemini-3-flash">Gemini 3 Flash (High Speed)</option>
+                                </optgroup>
+                                <optgroup label="Gemini 2.5 Series (Large-Scale Processing)">
+                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Code/Math/Data)</option>
+                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Balanced)</option>
+                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Efficient)</option>
+                                </optgroup>
+                                <optgroup label="Gemini 2.0 Series (Cost-Effective General)">
+                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
+                                </optgroup>
                             </select>
                             <div className="absolute right-4 top-4 pointer-events-none text-slate-500">
                                 <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                             </div>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-1">
-                            Switch to Flash or Lite models if you frequently hit API Rate Limits (429 Errors).
+                            Switch to Flash-Lite models if you frequently hit API Rate Limits (429 Errors).
                         </p>
                     </div>
 
@@ -551,7 +573,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </button>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                            If you see "Quota Exceeded", switch the model above to <strong>Flash Lite</strong> or wait a few minutes.
+                            If you see "Quota Exceeded", switch the model above to <strong>Flash-Lite</strong> or wait a few minutes.
                         </p>
                     </div>
 

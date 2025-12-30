@@ -6,14 +6,37 @@ import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMark
 const getModels = () => {
   const pref = localStorage.getItem('tradeMind_aiModel');
   switch (pref) {
-    case 'gemini-3-flash': // User wants purely flash (speed/quota)
+    // --- GEMINI 3 SERIES ---
+    case 'gemini-3-pro':
+      return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
+    case 'gemini-3-flash':
       return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-flash-preview' };
+    
+    // --- GEMINI 2.5 SERIES ---
+    case 'gemini-2.5-pro': 
+      // Mapping 2.5 Pro preference to 3-Pro for best reasoning performance if 2.5 Pro specific string is not standard yet
+      // or to 3-pro as the 'Pro' standard. 
+      return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-3-pro-preview' };
     case 'gemini-2.5-flash':
       return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.5-flash-latest' };
+    case 'gemini-2.5-flash-lite':
+      return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
+
+    // --- GEMINI 2.0 SERIES ---
+    case 'gemini-2.0-flash':
+      // Maps to the general stable flash alias
+      return { fast: 'gemini-flash-latest', reasoning: 'gemini-flash-latest' };
+    case 'gemini-2.0-flash-lite':
+      return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
+
+    // --- LEGACY / FALLBACK ---
+    case 'gemini-flash-stable':
+      return { fast: 'gemini-flash-latest', reasoning: 'gemini-flash-latest' };
     case 'gemini-flash-lite':
       return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
-    case 'gemini-3-pro': // Default behavior
+      
     default:
+      // Default to the most capable pairing
       return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
   }
 };
