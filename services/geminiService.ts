@@ -2,10 +2,21 @@
 import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis } from "../types";
 
-// Text model for quick single-trade analysis (with Google Search tool enabled)
-const FAST_MODEL = 'gemini-3-flash-preview';
-// Reasoning model for deep batch analysis & chart reading
-const REASONING_MODEL = 'gemini-3-pro-preview'; 
+// Helper to get configured models
+const getModels = () => {
+  const pref = localStorage.getItem('tradeMind_aiModel');
+  switch (pref) {
+    case 'gemini-3-flash': // User wants purely flash (speed/quota)
+      return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-flash-preview' };
+    case 'gemini-2.5-flash':
+      return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.5-flash-latest' };
+    case 'gemini-flash-lite':
+      return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
+    case 'gemini-3-pro': // Default behavior
+    default:
+      return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
+  }
+};
 
 // --- ROBUST API WRAPPER ---
 /**
@@ -15,11 +26,12 @@ const REASONING_MODEL = 'gemini-3-pro-preview';
  */
 const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, params: any): Promise<any> => {
     let currentModel = preferredModel;
+    const models = getModels();
     
     // Attempt sequence: 
     // 1. Preferred Model
     // 2. Preferred Model (Retry after delay)
-    // 3. Fallback Model (if preferred was PRO)
+    // 3. Fallback Model (if preferred was REASONING and different from FAST)
     
     const execute = async (model: string) => {
         return await ai.models.generateContent({
@@ -41,10 +53,10 @@ const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, para
             try {
                 return await execute(currentModel);
             } catch (retryError: any) {
-                // If retry fails and we are using PRO, fallback to FLASH
-                if (currentModel === REASONING_MODEL) {
-                    console.warn("Gemini Pro Quota Exhausted. Falling back to Flash.");
-                    return await execute(FAST_MODEL);
+                // If retry fails and we are using reasoning model, fallback to fast model if different
+                if (currentModel === models.reasoning && models.reasoning !== models.fast) {
+                    console.warn(`Gemini Pro Quota Exhausted. Falling back to ${models.fast}.`);
+                    return await execute(models.fast);
                 }
                 throw retryError;
             }
@@ -87,6 +99,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
   try {
     const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
+    const models = getModels();
     
     // Format timeline for prompt
     const timeline = trade.notes 
@@ -148,7 +161,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
     }
 
-    const response = await generateContentSafe(ai, FAST_MODEL, {
+    const response = await generateContentSafe(ai, models.fast, {
       contents: { parts },
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
@@ -219,6 +232,7 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
   try {
     const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
+    const models = getModels();
 
     // Prepare a summary of trades for the prompt to save tokens/complexity
     const tradeSummaries = trades.map((t, i) => `
@@ -248,7 +262,7 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
       (One advanced concept to apply tomorrow)
     `;
 
-    const response = await generateContentSafe(ai, REASONING_MODEL, {
+    const response = await generateContentSafe(ai, models.reasoning, {
       contents: prompt,
       config: {
         systemInstruction: "You are an expert trading psychologist. Format your response with clear Markdown headers and emojis.",
@@ -269,7 +283,8 @@ export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
   
   try {
     const ai = new GoogleGenAI({ apiKey: key });
-    const response = await generateContentSafe(ai, FAST_MODEL, {
+    const models = getModels();
+    const response = await generateContentSafe(ai, models.fast, {
       contents: "Give me ONE powerful, ultra-short trading aphorism (MAX 15 WORDS). Focus on patience, risk, or discipline. Tone: Sun Tzu / Marcus Aurelius. No generic advice.",
     });
     return response.text?.trim() || "The market transfers money from the impatient to the patient.";
@@ -286,6 +301,7 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
 
     try {
         const ai = new GoogleGenAI({ apiKey: key });
+        const models = getModels();
         
         const responseSchema = {
             type: Type.OBJECT,
@@ -302,7 +318,7 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
             }
         };
 
-        const response = await generateContentSafe(ai, FAST_MODEL, {
+        const response = await generateContentSafe(ai, models.fast, {
             contents: {
               parts: [
                 {
@@ -378,9 +394,10 @@ export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<
     `;
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
     
     try {
-        const response = await generateContentSafe(ai, REASONING_MODEL, {
+        const response = await generateContentSafe(ai, models.reasoning, {
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
@@ -437,9 +454,10 @@ export const queryTradeArchives = async (query: string, trades: Trade[], apiKey:
     `;
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
     
     try {
-        const response = await generateContentSafe(ai, FAST_MODEL, {
+        const response = await generateContentSafe(ai, models.fast, {
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -457,6 +475,7 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
     if (!key) throw new Error("API Key Required for News Intelligence");
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
     
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     
@@ -496,7 +515,7 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
     `;
 
     try {
-        const response = await generateContentSafe(ai, FAST_MODEL, {
+        const response = await generateContentSafe(ai, models.fast, {
             contents: { parts: [{ text: promptText }] },
             config: {
                 tools: [{ googleSearch: {} }],
@@ -529,6 +548,7 @@ export const analyzePreMarketRoutine = async (
     if (!key) throw new Error("API Key Required for Pre-Market Analysis");
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
 
     // Prepare prompt parts
     const parts: any[] = [];
@@ -677,7 +697,7 @@ export const analyzePreMarketRoutine = async (
     parts.push({ text: promptText });
 
     try {
-        const response = await generateContentSafe(ai, REASONING_MODEL, {
+        const response = await generateContentSafe(ai, models.reasoning, {
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -705,6 +725,7 @@ export const analyzeLiveMarketRoutine = async (
     if (!key) throw new Error("API Key Required for Live Check");
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
     const parts: any[] = [];
 
     // Context: Pre-Market Plan
@@ -759,7 +780,7 @@ export const analyzeLiveMarketRoutine = async (
     parts.push({ text: promptText });
 
     try {
-        const response = await generateContentSafe(ai, FAST_MODEL, {
+        const response = await generateContentSafe(ai, models.fast, {
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -785,6 +806,7 @@ export const analyzePostMarketRoutine = async (
     if (!key) throw new Error("API Key Required for Post-Market Analysis");
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
     const parts: any[] = [];
 
     // Context: Morning Plan
@@ -848,7 +870,7 @@ export const analyzePostMarketRoutine = async (
     parts.push({ text: promptText });
 
     try {
-        const response = await generateContentSafe(ai, REASONING_MODEL, {
+        const response = await generateContentSafe(ai, models.reasoning, {
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -876,6 +898,7 @@ export const getMentorChatResponse = async (
     if (!key) throw new Error("API Key Required for Mentor Chat");
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
 
     // 1. Summarize History for Context (Last 50 trades)
     // We don't send full objects to save tokens, just key metrics
@@ -916,7 +939,7 @@ export const getMentorChatResponse = async (
         const lastUserMsg = historyForInit.pop(); 
         
         const activeChat = ai.chats.create({
-            model: FAST_MODEL,
+            model: models.fast,
             config: {
                 systemInstruction: systemInstruction,
             },
@@ -946,6 +969,7 @@ export const getLiveTradeCoachResponse = async (
     if (!key) throw new Error("API Key Required");
 
     const ai = new GoogleGenAI({ apiKey: key });
+    const models = getModels();
 
     const strategyContext = formatStrategyForAI(strategyProfile);
     
@@ -982,7 +1006,7 @@ export const getLiveTradeCoachResponse = async (
         const lastUserMsg = historyForInit.pop();
 
         const activeChat = ai.chats.create({
-            model: FAST_MODEL,
+            model: models.fast,
             config: { systemInstruction },
             history: historyForInit as any
         });

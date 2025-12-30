@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload } from 'lucide-react';
+import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot } from 'lucide-react';
 import { shareBackupData } from '../services/dataService'; // Import shareBackupData
 
 interface AccountSettingsProps {
@@ -36,6 +36,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [scriptTimeout, setScriptTimeout] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [aiModel, setAiModel] = useState<string>('gemini-3-pro');
   
   // Local ref for config import
   const configFileInputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +62,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
      const timeoutId = setTimeout(() => {
         if (!isGapiReady) setScriptTimeout(true);
      }, 5000);
+
+     // Load AI Model pref
+     const savedModel = localStorage.getItem('tradeMind_aiModel');
+     if (savedModel) setAiModel(savedModel);
 
      return () => { clearInterval(checkGapi); clearTimeout(timeoutId); };
   }, [isGapiReady]);
@@ -119,8 +124,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       setGoogleClientId(clean);
   }
 
+  const handleSaveAll = () => {
+      localStorage.setItem('tradeMind_aiModel', aiModel);
+      onSaveSettings();
+  }
+
   const handleShareConfig = () => {
-      const configData = JSON.stringify({ k: apiKey, c: googleClientId });
+      const configData = JSON.stringify({ k: apiKey, c: googleClientId, m: aiModel });
       if (navigator.share) {
           navigator.share({
               title: 'TradeMind Config',
@@ -140,6 +150,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               const data = JSON.parse(text);
               if (data.k) setApiKey(data.k);
               if (data.c) setGoogleClientId(data.c);
+              if (data.m) setAiModel(data.m);
               if (data.apiKey) setApiKey(data.apiKey);
               if (data.googleClientId) setGoogleClientId(data.googleClientId);
               alert("Configuration pasted successfully!");
@@ -169,6 +180,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               let imported = false;
               if (data.k) { setApiKey(data.k); imported = true; }
               if (data.c) { setGoogleClientId(data.c); imported = true; }
+              if (data.m) { setAiModel(data.m); imported = true; }
               if (data.apiKey) { setApiKey(data.apiKey); imported = true; }
               if (data.googleClientId) { setGoogleClientId(data.googleClientId); imported = true; }
 
@@ -181,19 +193,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       reader.readAsText(file);
       if(configFileInputRef.current) configFileInputRef.current.value = '';
   };
-
-  const handleShareData = async () => {
-    setIsSharing(true);
-    try {
-        const trades = JSON.parse(localStorage.getItem('tradeMind_trades') || '[]');
-        const strategy = JSON.parse(localStorage.getItem('tradeMind_strategy') || '{}');
-        await shareBackupData(trades, strategy);
-    } catch (e) {
-        alert("Failed to share data.");
-    } finally {
-        setIsSharing(false);
-    }
-  }
 
   return (
     <div className="max-w-4xl mx-auto pb-12 animate-fade-in-up">
@@ -450,7 +449,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                          <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-[10px] text-indigo-400 mt-1 inline-block hover:underline">Get API Key &rarr;</a>
                     </div>
                     
-                    {/* Client ID */}
+                    {/* Google Client ID */}
                     <div className="mb-6">
                         <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
                             <Cloud size={16} className="text-blue-400"/> Google Client ID
@@ -481,6 +480,31 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         </p>
                     </div>
 
+                    {/* AI Model Selection */}
+                    <div className="mb-6">
+                        <label className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-2">
+                            <Bot size={16} className="text-emerald-400"/> AI Model Tier
+                        </label>
+                        <div className="relative">
+                            <select 
+                                value={aiModel} 
+                                onChange={(e) => setAiModel(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-medium text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer"
+                            >
+                                <option value="gemini-3-pro">Gemini 3 Pro (Recommended - High IQ)</option>
+                                <option value="gemini-3-flash">Gemini 3 Flash (Balanced Speed/Quota)</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Legacy Stable)</option>
+                                <option value="gemini-flash-lite">Gemini Flash Lite (Fastest - Budget)</option>
+                            </select>
+                            <div className="absolute right-4 top-4 pointer-events-none text-slate-500">
+                                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                            Switch to Flash or Lite models if you frequently hit API Rate Limits (429 Errors).
+                        </p>
+                    </div>
+
                     {/* Helper */}
                     <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 text-xs text-slate-400 mb-6">
                         <p className="mb-2 font-bold text-slate-200">Mobile/Xiaomi Login Issues?</p>
@@ -499,7 +523,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         </div>
                     </div>
 
-                    <button onClick={onSaveSettings} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-900/20">
+                    <button onClick={handleSaveAll} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-900/20">
                         Save Configuration
                     </button>
                 </div>
