@@ -1,7 +1,7 @@
 
 /**
  * Compresses an image file to a smaller Base64 string to fit in LocalStorage.
- * Resizes max width to 800px and reduces quality to 0.7.
+ * Resizes max width to 1280px (HD) to ensure text on charts is legible for AI.
  */
 export const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -12,7 +12,8 @@ export const compressImage = (file: File): Promise<string> => {
       img.src = event.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
+        // Increased from 800 to 1280 to improve OCR accuracy on chart numbers
+        const MAX_WIDTH = 1280; 
         const scaleSize = MAX_WIDTH / img.width;
         
         // Calculate new dimensions
@@ -27,8 +28,8 @@ export const compressImage = (file: File): Promise<string> => {
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         
-        // Compress to JPEG with 0.7 quality
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        // Compress to JPEG with 0.8 quality (Balanced for text readability vs size)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         resolve(dataUrl);
       };
       img.onerror = (err) => reject(err);

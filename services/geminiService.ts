@@ -3,10 +3,9 @@ import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis } from "../types";
 
 // Text model for quick single-trade analysis (with Google Search tool enabled)
-const FAST_MODEL = 'gemini-2.5-flash';
-// Reasoning model for deep batch analysis 
-// Switched to Flash to avoid 429 Resource Exhausted errors on Free Tier
-const REASONING_MODEL = 'gemini-2.5-flash'; 
+const FAST_MODEL = 'gemini-3-flash-preview';
+// Reasoning model for deep batch analysis & chart reading
+const REASONING_MODEL = 'gemini-3-pro-preview'; 
 
 const formatStrategyForAI = (profile?: StrategyProfile) => {
   if (!profile) return "Strategy: General Intraday Trading";
@@ -401,7 +400,7 @@ export const queryTradeArchives = async (query: string, trades: Trade[], apiKey:
     
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash', // Use flash for speed
+            model: 'gemini-3-flash-preview', // Use flash for speed
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -604,7 +603,18 @@ export const analyzePreMarketRoutine = async (
     // System Instruction
     const promptText = `
         You are an expert Nifty 50 intraday trading strategist.
-        Analyze the provided 4 images holistically${newsContext ? ' AND the provided Market News Intelligence' : ''}.
+        
+        TASK:
+        Analyze the provided charts with extreme precision.
+        
+        STEP 1: DATA EXTRACTION (Internal Thought Process)
+        - Image 1 (Market Graph): Read the exact price value on the right axis. Identify the candle pattern of the last few candles.
+        - Image 2 (Intraday): Identify specific support/resistance zones by reading the price axis numbers.
+        - Image 3 (Total OI): Compare the height of Call bars (Red/Green usually) vs Put bars at the ATM strike. Read the Strike Prices on X-axis.
+        - Image 4 (Multi-Strike): Check if Call OI line is crossing above/below Put OI line.
+        
+        STEP 2: STRATEGY GENERATION
+        Based *only* on the data extracted above (do not hallucinate levels not visible):
         
         CRITICAL TIME CONSTRAINTS:
         - The trader DOES NOT trade immediately at 9:15 AM.
@@ -630,12 +640,12 @@ export const analyzePreMarketRoutine = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash', 
+            model: REASONING_MODEL, // UPGRADED to gemini-3-pro-preview for better vision
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
-                systemInstruction: "You are a disciplined trading coach. Be objective. Do not hallucinate data not present in charts.",
+                systemInstruction: "You are a disciplined trading coach. Be objective. Extract specific numbers from axes before forming an opinion.",
                 temperature: 0.2
             }
         });
@@ -698,7 +708,7 @@ export const analyzeLiveMarketRoutine = async (
         
         TASK:
         1. Compare the LIVE charts against the PRE-MARKET PLAN context provided.
-        2. Did the market open as expected (Gap Up/Down)?
+        2. Look at the Live Chart: Did the market open Gap Up or Down? What is the current tick price relative to yesterday's close?
         3. Is the Core Thesis still valid?
         
         DECISION FOR 9:25 AM - 9:45 AM WINDOW:
@@ -713,7 +723,7 @@ export const analyzeLiveMarketRoutine = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: FAST_MODEL, // Using Flash 3 for speed in live environment
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -803,7 +813,7 @@ export const analyzePostMarketRoutine = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: REASONING_MODEL, // Using Pro 3 for deep reflection
             contents: { parts },
             config: {
                 responseMimeType: "application/json",
@@ -871,7 +881,7 @@ export const getMentorChatResponse = async (
         const lastUserMsg = historyForInit.pop(); 
         
         const activeChat = ai.chats.create({
-            model: 'gemini-2.5-flash',
+            model: FAST_MODEL,
             config: {
                 systemInstruction: systemInstruction,
             },
@@ -937,7 +947,7 @@ export const getLiveTradeCoachResponse = async (
         const lastUserMsg = historyForInit.pop();
 
         const activeChat = ai.chats.create({
-            model: 'gemini-2.5-flash',
+            model: FAST_MODEL,
             config: { systemInstruction },
             history: historyForInit as any
         });

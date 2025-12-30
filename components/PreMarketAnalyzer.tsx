@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw, Globe, Newspaper, Info } from 'lucide-react';
@@ -122,7 +121,7 @@ const DirectionBadge = ({ dir }: { dir: string }) => {
 };
 
 // --- NEW HELPER: Live Check Result Card (Foldable) ---
-const LiveCheckCard = ({ checkData, timestamp, isFoldable = false }: { checkData: LiveMarketAnalysis, timestamp: string, isFoldable?: boolean }) => {
+const LiveCheckCard: React.FC<{ checkData: LiveMarketAnalysis, timestamp: string, isFoldable?: boolean }> = ({ checkData, timestamp, isFoldable = false }) => {
     const [isOpen, setIsOpen] = useState(!isFoldable);
 
     const content = (
