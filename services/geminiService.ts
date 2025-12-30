@@ -161,7 +161,8 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
     }
 
-    const response = await generateContentSafe(ai, models.fast, {
+    // Use Reasoning Model for better quality, fallback to Fast handled by wrapper
+    const response = await generateContentSafe(ai, models.reasoning, {
       contents: { parts },
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
@@ -172,10 +173,15 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 
     let jsonResult = response.text || "{}";
     
-    // Clean markdown if present
-    if (jsonResult.includes('```')) {
-        jsonResult = jsonResult.replace(/```json/g, '').replace(/```/g, '');
+    // Robust JSON Extraction
+    const startIndex = jsonResult.indexOf('{');
+    const endIndex = jsonResult.lastIndexOf('}');
+    if (startIndex !== -1 && endIndex !== -1) {
+        jsonResult = jsonResult.substring(startIndex, endIndex + 1);
     }
+    
+    // Clean markdown if present (double check)
+    jsonResult = jsonResult.replace(/```json/g, '').replace(/```/g, '');
     
     let resultObj: any = {};
     try {
@@ -186,7 +192,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
             grade: 0, 
             gradeColor: "gray",
             marketTrend: "Analysis Error", 
-            realityCheck: "AI returned invalid format. Please try again.", 
+            realityCheck: "AI returned invalid format. Try again.", 
             strategyAudit: { timing: "-", direction: "-", rulesFollowed: false },
             coachCommand: "Try again."
         });
@@ -203,11 +209,6 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       }
     }
     
-    // Add error field if present to handle it in UI logic if needed
-    if (resultObj.realityCheck && resultObj.realityCheck.includes("Analysis Failed")) {
-        // Just return as is
-    }
-
     return JSON.stringify(resultObj);
 
   } catch (error: any) {
