@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot } from 'lucide-react';
+import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot, Activity } from 'lucide-react';
 import { shareBackupData } from '../services/dataService'; // Import shareBackupData
+import { checkModelHealth } from '../services/geminiService'; // New import
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -37,6 +38,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [showSecrets, setShowSecrets] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [aiModel, setAiModel] = useState<string>('gemini-3-pro');
+  
+  // Health Check State
+  const [healthCheck, setHealthCheck] = useState<{ status: 'idle' | 'loading' | 'ok' | 'error' | 'quota', message: string, latency?: number }>({ status: 'idle', message: '' });
   
   // Local ref for config import
   const configFileInputRef = useRef<HTMLInputElement>(null);
@@ -192,6 +196,18 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       };
       reader.readAsText(file);
       if(configFileInputRef.current) configFileInputRef.current.value = '';
+  };
+
+  const handleHealthCheck = async () => {
+      setHealthCheck({ status: 'loading', message: 'Pinging Google AI...' });
+      // Determine the exact model string to test based on selection
+      let modelToTest = 'gemini-3-pro-preview';
+      if (aiModel === 'gemini-3-flash') modelToTest = 'gemini-3-flash-preview';
+      if (aiModel === 'gemini-2.5-flash') modelToTest = 'gemini-2.5-flash-latest';
+      if (aiModel === 'gemini-flash-lite') modelToTest = 'gemini-flash-lite-latest';
+
+      const result = await checkModelHealth(apiKey, modelToTest);
+      setHealthCheck(result);
   };
 
   return (
@@ -502,6 +518,40 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         </div>
                         <p className="text-[10px] text-slate-500 mt-1">
                             Switch to Flash or Lite models if you frequently hit API Rate Limits (429 Errors).
+                        </p>
+                    </div>
+
+                    {/* NEW: API Health & Quota Check */}
+                    <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 mb-6">
+                        <div className="flex justify-between items-center mb-2">
+                            <h5 className="font-bold text-slate-200 text-sm flex items-center gap-2">
+                                <Activity size={16} className="text-blue-400"/> API Health & Quota
+                            </h5>
+                            <a href="https://aistudio.google.com/app/plan_information" target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 hover:text-white flex items-center gap-1">
+                                View Official Usage <ExternalLink size={10}/>
+                            </a>
+                        </div>
+                        
+                        <div className="flex items-center justify-between bg-slate-900 p-3 rounded-lg border border-slate-800">
+                            <div className="flex items-center gap-3">
+                                {healthCheck.status === 'loading' && <Loader2 size={18} className="animate-spin text-slate-400"/>}
+                                {healthCheck.status === 'ok' && <CheckCircle2 size={18} className="text-emerald-400"/>}
+                                {healthCheck.status === 'quota' && <AlertTriangle size={18} className="text-amber-400"/>}
+                                {healthCheck.status === 'error' && <AlertCircle size={18} className="text-red-400"/>}
+                                
+                                <div className="flex flex-col">
+                                    <span className={`text-xs font-bold ${healthCheck.status === 'ok' ? 'text-emerald-400' : healthCheck.status === 'quota' ? 'text-amber-400' : healthCheck.status === 'error' ? 'text-red-400' : 'text-slate-400'}`}>
+                                        {healthCheck.status === 'idle' ? 'Ready to Test' : healthCheck.message}
+                                    </span>
+                                    {healthCheck.latency && <span className="text-[10px] text-slate-500 font-mono">{healthCheck.latency}ms latency</span>}
+                                </div>
+                            </div>
+                            <button onClick={handleHealthCheck} disabled={healthCheck.status === 'loading'} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded border border-slate-600 transition disabled:opacity-50">
+                                Check Now
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+                            If you see "Quota Exceeded", switch the model above to <strong>Flash Lite</strong> or wait a few minutes.
                         </p>
                     </div>
 

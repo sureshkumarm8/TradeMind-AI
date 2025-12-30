@@ -68,6 +68,28 @@ const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, para
     }
 };
 
+// --- HEALTH CHECK ---
+export const checkModelHealth = async (apiKey: string, model: string): Promise<{ status: 'ok' | 'error' | 'quota', message: string, latency?: number }> => {
+  const start = Date.now();
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    // Minimal token request to test connectivity and quota
+    await ai.models.generateContent({
+      model: model,
+      contents: { parts: [{ text: "Ping" }] }
+    });
+    const latency = Date.now() - start;
+    return { status: 'ok', message: "Operational", latency };
+  } catch (e: any) {
+    console.error("Health Check Error", e);
+    const msg = e.message || JSON.stringify(e);
+    if (msg.includes('429') || msg.includes('Quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+      return { status: 'quota', message: "Quota Exceeded (429)" };
+    }
+    return { status: 'error', message: "Connection Failed" };
+  }
+};
+
 const formatStrategyForAI = (profile?: StrategyProfile) => {
   if (!profile) return "Strategy: General Intraday Trading";
 
