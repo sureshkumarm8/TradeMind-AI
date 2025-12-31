@@ -4,24 +4,29 @@ import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMark
 
 // Helper to get configured models with strict fallbacks
 const getModels = () => {
-  const pref = localStorage.getItem('tradeMind_aiModel');
+  const pref = localStorage.getItem('tradeMind_aiModel') || 'gemini-3-pro-preview';
   
-  // Strict mapping to valid API model names
+  // -- GEMINI 3 SERIES (LATE 2025) --
   if (pref === 'gemini-3-pro-preview') return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
+  if (pref === 'gemini-3-deep-think') return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' }; // Logic handled in call
   if (pref === 'gemini-3-flash-preview') return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-flash-preview' };
   
+  // -- GEMINI 2.5 SERIES (MID 2025) --
+  // Note: 2.5 Pro typically maps to 2.0 Pro Exp or updated 3.0 Pro in some contexts. We map to 3 Pro or 2.0 Pro Exp if available.
+  // For safety/quality, we map requested "2.5 Pro" to "3 Pro" if 2.5 isn't distinct in current types, or use a specific known ID.
+  // Using `gemini-2.0-pro-exp-02-05` as best proxy for "Late 2.0/Early 2.5 Pro" behavior if users want that specific era.
+  if (pref === 'gemini-2.5-pro') return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.0-pro-exp-02-05' }; 
   if (pref === 'gemini-2.5-flash-latest') return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.5-flash-latest' };
-  
-  if (pref === 'gemini-2.5-pro') return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-3-pro-preview' }; 
-  
   if (pref === 'gemini-flash-lite-latest') return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
   
-  // Legacy/Catch-all aliases
-  if (pref?.includes('gemini-2.0')) return { fast: 'gemini-2.0-flash-latest', reasoning: 'gemini-2.0-flash-latest' };
-  if (pref === 'gemini-3-flash') return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-flash-preview' };
+  // -- GEMINI 2.0 SERIES (EARLY 2025) --
+  if (pref === 'gemini-2.0-pro') return { fast: 'gemini-2.0-flash-001', reasoning: 'gemini-2.0-pro-exp-02-05' };
+  if (pref === 'gemini-2.0-flash') return { fast: 'gemini-2.0-flash-001', reasoning: 'gemini-2.0-flash-001' };
+  if (pref === 'gemini-2.0-flash-thinking') return { fast: 'gemini-2.0-flash-001', reasoning: 'gemini-2.0-flash-thinking-exp-01-21' };
+  if (pref === 'gemini-2.0-flash-lite') return { fast: 'gemini-2.0-flash-lite-preview-02-05', reasoning: 'gemini-2.0-flash-lite-preview-02-05' };
 
-  // Default Fallback (High Quality)
-  return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-3-pro-preview' };
+  // Default Fallback
+  return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
 };
 
 // --- ROBUST API WRAPPER ---
@@ -58,7 +63,7 @@ const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, para
             
             // If using Pro, it likely hit the 2 RPM limit of Free Tier.
             // Fallback to Flash Lite (Highest Rate Limit)
-            if (preferredModel.includes('pro')) {
+            if (preferredModel.includes('pro') || preferredModel.includes('thinking')) {
                 console.warn(`Falling back to gemini-flash-lite-latest due to Rate Limit.`);
                 try {
                     return await execute('gemini-flash-lite-latest');
@@ -118,8 +123,8 @@ ${rulesText}
 
 export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
   // STRICT: Use the passed apiKey argument.
-  // We do NOT fallback to process.env here to avoid confusion with static keys.
   const key = apiKey;
+  const pref = localStorage.getItem('tradeMind_aiModel');
   
   if (!key) {
     return JSON.stringify({
@@ -237,10 +242,11 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         temperature: 0.2, 
     };
 
-    // Activate Thinking Mode for Gemini 3 Pro
-    if (models.reasoning === 'gemini-3-pro-preview') {
-        // Max budget for Pro is 32k. We set it high for deep analysis.
-        config.thinkingConfig = { thinkingBudget: 32768 }; 
+    // Activate Thinking Mode Logic
+    if (pref === 'gemini-3-deep-think') {
+        config.thinkingConfig = { thinkingBudget: 32768 }; // Max Budget for Deep Think
+    } else if (models.reasoning === 'gemini-3-pro-preview' || models.reasoning.includes('thinking')) {
+        config.thinkingConfig = { thinkingBudget: 16000 }; // Standard Reasoning
     }
 
     // Use Reasoning Model if available
@@ -292,6 +298,7 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
     const ai = new GoogleGenAI({ apiKey: key });
     const strategyContext = formatStrategyForAI(strategyProfile);
     const models = getModels();
+    const pref = localStorage.getItem('tradeMind_aiModel');
 
     // Batch analysis focuses on stats/text logs.
     const tradeSummaries = trades.map((t, i) => `
@@ -327,8 +334,10 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
     };
     
     // Enable Thinking for deep batch analysis
-    if (models.reasoning === 'gemini-3-pro-preview') {
-        config.thinkingConfig = { thinkingBudget: 32768 }; 
+    if (pref === 'gemini-3-deep-think') {
+        config.thinkingConfig = { thinkingBudget: 32768 };
+    } else if (models.reasoning === 'gemini-3-pro-preview') {
+        config.thinkingConfig = { thinkingBudget: 16000 }; 
     }
 
     const response = await generateContentSafe(ai, models.reasoning, {
@@ -386,6 +395,7 @@ export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<
     const models = getModels();
     
     const config: any = { responseMimeType: "application/json" };
+    // Standard thinking for patterns
     if (models.reasoning === 'gemini-3-pro-preview') config.thinkingConfig = { thinkingBudget: 16000 };
 
     try {
@@ -466,6 +476,7 @@ export const analyzePreMarketRoutine = async (images: { market: string, intraday
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
+    const pref = localStorage.getItem('tradeMind_aiModel');
 
     const promptText = `
     Analyze these 4 charts (Market Graph, Intraday, OI, Multi-Strike OI) for Nifty 50 Pre-Market planning.
@@ -495,7 +506,11 @@ export const analyzePreMarketRoutine = async (images: { market: string, intraday
 
     // Config with Thinking for Pro
     const config: any = { responseMimeType: "application/json" };
-    if (models.reasoning === 'gemini-3-pro-preview') config.thinkingConfig = { thinkingBudget: 32768 };
+    if (pref === 'gemini-3-deep-think') {
+        config.thinkingConfig = { thinkingBudget: 32768 };
+    } else if (models.reasoning === 'gemini-3-pro-preview') {
+        config.thinkingConfig = { thinkingBudget: 16000 }; 
+    }
 
     try {
         const response = await generateContentSafe(ai, models.reasoning, {
@@ -557,6 +572,7 @@ export const analyzePostMarketRoutine = async (images: { dailyChart: string, eod
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
+    const pref = localStorage.getItem('tradeMind_aiModel');
 
     const promptText = `
     Conduct Post-Market Debrief.
@@ -586,7 +602,11 @@ export const analyzePostMarketRoutine = async (images: { dailyChart: string, eod
 
     // Config with Thinking for Pro
     const config: any = { responseMimeType: "application/json" };
-    if (models.reasoning === 'gemini-3-pro-preview') config.thinkingConfig = { thinkingBudget: 32768 };
+    if (pref === 'gemini-3-deep-think') {
+        config.thinkingConfig = { thinkingBudget: 32768 };
+    } else if (models.reasoning === 'gemini-3-pro-preview') {
+        config.thinkingConfig = { thinkingBudget: 16000 }; 
+    }
 
     try {
         const response = await generateContentSafe(ai, models.reasoning, {

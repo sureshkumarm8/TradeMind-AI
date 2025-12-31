@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot, Activity, Zap, BrainCircuit } from 'lucide-react';
+import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot, Activity, Zap, BrainCircuit, Sparkles } from 'lucide-react';
 import { shareBackupData } from '../services/dataService'; 
 import { checkModelHealth } from '../services/geminiService'; 
 
@@ -187,7 +187,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   const handleHealthCheck = async () => {
       setHealthCheck({ status: 'loading', message: 'Pinging Google AI...' });
-      const modelToTest = aiModel.includes('gemini') ? aiModel : 'gemini-3-pro-preview';
+      // Sanitize model ID for check (Deep Think maps to Pro in backend, so check Pro)
+      const modelToTest = aiModel.includes('deep-think') ? 'gemini-3-pro-preview' : aiModel.includes('gemini') ? aiModel : 'gemini-3-pro-preview';
       const result = await checkModelHealth(apiKey, modelToTest);
       setHealthCheck(result);
   };
@@ -489,13 +490,21 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-medium text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer"
                             >
-                                <optgroup label="Gemini 3 Series (High Performance)">
-                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Deep Reasoning & Thinking)</option>
-                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast & Smart)</option>
+                                <optgroup label="Gemini 3 Series (Late 2025 - State of the Art)">
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Complex Reasoning & Vibe Coding)</option>
+                                    <option value="gemini-3-deep-think">Gemini 3 Deep Think (Max Reasoning Budget)</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (Frontier Speed & Intelligence)</option>
                                 </optgroup>
-                                <optgroup label="Gemini 2.5 Series (Standard)">
-                                    <option value="gemini-2.5-flash-latest">Gemini 2.5 Flash</option>
-                                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (Economy)</option>
+                                <optgroup label="Gemini 2.5 Series (Mid 2025 - Optimized)">
+                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Flagship Reasoning)</option>
+                                    <option value="gemini-2.5-flash-latest">Gemini 2.5 Flash (General Speed & Efficiency)</option>
+                                    <option value="gemini-flash-lite-latest">Gemini 2.5 Flash-Lite (High Volume / Low Cost)</option>
+                                </optgroup>
+                                <optgroup label="Gemini 2.0 Series (Early 2025 - Workhorses)">
+                                    <option value="gemini-2.0-pro">Gemini 2.0 Pro (Complex Prompts)</option>
+                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Multimodal Workhorse)</option>
+                                    <option value="gemini-2.0-flash-thinking">Gemini 2.0 Flash Thinking (Exposed Thinking Process)</option>
+                                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite (Cost Effective)</option>
                                 </optgroup>
                             </select>
                             <div className="absolute right-4 top-4 pointer-events-none text-slate-500">
@@ -504,15 +513,21 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                         </div>
                         
                         {/* Capabilities Badge based on selection */}
-                        <div className="mt-3 flex gap-2">
-                            {aiModel === 'gemini-3-pro-preview' && (
+                        <div className="mt-3 flex gap-2 flex-wrap">
+                            {(aiModel === 'gemini-3-pro-preview' || aiModel === 'gemini-3-deep-think') && (
                                 <span className="inline-flex items-center px-2 py-1 rounded bg-indigo-900/30 border border-indigo-500/30 text-[10px] font-bold text-indigo-300 uppercase">
-                                    <BrainCircuit size={10} className="mr-1"/> Thinking Mode Active (32k)
+                                    <BrainCircuit size={10} className="mr-1"/> 
+                                    {aiModel === 'gemini-3-deep-think' ? 'Max Thinking (32k)' : 'Thinking Mode'}
                                 </span>
                             )}
                             {aiModel.includes('flash') && (
                                 <span className="inline-flex items-center px-2 py-1 rounded bg-amber-900/30 border border-amber-500/30 text-[10px] font-bold text-amber-300 uppercase">
                                     <Zap size={10} className="mr-1"/> Low Latency
+                                </span>
+                            )}
+                            {aiModel.includes('thinking') && (
+                                <span className="inline-flex items-center px-2 py-1 rounded bg-purple-900/30 border border-purple-500/30 text-[10px] font-bold text-purple-300 uppercase">
+                                    <Sparkles size={10} className="mr-1"/> Thinking Process
                                 </span>
                             )}
                         </div>
