@@ -1,10 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
 import { 
     X, BrainCircuit, ShieldCheck, HeartPulse, Target, 
     ArrowLeft, Calendar, TrendingUp, AlertTriangle, 
     Wallet, Scale, Calculator, ChevronUp, ChevronDown, 
     ArrowUpRight, Percent, Info, Sparkles, Ban, Repeat, 
-    Flame, Skull, CheckCircle2, User, Zap, Lock
+    Flame, Skull, CheckCircle2, User, Zap, Lock, BarChart2, History
 } from 'lucide-react';
 import { 
     ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, 
@@ -29,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }}></div>
                         <span className="text-xs font-medium text-slate-300 min-w-[120px]">{p.name}</span>
                         <span className="text-sm font-bold font-mono text-white">
-                            {typeof p.value === 'number' && p.value % 1 !== 0 ? p.value.toFixed(1) : p.value}
+                            {typeof p.value === 'number' && (p.name.includes('PnL') || p.name === 'Value') ? `₹${p.value.toFixed(0)}` : p.value}
                             {p.unit}
                         </span>
                     </div>
@@ -91,20 +92,19 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
             .map(([name, value]) => ({ name, value }))
             .sort((a,b) => b.value - a.value);
 
-        // 4. Equity vs Discipline Correlation
-        // Create a running equity curve and overlay discipline score
-        let equity = 0;
-        const correlationData = [...closedTrades]
-            .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-            .map(t => {
-                equity += (t.pnl || 0);
-                return {
-                    date: t.date,
-                    equity,
-                    discipline: (t.disciplineRating || 0) * 20, // scale to 100 for chart
-                    pnl: t.pnl
-                };
-            });
+        // 4. Weekly Performance Trajectory (Replaces Correlation)
+        const weeklyMap: Record<string, number> = {};
+        closedTrades.forEach(t => {
+            const d = new Date(t.date);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+            const weekDate = new Date(d.setDate(diff)).toISOString().split('T')[0];
+            weeklyMap[weekDate] = (weeklyMap[weekDate] || 0) + (t.pnl || 0);
+        });
+        
+        const weeklyTrajectory = Object.entries(weeklyMap)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a,b) => new Date(a.name).getTime() - new Date(b.name).getTime());
 
         // 5. Stop / Start Lists
         const stopList = costOfStupid.map(m => m.name);
@@ -122,6 +122,9 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
             .slice(0, 5)
             .map(x => x[0]);
 
+        // 6. History Data
+        const historyData = [...closedTrades].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
         return {
             disciplineIndex,
             winRate,
@@ -129,9 +132,10 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
             identityDesc,
             costOfStupid,
             emotionalPnL,
-            correlationData,
+            weeklyTrajectory,
             stopList,
-            startList
+            startList,
+            historyData
         };
     }, [trades]);
 
@@ -209,32 +213,28 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                                 </div>
                             </div>
 
-                            {/* Correlation Chart: Equity vs Discipline */}
+                            {/* Weekly Performance Trajectory */}
                             <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl flex flex-col">
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Scale size={14} className="text-blue-400"/> Discipline vs. Equity Correlation
+                                    <BarChart2 size={14} className="text-emerald-400"/> Weekly Performance Trajectory
                                 </h3>
                                 <div className="flex-1 w-full min-h-[200px]">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <ComposedChart data={data.correlationData}>
-                                            <defs>
-                                                <linearGradient id="colorEq" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                                                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                                                </linearGradient>
-                                            </defs>
+                                        <BarChart data={data.weeklyTrajectory}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                            <XAxis dataKey="date" hide />
-                                            <YAxis yAxisId="left" orientation="left" stroke="#475569" fontSize={10} tickFormatter={(val) => `₹${val}`} />
-                                            <YAxis yAxisId="right" orientation="right" stroke="#475569" fontSize={10} domain={[0, 100]} />
-                                            <Tooltip content={<CustomTooltip />} />
-                                            
-                                            <Area yAxisId="left" type="monotone" dataKey="equity" name="Equity" stroke="#3B82F6" fill="url(#colorEq)" strokeWidth={2} />
-                                            <Line yAxisId="right" type="monotone" dataKey="discipline" name="Discipline Score" stroke="#10B981" dot={false} strokeWidth={2} />
-                                        </ComposedChart>
+                                            <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickFormatter={(d) => new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric'})} />
+                                            <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `₹${val}`} />
+                                            <Tooltip content={<CustomTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
+                                            <ReferenceLine y={0} stroke="#475569" />
+                                            <Bar dataKey="value" name="Net PnL" radius={[4, 4, 0, 0]} barSize={20}>
+                                                {data.weeklyTrajectory.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#10B981' : '#EF4444'} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
                                     </ResponsiveContainer>
                                 </div>
-                                <p className="text-[10px] text-slate-500 text-center mt-2 italic">Proof that sticking to rules protects capital.</p>
+                                <p className="text-[10px] text-slate-500 text-center mt-2 italic">Consistency over time is the ultimate edge.</p>
                             </div>
                         </div>
 
@@ -268,6 +268,55 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                                         </li>
                                     )) : <li className="text-slate-500 text-xs italic">Identify your winning setups to populate this.</li>}
                                 </ul>
+                            </div>
+                        </div>
+
+                        {/* Discipline History Table */}
+                        <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
+                            <div className="p-4 border-b border-slate-700 bg-slate-950/50 flex justify-between items-center">
+                                <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                                    <History size={16} className="text-indigo-400"/> Discipline Record
+                                </h3>
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">{data.historyData.length} Logs</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-950 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800">
+                                        <tr>
+                                            <th className="px-6 py-3 tracking-wider">Date</th>
+                                            <th className="px-6 py-3 tracking-wider">Instrument</th>
+                                            <th className="px-6 py-3 tracking-wider">Discipline Rating</th>
+                                            <th className="px-6 py-3 tracking-wider">Emotional State</th>
+                                            <th className="px-6 py-3 tracking-wider text-right">Result</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {data.historyData.slice(0, 15).map((t) => (
+                                            <tr key={t.id} onClick={() => onViewTrade?.(t.id)} className="hover:bg-slate-800/50 transition cursor-pointer group">
+                                                <td className="px-6 py-3 font-mono text-slate-400 group-hover:text-white transition-colors">{t.date}</td>
+                                                <td className="px-6 py-3 text-indigo-300 font-bold text-xs">{t.instrument}</td>
+                                                <td className="px-6 py-3">
+                                                    <div className="flex gap-1">
+                                                        {[1,2,3,4,5].map(star => (
+                                                            <div key={star} className={`w-6 h-1.5 rounded-full ${t.disciplineRating && t.disciplineRating >= star ? 'bg-cyan-400' : 'bg-slate-700'}`}></div>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-3">
+                                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${t.emotionalState === 'Neutral' || t.emotionalState === 'Calm' || t.emotionalState === 'Focused' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                                                        {t.emotionalState || '---'}
+                                                    </span>
+                                                </td>
+                                                <td className={`px-6 py-3 text-right font-mono font-bold ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : t.pnl && t.pnl < 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                                                    {t.pnl ? `₹${t.pnl.toFixed(0)}` : '-'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {data.historyData.length === 0 && (
+                                    <div className="p-8 text-center text-slate-500 text-xs italic">No trade history available.</div>
+                                )}
                             </div>
                         </div>
                     </div>
