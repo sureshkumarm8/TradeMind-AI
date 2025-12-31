@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
-import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot, Activity } from 'lucide-react';
+import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot, Activity, Zap, BrainCircuit } from 'lucide-react';
 import { shareBackupData } from '../services/dataService'; 
 import { checkModelHealth } from '../services/geminiService'; 
 
@@ -489,22 +489,33 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-medium text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer"
                             >
-                                <optgroup label="Gemini 3 Series (Current)">
-                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (High Quality & Reasoning)</option>
-                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast & Efficient)</option>
+                                <optgroup label="Gemini 3 Series (High Performance)">
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Deep Reasoning & Thinking)</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast & Smart)</option>
                                 </optgroup>
-                                <optgroup label="Gemini 2.5 Series (Stable)">
+                                <optgroup label="Gemini 2.5 Series (Standard)">
                                     <option value="gemini-2.5-flash-latest">Gemini 2.5 Flash</option>
-                                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (Budget)</option>
+                                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (Economy)</option>
                                 </optgroup>
                             </select>
                             <div className="absolute right-4 top-4 pointer-events-none text-slate-500">
                                 <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                             </div>
                         </div>
-                        <p className="text-[10px] text-slate-500 mt-1">
-                            Use <strong>Gemini 3 Pro</strong> for deep analysis or complex charts. Use <strong>Flash Lite</strong> for speed.
-                        </p>
+                        
+                        {/* Capabilities Badge based on selection */}
+                        <div className="mt-3 flex gap-2">
+                            {aiModel === 'gemini-3-pro-preview' && (
+                                <span className="inline-flex items-center px-2 py-1 rounded bg-indigo-900/30 border border-indigo-500/30 text-[10px] font-bold text-indigo-300 uppercase">
+                                    <BrainCircuit size={10} className="mr-1"/> Thinking Mode Active (32k)
+                                </span>
+                            )}
+                            {aiModel.includes('flash') && (
+                                <span className="inline-flex items-center px-2 py-1 rounded bg-amber-900/30 border border-amber-500/30 text-[10px] font-bold text-amber-300 uppercase">
+                                    <Zap size={10} className="mr-1"/> Low Latency
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* NEW: API Health & Quota Check */}
@@ -537,7 +548,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </button>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                            If you see "Quota Exceeded", switch the model above to <strong>Flash Lite</strong> or wait a few minutes.
+                            If you see "Quota Exceeded" (429), switch the model above to <strong>Flash Lite</strong> or wait a few minutes.
                         </p>
                     </div>
 

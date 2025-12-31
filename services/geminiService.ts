@@ -119,7 +119,6 @@ ${rulesText}
 export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
   // STRICT: Use the passed apiKey argument.
   // We do NOT fallback to process.env here to avoid confusion with static keys.
-  // The caller (App.tsx) is responsible for providing the correct key from settings/env.
   const key = apiKey;
   
   if (!key) {
@@ -231,14 +230,23 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 
     parts.push({ text: promptText });
 
-    // Use Reasoning Model if available
-    const response = await generateContentSafe(ai, models.reasoning, {
-      contents: { parts },
-      config: {
+    // Config Setup
+    const config: any = {
         tools: [{ googleSearch: {} }],
         systemInstruction: "You are a professional prop trader manager. Return ONLY valid JSON.",
         temperature: 0.2, 
-      }
+    };
+
+    // Activate Thinking Mode for Gemini 3 Pro
+    if (models.reasoning === 'gemini-3-pro-preview') {
+        // Max budget for Pro is 32k. We set it high for deep analysis.
+        config.thinkingConfig = { thinkingBudget: 32768 }; 
+    }
+
+    // Use Reasoning Model if available
+    const response = await generateContentSafe(ai, models.reasoning, {
+      contents: { parts },
+      config: config
     });
 
     let jsonResult = response.text || "{}";
@@ -313,11 +321,19 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
       (One advanced concept to apply tomorrow)
     `;
 
+    // Config for Batch
+    const config: any = {
+        systemInstruction: "You are an expert trading psychologist. Format your response with clear Markdown headers and emojis.",
+    };
+    
+    // Enable Thinking for deep batch analysis
+    if (models.reasoning === 'gemini-3-pro-preview') {
+        config.thinkingConfig = { thinkingBudget: 32768 }; 
+    }
+
     const response = await generateContentSafe(ai, models.reasoning, {
       contents: prompt,
-      config: {
-        systemInstruction: "You are an expert trading psychologist. Format your response with clear Markdown headers and emojis.",
-      }
+      config: config
     });
 
     return response.text || "Analysis complete.";
@@ -368,8 +384,12 @@ export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<
     const prompt = `Analyze trades for patterns. Output JSON array of insights. Data: ${data}`;
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
+    
+    const config: any = { responseMimeType: "application/json" };
+    if (models.reasoning === 'gemini-3-pro-preview') config.thinkingConfig = { thinkingBudget: 16000 };
+
     try {
-        const response = await generateContentSafe(ai, models.reasoning, { contents: prompt, config: { responseMimeType: "application/json" } });
+        const response = await generateContentSafe(ai, models.reasoning, { contents: prompt, config });
         return JSON.parse(response.text || "[]");
     } catch (e) { return [{ type: 'strength', title: 'Data Insufficient', description: 'Log more trades.', actionable: 'Keep logging.' }]; }
 }
@@ -473,10 +493,14 @@ export const analyzePreMarketRoutine = async (images: { market: string, intraday
         { inlineData: { mimeType: "image/jpeg", data: images.multiStrike.split(',')[1] } }
     ];
 
+    // Config with Thinking for Pro
+    const config: any = { responseMimeType: "application/json" };
+    if (models.reasoning === 'gemini-3-pro-preview') config.thinkingConfig = { thinkingBudget: 32768 };
+
     try {
         const response = await generateContentSafe(ai, models.reasoning, {
             contents: { parts },
-            config: { responseMimeType: "application/json" }
+            config: config
         });
         return JSON.parse(response.text || "{}");
     } catch (e: any) {
@@ -514,6 +538,8 @@ export const analyzeLiveMarketRoutine = async (images: { liveChart: string, live
     ];
 
     try {
+        // Live analysis uses 'fast' model by default for speed, but if 'fast' maps to '3-flash', it's smart enough.
+        // We do NOT use thinking here to ensure speed (Phase 2 requirement).
         const response = await generateContentSafe(ai, models.reasoning, {
             contents: { parts },
             config: { responseMimeType: "application/json" }
@@ -558,10 +584,14 @@ export const analyzePostMarketRoutine = async (images: { dailyChart: string, eod
         { inlineData: { mimeType: "image/jpeg", data: images.eodOi.split(',')[1] } }
     ];
 
+    // Config with Thinking for Pro
+    const config: any = { responseMimeType: "application/json" };
+    if (models.reasoning === 'gemini-3-pro-preview') config.thinkingConfig = { thinkingBudget: 32768 };
+
     try {
         const response = await generateContentSafe(ai, models.reasoning, {
             contents: { parts },
-            config: { responseMimeType: "application/json" }
+            config: config
         });
         return JSON.parse(response.text || "{}");
     } catch (e: any) {
