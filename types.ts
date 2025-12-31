@@ -1,4 +1,5 @@
 
+
 export enum TradeDirection {
   LONG = 'LONG',
   SHORT = 'SHORT'
@@ -297,4 +298,11 @@ export interface ParsedVoiceCommand {
     entryReason?: string;
     setupName?: string;
     note?: string; // New: For appending notes
+}
+
+export interface EdgeInsight {
+    type: 'strength' | 'weakness' | 'neutral';
+    title: string;
+    description: string;
+    actionable: string;
 }

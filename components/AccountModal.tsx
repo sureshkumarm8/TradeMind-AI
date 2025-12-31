@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, SyncStatus } from '../types';
 import { Settings, User, Cloud, Key, ExternalLink, Download, FileJson, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Copy, LogOut, AlertTriangle, Eye, EyeOff, Share2, Upload, RefreshCw, CloudUpload, CloudDownload, Bot, Activity } from 'lucide-react';
-import { shareBackupData } from '../services/dataService'; // Import shareBackupData
-import { checkModelHealth } from '../services/geminiService'; // New import
+import { shareBackupData } from '../services/dataService'; 
+import { checkModelHealth } from '../services/geminiService'; 
 
 interface AccountSettingsProps {
   isOpen: boolean; 
@@ -39,14 +39,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [isSharing, setIsSharing] = useState(false);
   const [aiModel, setAiModel] = useState<string>('gemini-3-pro-preview');
   
-  // Health Check State
   const [healthCheck, setHealthCheck] = useState<{ status: 'idle' | 'loading' | 'ok' | 'error' | 'quota', message: string, latency?: number }>({ status: 'idle', message: '' });
   
-  // Local ref for config import
   const configFileInputRef = useRef<HTMLInputElement>(null);
   
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  // Check if running in a Sandbox/Preview environment
   const isSandbox = currentOrigin === 'null' || 
                     currentOrigin.includes('storagerelay') || 
                     currentOrigin.includes('webcontainer') || 
@@ -62,12 +59,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
         }
      }, 500);
 
-     // Timeout fallback for mobile networks
      const timeoutId = setTimeout(() => {
         if (!isGapiReady) setScriptTimeout(true);
      }, 5000);
 
-     // Load AI Model pref
      const savedModel = localStorage.getItem('tradeMind_aiModel');
      if (savedModel) setAiModel(savedModel);
 
@@ -75,13 +70,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   }, [isGapiReady]);
 
   const handleConnectClick = async () => {
-      // Basic client ID validation before attempting connection
       if (!googleClientId || !googleClientId.trim().endsWith('.apps.googleusercontent.com')) {
           setActiveTab('config');
           alert("Please enter a valid Google Client ID in the Configuration tab first.\nIt must end with '.apps.googleusercontent.com'");
           return;
       }
-      
       setIsConnecting(true);
       try {
         await onConnect();
@@ -117,13 +110,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   const isAccessDenied = authError && (authError.includes('access_denied') || authError.includes('not_authorized') || authError.includes('403'));
   const isInvalidClient = authError && (authError.includes('invalid_client') || authError.includes('401'));
-
-  // Helper to validate client ID format
   const isValidClientId = googleClientId && googleClientId.trim().endsWith('.apps.googleusercontent.com');
 
-  // Input sanitizer to prevent mobile keyboard issues
   const handleClientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      // Remove all whitespace, newlines, and non-printable chars
       const clean = e.target.value.replace(/\s/g, '').trim();
       setGoogleClientId(clean);
   }
@@ -150,7 +139,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
       try {
           const text = await navigator.clipboard.readText();
           try {
-              // Try parsing as JSON first
               const data = JSON.parse(text);
               if (data.k) setApiKey(data.k);
               if (data.c) setGoogleClientId(data.c);
@@ -159,7 +147,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
               if (data.googleClientId) setGoogleClientId(data.googleClientId);
               alert("Configuration pasted successfully!");
           } catch {
-              // Fallback for direct string paste
               if (text.includes('.apps.googleusercontent.com')) {
                   setGoogleClientId(text.trim());
               } else if (text.length > 20) {
@@ -200,7 +187,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   const handleHealthCheck = async () => {
       setHealthCheck({ status: 'loading', message: 'Pinging Google AI...' });
-      // Use the exact model selected to test availability
       const modelToTest = aiModel.includes('gemini') ? aiModel : 'gemini-3-pro-preview';
       const result = await checkModelHealth(apiKey, modelToTest);
       setHealthCheck(result);
@@ -503,16 +489,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-medium text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer"
                             >
-                                <optgroup label="Gemini 3 Series (High Performance)">
-                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Best for Complex Logic & Images)</option>
-                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (High Speed)</option>
+                                <optgroup label="Gemini 3 Series (Current)">
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (High Quality & Reasoning)</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast & Efficient)</option>
                                 </optgroup>
-                                <optgroup label="Gemini 2.5 Series (Legacy Support)">
+                                <optgroup label="Gemini 2.5 Series (Stable)">
                                     <option value="gemini-2.5-flash-latest">Gemini 2.5 Flash</option>
-                                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (Efficient)</option>
-                                </optgroup>
-                                <optgroup label="Experimental / Other">
-                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Stable)</option>
+                                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (Budget)</option>
                                 </optgroup>
                             </select>
                             <div className="absolute right-4 top-4 pointer-events-none text-slate-500">
@@ -520,7 +503,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </div>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-1">
-                            Select <strong>Gemini 3 Pro</strong> for best image analysis results.
+                            Use <strong>Gemini 3 Pro</strong> for deep analysis or complex charts. Use <strong>Flash Lite</strong> for speed.
                         </p>
                     </div>
 
@@ -554,7 +537,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </button>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                            If you see "Quota Exceeded", switch the model above to <strong>Flash-Lite</strong> or wait a few minutes.
+                            If you see "Quota Exceeded", switch the model above to <strong>Flash Lite</strong> or wait a few minutes.
                         </p>
                     </div>
 

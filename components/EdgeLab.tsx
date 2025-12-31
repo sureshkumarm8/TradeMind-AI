@@ -12,8 +12,8 @@ import {
     CartesianGrid, Tooltip, Cell, AreaChart, Area,
     ScatterChart, Scatter, ZAxis, ReferenceLine, LineChart, Line, ComposedChart
 } from 'recharts';
-import { Trade, TradeOutcome } from '../types';
-import { getEdgePatterns, EdgeInsight, queryTradeArchives } from '../services/geminiService';
+import { Trade, TradeOutcome, EdgeInsight } from '../types';
+import { getEdgePatterns, queryTradeArchives } from '../services/geminiService';
 
 interface EdgeLabProps {
     trades: Trade[];
