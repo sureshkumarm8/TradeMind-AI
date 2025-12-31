@@ -159,6 +159,11 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       The user follows a specific system.
       ${strategyContext}
       
+      RULE HIERARCHY (CRITICAL):
+      1. TIME STOPS are absolute. If the strategy says "Exit by 10:15" and the user exits at 10:15 (or slightly before/after), that is PERFECT DISCIPLINE, regardless of whether the Profit Target was hit.
+      2. RISK MANAGEMENT > TARGETS. If the user exits early to preserve capital due to a valid reason logged in timeline (e.g. "Choppy", "Reversal"), they must be credited for following "NO SETUP = NO TRADE".
+      3. "30 Points or Nothing" applies ONLY if the time limit hasn't been reached. If time limit is hit, exiting with 10 pts or 0 pts is CORRECT behavior.
+      
       TASK:
       1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} between ${trade.entryTime || 'market open'} and ${trade.exitTime || 'market close'}.
       2. If a chart image is provided, analyze the visual price structure (Candles, Patterns) to verify the entry.
@@ -218,7 +223,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
         systemInstruction: "You are a professional prop trader manager. Return ONLY valid JSON. No Markdown.",
-        temperature: 0.3,
+        temperature: 0.2, // Lower temperature for stricter adherence
       }
     });
 
@@ -851,6 +856,7 @@ export const analyzeLiveMarketRoutine = async (
         - If entering, confirm the levels.
         - Constraints: Stop Loss = 30 pts, Target = 35 pts.
         - REMEMBER: 10:15 AM Hard Stop. If volatility is too low, advise "NO TRADE".
+        - RULE HIERARCHY: If current time is past 10:00 AM, advise extreme caution or no entry.
         
         Output valid JSON.
     `;
