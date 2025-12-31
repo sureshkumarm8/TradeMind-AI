@@ -37,7 +37,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
   const [scriptTimeout, setScriptTimeout] = useState(false);
   const [showSecrets, setShowSecrets] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [aiModel, setAiModel] = useState<string>('gemini-3-pro');
+  const [aiModel, setAiModel] = useState<string>('gemini-3-pro-preview');
   
   // Health Check State
   const [healthCheck, setHealthCheck] = useState<{ status: 'idle' | 'loading' | 'ok' | 'error' | 'quota', message: string, latency?: number }>({ status: 'idle', message: '' });
@@ -200,25 +200,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
 
   const handleHealthCheck = async () => {
       setHealthCheck({ status: 'loading', message: 'Pinging Google AI...' });
-      // Determine the exact model string to test based on selection
-      let modelToTest = 'gemini-3-pro-preview';
-      
-      // Gemini 3
-      if (aiModel === 'gemini-3-flash') modelToTest = 'gemini-3-flash-preview';
-      
-      // Gemini 2.5
-      if (aiModel === 'gemini-2.5-pro') modelToTest = 'gemini-3-pro-preview'; // Map to best Pro available
-      if (aiModel === 'gemini-2.5-flash') modelToTest = 'gemini-2.5-flash-latest';
-      if (aiModel === 'gemini-2.5-flash-lite') modelToTest = 'gemini-flash-lite-latest';
-      
-      // Gemini 2.0 (Fallbacks)
-      if (aiModel === 'gemini-2.0-flash') modelToTest = 'gemini-flash-latest';
-      if (aiModel === 'gemini-2.0-flash-lite') modelToTest = 'gemini-flash-lite-latest';
-      
-      // Legacy
-      if (aiModel === 'gemini-flash-stable') modelToTest = 'gemini-flash-latest';
-      if (aiModel === 'gemini-flash-lite') modelToTest = 'gemini-flash-lite-latest';
-
+      // Use the exact model selected to test availability
+      const modelToTest = aiModel.includes('gemini') ? aiModel : 'gemini-3-pro-preview';
       const result = await checkModelHealth(apiKey, modelToTest);
       setHealthCheck(result);
   };
@@ -520,18 +503,16 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 px-4 text-white font-medium text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer"
                             >
-                                <optgroup label="Gemini 3 Series (Intelligent & Complex)">
-                                    <option value="gemini-3-pro">Gemini 3 Pro (Reasoning & Multimodal)</option>
-                                    <option value="gemini-3-flash">Gemini 3 Flash (High Speed)</option>
+                                <optgroup label="Gemini 3 Series (High Performance)">
+                                    <option value="gemini-3-pro-preview">Gemini 3 Pro (Best for Complex Logic & Images)</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash (High Speed)</option>
                                 </optgroup>
-                                <optgroup label="Gemini 2.5 Series (Large-Scale Processing)">
-                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Code/Math/Data)</option>
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Balanced)</option>
-                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Efficient)</option>
+                                <optgroup label="Gemini 2.5 Series (Legacy Support)">
+                                    <option value="gemini-2.5-flash-latest">Gemini 2.5 Flash</option>
+                                    <option value="gemini-flash-lite-latest">Gemini Flash Lite (Efficient)</option>
                                 </optgroup>
-                                <optgroup label="Gemini 2.0 Series (Cost-Effective General)">
-                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite</option>
+                                <optgroup label="Experimental / Other">
+                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Stable)</option>
                                 </optgroup>
                             </select>
                             <div className="absolute right-4 top-4 pointer-events-none text-slate-500">
@@ -539,7 +520,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({
                             </div>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-1">
-                            Switch to Flash-Lite models if you frequently hit API Rate Limits (429 Errors).
+                            Select <strong>Gemini 3 Pro</strong> for best image analysis results.
                         </p>
                     </div>
 

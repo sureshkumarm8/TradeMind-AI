@@ -5,36 +5,34 @@ import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMark
 // Helper to get configured models
 const getModels = () => {
   const pref = localStorage.getItem('tradeMind_aiModel');
+  
+  // Direct mapping for specific technical names if selected directly
+  if (pref && (pref.includes('gemini-3') || pref.includes('gemini-2.5'))) {
+      // If it's a specific "Pro" or "Reasoning" model, use it for reasoning tasks
+      // Use Flash for fast tasks
+      if (pref.includes('pro')) {
+          return { fast: 'gemini-3-flash-preview', reasoning: pref };
+      }
+      return { fast: pref, reasoning: pref };
+  }
+
+  // Legacy/Alias Mapping
   switch (pref) {
-    // --- GEMINI 3 SERIES ---
     case 'gemini-3-pro':
       return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
     case 'gemini-3-flash':
       return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-flash-preview' };
-    
-    // --- GEMINI 2.5 SERIES ---
     case 'gemini-2.5-pro': 
       // Mapping 2.5 Pro preference to 3-Pro for best reasoning performance if 2.5 Pro specific string is not standard yet
-      // or to 3-pro as the 'Pro' standard. 
       return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-3-pro-preview' };
     case 'gemini-2.5-flash':
       return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.5-flash-latest' };
     case 'gemini-2.5-flash-lite':
       return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
-
-    // --- GEMINI 2.0 SERIES ---
     case 'gemini-2.0-flash':
-      // Maps to the general stable flash alias
       return { fast: 'gemini-flash-latest', reasoning: 'gemini-flash-latest' };
-    case 'gemini-2.0-flash-lite':
-      return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
-
-    // --- LEGACY / FALLBACK ---
     case 'gemini-flash-stable':
       return { fast: 'gemini-flash-latest', reasoning: 'gemini-flash-latest' };
-    case 'gemini-flash-lite':
-      return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
-      
     default:
       // Default to the most capable pairing
       return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-pro-preview' };
@@ -154,56 +152,72 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         ? trade.notes.map(n => `[${n.timestamp}] ${n.content} (${n.type})`).join('\n') 
         : "No live timeline logged.";
 
+    // --- CRITICAL TIME LOGIC CHECK ---
+    // Detect if the exit time is near the 10:15 AM Hard Stop
+    let hardStopOverride = "";
+    if (trade.exitTime) {
+        const [h, m] = trade.exitTime.split(':').map(Number);
+        // Check window 10:10 to 10:20 (allowing 5 min buffer around 10:15)
+        if (h === 10 && m >= 10 && m <= 20) {
+            hardStopOverride = `
+            CRITICAL OVERRIDE: The user exited at ${trade.exitTime}, which is the HARD STOP time (10:15 AM).
+            YOU MUST IGNORE PROFIT TARGETS. 
+            Exiting at 10:15 AM is considered PERFECT DISCIPLINE regardless of PnL or 30-point target.
+            Grade this as highly disciplined for respecting the time limit.
+            `;
+        }
+    }
+
     const promptText = `
       You are a strict Quantitative Trading Mentor.
       The user follows a specific system.
       ${strategyContext}
       
+      ${hardStopOverride}
+
       RULE HIERARCHY (CRITICAL):
-      1. TIME STOPS are absolute. If the strategy says "Exit by 10:15" and the user exits at 10:15 (or slightly before/after), that is PERFECT DISCIPLINE, regardless of whether the Profit Target was hit.
-      2. RISK MANAGEMENT > TARGETS. If the user exits early to preserve capital due to a valid reason logged in timeline (e.g. "Choppy", "Reversal"), they must be credited for following "NO SETUP = NO TRADE".
-      3. "30 Points or Nothing" applies ONLY if the time limit hasn't been reached. If time limit is hit, exiting with 10 pts or 0 pts is CORRECT behavior.
+      1. TIME STOPS are absolute. If the user exits at 10:15 AM (or 10:10-10:20 range), that is A+ DISCIPLINE. Do NOT say "premature exit".
+      2. RISK MANAGEMENT > TARGETS. If the user exits early due to "Choppy" market or "Reversal" signs in timeline, credit them for preserving capital.
+      3. "30 Points or Nothing" applies ONLY if the time limit hasn't been reached.
       
       TASK:
-      1. Use Google Search to find the ACTUAL Nifty 50 intraday price action on ${trade.date} between ${trade.entryTime || 'market open'} and ${trade.exitTime || 'market close'}.
-      2. If a chart image is provided, analyze the visual price structure (Candles, Patterns) to verify the entry.
-      3. Compare the user's Nifty Spot Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs the Real Market.
-      4. Verify if their view (LONG/SHORT) aligned with the trend in that specific window.
-      5. Analyze their "Live Mission Timeline" (below) to check emotional stability and decision making during the trade.
+      1. Analyze the provided chart image (if any) first. Look for candle patterns and trend at entry/exit.
+      2. Use Google Search to verify Nifty 50 price action on ${trade.date} if chart is unclear.
+      3. Compare User Entry (${trade.niftyEntryPrice || 'Not Logged'}) vs Real Market.
+      4. Verify if view (LONG/SHORT) aligned with the trend.
       
       User's Logged Trade:
       - Date: ${trade.date}
-      - Time: ${trade.entryTime} to ${trade.exitTime} (${trade.tradeDurationMins} mins)
+      - Time: ${trade.entryTime} to ${trade.exitTime}
       - Nifty Spot: Entered @ ${trade.niftyEntryPrice}, Exited @ ${trade.niftyExitPrice}
       - Instrument: ${trade.instrument} ${trade.strikePrice || ''} ${trade.optionType || ''}
       - Direction: ${trade.direction}
       - Result: ${trade.outcome} (PnL: ₹${trade.pnl})
       - Logic Summary: "${trade.entryReason}"
       
-      LIVE MISSION TIMELINE (Thoughts during trade):
+      LIVE MISSION TIMELINE:
       ${timeline}
       
       CRITICAL OUTPUT INSTRUCTION:
-      - You must output STRICT VALID JSON only.
-      - Do NOT wrap the JSON in markdown code blocks (like \`\`\`json). 
-      - Do NOT output any introductory text. Just the curly braces { ... }.
+      - Output STRICT VALID JSON only. No Markdown. No Intro.
       
       Expected JSON Structure:
       {
-        "grade": "Integer between 0 and 100 representing execution score. 100 is Perfect Discipline.",
-        "gradeColor": "green (80-100), yellow (50-79), or red (0-49)",
-        "marketTrend": "Short phrase describing Nifty action during trade window (e.g. 'Strong Bullish Trend', 'Choppy Range')",
-        "realityCheck": "Direct comparison of User Entry vs Actual Market Price Action found via Search",
+        "grade": "Integer 0-100 (100 = Perfect Discipline/Time Stop adherence)",
+        "gradeColor": "green, yellow, or red",
+        "marketTrend": "Short phrase describing Nifty action",
+        "realityCheck": "Comparison of User Entry vs Actual Market Price/Chart",
         "strategyAudit": {
             "timing": "Early, Late, or Perfect",
             "direction": "With Trend or Counter Trend",
             "rulesFollowed": true or false
         },
-        "coachCommand": "One specific, actionable command for the next trade."
+        "coachCommand": "One specific actionable command."
       }
     `;
     
-    const parts: any[] = [{ text: promptText }];
+    // Construct Parts: IMAGE MUST BE BEFORE TEXT for some models, or generally robustly handled
+    const parts: any[] = [];
     
     // Add Chart Image if exists (base64)
     if (trade.chartImage) {
@@ -214,16 +228,18 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
                 data: base64Data
             }
         });
-        parts.push({ text: "Analyze the attached chart screenshot for technical confluence." });
+        parts.push({ text: "REFER TO THIS CHART IMAGE FOR PRICE ACTION CONTEXT." });
     }
+
+    parts.push({ text: promptText });
 
     // Use Reasoning Model for better quality, fallback to Fast handled by wrapper
     const response = await generateContentSafe(ai, models.reasoning, {
       contents: { parts },
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
-        systemInstruction: "You are a professional prop trader manager. Return ONLY valid JSON. No Markdown.",
-        temperature: 0.2, // Lower temperature for stricter adherence
+        systemInstruction: "You are a professional prop trader manager. Return ONLY valid JSON. Prioritize Image Analysis.",
+        temperature: 0.2, 
       }
     });
 
@@ -236,7 +252,6 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         jsonResult = jsonResult.substring(startIndex, endIndex + 1);
     }
     
-    // Clean markdown if present (double check)
     jsonResult = jsonResult.replace(/```json/g, '').replace(/```/g, '');
     
     let resultObj: any = {};
@@ -273,10 +288,8 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
     // Parse error for better display
     let cleanMsg = "Unknown API Error";
     try {
-        // Attempt to parse JSON error message from Google
         const errStr = typeof error === 'string' ? error : error.message;
         if (errStr && errStr.includes('{')) {
-             // Extract JSON part if mixed with text
              const start = errStr.indexOf('{');
              const end = errStr.lastIndexOf('}');
              if (start !== -1 && end !== -1) {
@@ -290,7 +303,6 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
         }
     } catch (e) { cleanMsg = String(error); }
 
-    // Friendly message for Quota issues
     if (cleanMsg.includes('429') || cleanMsg.includes('Quota') || cleanMsg.includes('exhausted')) {
         cleanMsg = "Gemini Quota Exceeded. Please wait a moment or switch to 'Flash Lite' model in Settings.";
     }
