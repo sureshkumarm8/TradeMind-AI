@@ -178,7 +178,10 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       LIVE MISSION TIMELINE (Thoughts during trade):
       ${timeline}
       
-      Output strict JSON format ONLY. Do not output markdown code blocks.
+      CRITICAL OUTPUT INSTRUCTION:
+      - You must output STRICT VALID JSON only.
+      - Do NOT wrap the JSON in markdown code blocks (like \`\`\`json). 
+      - Do NOT output any introductory text. Just the curly braces { ... }.
       
       Expected JSON Structure:
       {
@@ -214,7 +217,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
       contents: { parts },
       config: {
         tools: [{ googleSearch: {} }], // Enable Grounding
-        systemInstruction: "You are a professional prop trader manager. You must verify user claims against actual market history using Search. Return strictly valid JSON.",
+        systemInstruction: "You are a professional prop trader manager. Return ONLY valid JSON. No Markdown.",
         temperature: 0.3,
       }
     });
@@ -611,7 +614,6 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
     }
 };
 
-// ... (Rest of existing code remains unchanged)
 // PRE-MARKET ANALYZER ROUTINE
 export const analyzePreMarketRoutine = async (
     images: { market: string; intraday: string; oi: string; multiStrike: string },
@@ -1060,43 +1062,43 @@ export const getLiveTradeCoachResponse = async (
         CURRENT TRADE DATA:
         Instrument: ${currentTradeData.instrument || 'Nifty'} ${currentTradeData.strikePrice || ''} ${currentTradeData.optionType || ''}
         Direction: ${currentTradeData.direction}
-        Entry: ${currentTradeData.entryPrice || 0}
-        Qty: ${currentTradeData.quantity || 0}
-        Reason: ${currentTradeData.entryReason || 'Not specified'}
+        Entry: ${currentTradeData.entryPrice || 'Pending'}
+        Current PnL: ${currentTradeData.pnl || '0'}
         
-        LIVE MISSION TIMELINE (User's Thoughts):
+        LIVE MISSION TIMELINE:
         ${timeline}
         
-        USER STRATEGY:
+        STRATEGY PROTOCOL:
         ${strategyContext}
         
         YOUR MISSION:
-        - Provide immediate, tactical advice based on the user's strategy.
-        - Check their emotional state from the timeline. If they seem tilted, tell them to stop.
-        - If they upload a chart image, analyze it for the specific setup they claim to be trading.
-        - Keep responses SHORT and PUNCHY. You are on the radio.
+        - Provide immediate, tactical advice based on the Strategy Rules.
+        - If they are hesitating, push them (if setup is valid) or hold them back (if not).
+        - Keep answers SHORT and punchy. You are on radio comms.
+        - No lengthy disclaimers.
     `;
 
     try {
+        // Pop the last message (current user prompt) to send it via sendMessage
+        // The rest is history.
         const historyForInit = [...chatHistory];
-        const lastUserMsg = historyForInit.pop();
-
+        const lastUserMsg = historyForInit.pop(); 
+        
         const activeChat = ai.chats.create({
             model: models.fast,
-            config: { systemInstruction },
+            config: {
+                systemInstruction: systemInstruction,
+            },
             history: historyForInit as any
         });
 
-        if (!lastUserMsg) return "Standby.";
-        
-        // Construct message content correctly for the SDK
-        // The SDK expects { message: string | Part[] } or just string/Part[] if implicit.
-        // We use { message: ... } to be safe and explicit with multi-modal content.
-        const result = await activeChat.sendMessage({ message: lastUserMsg.parts });
+        if (!lastUserMsg || !lastUserMsg.parts[0].text) return "Copy that. Standing by.";
+
+        const result = await activeChat.sendMessage({ message: lastUserMsg.parts[0].text });
         return result.text || "";
 
     } catch (e: any) {
         console.error("Live Coach Error", e);
-        return `COMM LINK OFFLINE: ${e.message}`;
+        return `Comms offline. Check connection.`;
     }
-}
+};

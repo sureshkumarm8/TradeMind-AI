@@ -130,7 +130,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
     instrument: 'NIFTY',
     optionType: OptionType.CE,
     direction: TradeDirection.LONG,
-    quantity: 50,
+    quantity: 75, // Updated default to 75
     timeframe: Timeframe.M5,
     systemChecks: {
       analyzedPreMarket: preMarketDone || false,
@@ -192,11 +192,24 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
         return;
     }
     
+    // Outcome Calculation Logic
+    let finalOutcome = formData.outcome;
+    if (isNoTrade) {
+        finalOutcome = TradeOutcome.SKIPPED;
+    } else if (formData.exitPrice && formData.exitPrice > 0) {
+        // Automatically determine outcome if exit price is present
+        const currentPnL = pnl !== undefined ? pnl : 0;
+        finalOutcome = currentPnL > 0 ? TradeOutcome.WIN : currentPnL < 0 ? TradeOutcome.LOSS : TradeOutcome.BREAK_EVEN;
+    } else {
+        // If no exit price, it MUST be OPEN (unless user manually set it to something else, but we enforce OPEN logic for safety)
+        finalOutcome = TradeOutcome.OPEN;
+    }
+
     // Final Data Prep
     const finalData = {
         ...formData,
         pnl: isNoTrade ? 0 : (formData.pnl ?? pnl),
-        outcome: isNoTrade ? TradeOutcome.SKIPPED : (formData.outcome ?? (pnl !== undefined ? (pnl > 0 ? TradeOutcome.WIN : pnl < 0 ? TradeOutcome.LOSS : TradeOutcome.BREAK_EVEN) : TradeOutcome.OPEN)),
+        outcome: finalOutcome,
         // If skipped, zero out these fields to avoid confusion
         entryPrice: isNoTrade ? 0 : formData.entryPrice,
         exitPrice: isNoTrade ? 0 : formData.exitPrice,
@@ -481,6 +494,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                             </div>
                         ) : (
                             <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 space-y-3">
+                                {/* Option Prices */}
                                 <div className="flex gap-3">
                                     <div className="flex-1">
                                         <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">Entry Price</label>
@@ -491,6 +505,18 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                                         <input type="number" name="exitPrice" value={formData.exitPrice || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="0.00" step="0.05" />
                                     </div>
                                 </div>
+                                {/* Nifty Spot Prices */}
+                                <div className="flex gap-3">
+                                    <div className="flex-1">
+                                        <label className="text-[9px] uppercase font-bold text-indigo-400 mb-1 block">Spot Entry</label>
+                                        <input type="number" name="niftyEntryPrice" value={formData.niftyEntryPrice || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-indigo-500/30 rounded p-2 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="Spot Price" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-[9px] uppercase font-bold text-indigo-400 mb-1 block">Spot Exit</label>
+                                        <input type="number" name="niftyExitPrice" value={formData.niftyExitPrice || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-indigo-500/30 rounded p-2 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="Spot Price" />
+                                    </div>
+                                </div>
+                                
                                 <div className="flex gap-3">
                                     <div className="flex-1">
                                         <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">Strike</label>
@@ -498,7 +524,7 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                                     </div>
                                     <div className="flex-1">
                                         <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">Qty</label>
-                                        <input type="number" name="quantity" value={formData.quantity || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="50" />
+                                        <input type="number" name="quantity" value={formData.quantity || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="75" />
                                     </div>
                                 </div>
                                 <div className="pt-2 border-t border-slate-800">
