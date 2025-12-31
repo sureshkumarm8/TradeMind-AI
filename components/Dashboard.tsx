@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
 import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis, AiAnalysisResponse } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale, Bot, Loader2, Lightbulb, GraduationCap, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale, Bot, Loader2, Lightbulb, GraduationCap, RefreshCw, History } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -176,7 +176,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         recentOffenses: [],
         costOfIndiscipline: 0,
         winRateVariance: 0,
-        last5Sessions: []
+        last5Avg: 0
     };
 
     // Unified Discipline Scorer (1-5 Scale)
@@ -226,7 +226,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     // Count Total Disciplined
     totalDisciplined = closedTrades.filter(t => isDisciplined(t)).length;
 
-    // 5. Last 5 Sessions Discipline
+    // 5. Last 5 Sessions Discipline Calculation
     const tradesByDate: Record<string, Trade[]> = {};
     closedTrades.forEach(t => {
         if (!tradesByDate[t.date]) tradesByDate[t.date] = [];
@@ -235,15 +235,20 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     
     // Sort dates descending
     const sortedDates = Object.keys(tradesByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    const last5Dates = sortedDates.slice(0, 5);
     
-    const last5Sessions = sortedDates.slice(0, 5).map(date => {
-        const dayTrades = tradesByDate[date];
-        // Use Unified Scorer here too
-        const totalDisc = dayTrades.reduce((acc, t) => acc + getTradeScore(t), 0);
-        const avg = totalDisc / dayTrades.length;
-        const score = Math.round(avg * 20); // 0-100
-        return { date: new Date(date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}), score };
-    }).reverse(); // Order Oldest -> Newest for left-to-right reading
+    // Calculate Average of averages for Last 5 Days
+    let last5Avg = 0;
+    if (last5Dates.length > 0) {
+        let sumDailyScores = 0;
+        last5Dates.forEach(date => {
+            const dayTrades = tradesByDate[date];
+            const dayScoreTotal = dayTrades.reduce((acc, t) => acc + getTradeScore(t), 0);
+            const dayAvg = dayScoreTotal / dayTrades.length;
+            sumDailyScores += (dayAvg * 20); // Scale to 100
+        });
+        last5Avg = Math.round(sumDailyScores / last5Dates.length);
+    }
 
     // Status Label
     let statusLabel = "Rookie";
@@ -254,7 +259,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     else if (disciplineIndex > 0) statusLabel = "Tilted";
     else statusLabel = "Rookie";
 
-    return { disciplineIndex, systemAdherence, streak, totalDisciplined, emotionalStability, statusLabel, last5Sessions };
+    return { disciplineIndex, systemAdherence, streak, totalDisciplined, emotionalStability, statusLabel, last5Avg };
   }, [trades]);
 
   const stats: DashboardStats = useMemo(() => {
@@ -447,20 +452,32 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
          {renderParticles()}
 
          <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-            {/* 1. Discipline Score */}
+            {/* 1. Discipline Score (Modified for Last 5 Days) */}
             <div className="md:col-span-4 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-indigo-500/20 pb-6 md:pb-0 md:pr-6">
                 <div className="flex items-center gap-2 mb-2">
                    <ShieldCheck size={18} className="text-cyan-400"/>
                    <span className="text-xs font-bold uppercase tracking-widest text-cyan-200">Discipline Index</span>
                 </div>
-                <div className={`relative w-32 h-32 rounded-full border-4 flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-950 transition-shadow duration-500 group-hover:shadow-[0_0_50px_rgba(99,102,241,0.3)] ${getDisciplineColor(psychoStats.disciplineIndex)}`}>
-                   <div className="text-center">
-                      <span className={`text-4xl font-black block leading-none ${getDisciplineColor(psychoStats.disciplineIndex).split(' ')[0]}`}>
-                        {psychoStats.disciplineIndex}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-medium uppercase mt-1">out of 100</span>
-                   </div>
+                
+                <div className="flex items-end gap-3">
+                    <div className={`relative w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.5)] bg-slate-950 transition-shadow duration-500 group-hover:shadow-[0_0_50px_rgba(99,102,241,0.3)] ${getDisciplineColor(psychoStats.disciplineIndex)}`}>
+                       <div className="text-center">
+                          <span className={`text-4xl font-black block leading-none ${getDisciplineColor(psychoStats.disciplineIndex).split(' ')[0]}`}>
+                            {psychoStats.disciplineIndex}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-medium uppercase mt-1">Total</span>
+                       </div>
+                    </div>
+                    
+                    {/* NEW: Last 5 Days Mini-Stat */}
+                    <div className="flex flex-col items-center mb-1">
+                        <div className={`w-14 h-14 rounded-full border-2 flex items-center justify-center bg-slate-900 ${getDisciplineColor(psychoStats.last5Avg).replace('shadow-', '').replace('text-','text-').replace('border-', 'border-')}`}>
+                            <span className="text-lg font-bold">{psychoStats.last5Avg}</span>
+                        </div>
+                        <span className="text-[8px] text-slate-400 uppercase font-bold mt-1 tracking-tight">Last 5 Days</span>
+                    </div>
                 </div>
+
                 <div className="mt-3 text-center">
                    <span className={`text-sm font-bold uppercase tracking-wider px-3 py-1 rounded-full border bg-slate-900 ${getDisciplineColor(psychoStats.disciplineIndex).replace('text-', 'text-').replace('border-', 'border-').replace('shadow-', '')}`}>
                       {psychoStats.statusLabel}
@@ -493,25 +510,11 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                   </div>
                </div>
 
-               {/* Last 5 Sessions Discipline Trend */}
-               <div className="pt-2">
-                   <div className="flex justify-between items-center mb-2">
-                       <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Last 5 Sessions (Trend)</span>
-                   </div>
-                   <div className="flex gap-2 h-10 items-end">
-                       {psychoStats.last5Sessions.length > 0 ? psychoStats.last5Sessions.map((sess, idx) => (
-                           <div key={idx} className="group/sess flex-1 flex flex-col items-center relative">
-                               {/* Tooltip */}
-                               <div className="absolute -top-8 bg-slate-900 border border-slate-700 text-[9px] text-white px-2 py-1 rounded opacity-0 group-hover/sess:opacity-100 transition-opacity z-20 pointer-events-none whitespace-nowrap">
-                                   {sess.date}: {sess.score}%
-                               </div>
-                               {/* Bar */}
-                               <div className={`w-full rounded-t-sm transition-all hover:opacity-80 ${sess.score >= 80 ? 'bg-emerald-500' : sess.score >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ height: `${Math.max(10, sess.score)}%` }}></div>
-                           </div>
-                       )) : (
-                           <div className="w-full text-center text-[9px] text-slate-600 italic mt-2">Log trades to see trend</div>
-                       )}
-                   </div>
+               {/* Hint to open */}
+               <div className="pt-2 text-left">
+                   <p className="text-[10px] text-indigo-300 flex items-center animate-pulse">
+                       <ArrowRight size={12} className="mr-1"/> Tap to open Behavioral Audit Center
+                   </p>
                </div>
             </div>
 
@@ -526,11 +529,6 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                   Total Disciplined: <span className="text-emerald-400 font-bold">{psychoStats.totalDisciplined}</span>
                </span>
             </div>
-         </div>
-         <div className="absolute bottom-2 left-0 w-full text-center">
-            <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-               <Info size={10} className="mr-1"/> Click for detailed breakdown & analytics
-            </span>
          </div>
       </div>
 
