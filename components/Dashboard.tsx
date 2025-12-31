@@ -1,8 +1,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis, AiAnalysisResponse } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale, Bot, Loader2, Lightbulb, GraduationCap, RefreshCw, History } from 'lucide-react';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis, AiAnalysisResponse, OptionType } from '../types';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale, Bot, Loader2, Lightbulb, GraduationCap, RefreshCw, History, LineChart } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -21,13 +21,19 @@ interface DashboardProps {
 const CustomChartTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900/90 border border-slate-700 p-3 rounded-lg shadow-xl backdrop-blur-md">
-        <p className="text-slate-400 text-xs font-bold mb-1">{label}</p>
+      <div className="bg-slate-900/95 border border-slate-700 p-3 rounded-lg shadow-2xl backdrop-blur-md z-50">
+        <p className="text-slate-400 text-[10px] font-bold mb-1 uppercase tracking-wider">{label}</p>
         {payload.map((p: any, index: number) => (
-           <p key={index} className="text-sm font-mono font-bold" style={{ color: p.color }}>
-              {p.name}: {typeof p.value === 'number' && (p.name === 'PnL' || p.name === 'Equity') ? `₹${p.value.toFixed(2)}` : p.value}
-           </p>
+           <div key={index} className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || p.payload.fill }}></div>
+              <p className="text-sm font-mono font-bold text-white">
+                  {p.name}: {typeof p.value === 'number' && (p.name === 'Equity' || p.name.includes('PnL')) ? `₹${p.value.toLocaleString()}` : `${p.value}%`}
+              </p>
+           </div>
         ))}
+        {payload[0]?.payload?.count !== undefined && (
+            <p className="text-[10px] text-slate-500 mt-1 pl-4">{payload[0].payload.count} Trades</p>
+        )}
       </div>
     );
   }
@@ -346,10 +352,23 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     setIsGeneratingReport(false);
   };
 
-  const directionalData = [
-    { name: 'Long Win %', value: stats.longWinRate, fill: '#3B82F6', type: 'Long' },
-    { name: 'Short Win %', value: stats.shortWinRate, fill: '#F59E0B', type: 'Short' },
-  ];
+  // CE vs PE Data Calculation
+  const optionTypeData = useMemo(() => {
+    const closedTrades = trades.filter(t => t.outcome !== TradeOutcome.OPEN);
+    const ceTrades = closedTrades.filter(t => t.optionType === OptionType.CE);
+    const peTrades = closedTrades.filter(t => t.optionType === OptionType.PE);
+
+    const ceWins = ceTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
+    const peWins = peTrades.filter(t => t.outcome === TradeOutcome.WIN).length;
+
+    const ceWinRate = ceTrades.length > 0 ? (ceWins / ceTrades.length) * 100 : 0;
+    const peWinRate = peTrades.length > 0 ? (peWins / peTrades.length) * 100 : 0;
+
+    return [
+      { name: 'CE Mastery', value: Math.round(ceWinRate), count: ceTrades.length, fill: '#34d399', type: OptionType.CE }, // Emerald-400
+      { name: 'PE Mastery', value: Math.round(peWinRate), count: peTrades.length, fill: '#f87171', type: OptionType.PE }, // Red-400
+    ];
+  }, [trades]);
   
   const filteredTrades = useMemo(() => {
      if (!selectedFilter) return [];
@@ -371,6 +390,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         case 'day': result = trades.filter(t => new Date(t.date).getDay() === selectedFilter.value); break;
         case 'direction': result = trades.filter(t => t.direction === (selectedFilter.value === 'Long' ? TradeDirection.LONG : TradeDirection.SHORT)); break;
         case 'date': result = trades.filter(t => t.date === selectedFilter.value); break;
+        case 'optionType': result = trades.filter(t => t.optionType === selectedFilter.value); break; // New Filter
         default: result = [];
      }
      return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -384,6 +404,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
         case 'losses': return 'Losing Trades Analysis';
         case 'best': return 'Best Performance Record';
         case 'worst': return 'Worst Performance Record';
+        case 'optionType': return `${filter.value} Trades Performance`;
         default: return filter.value;
      }
   }
@@ -752,39 +773,103 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
 
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                    <h3 className="text-white font-semibold mb-4 text-sm uppercase tracking-wide">Account Growth</h3>
-                    <div className="h-64 w-full cursor-pointer">
+                
+                {/* 1. Financial Velocity (Account Growth) */}
+                <div className="lg:col-span-2 bg-gradient-to-b from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden group">
+                    <div className="flex justify-between items-start mb-6 relative z-10">
+                        <div>
+                            <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                                <LineChart size={16} className="text-emerald-400"/> Financial Velocity
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1">Equity Curve Growth</p>
+                        </div>
+                        {stats.totalPnL > 0 && (
+                            <div className="bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-[10px] font-bold text-emerald-400 uppercase tracking-wide flex items-center">
+                                <Trophy size={12} className="mr-1"/> All Time High
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Subtle Grid Background */}
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
+
+                    <div className="h-72 w-full cursor-pointer relative z-10">
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={equityCurveData} onClick={(data: any) => { if (data && data.activePayload && data.activePayload[0]) { setSelectedFilter({ type: 'date', value: data.activePayload[0].payload.fullDate }); }}}>
                                 <defs>
-                                    <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/></linearGradient>
+                                    <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.4}/>
+                                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorEquityLoss" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.4}/>
+                                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
+                                    </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                <XAxis dataKey="date" stroke="#64748b" fontSize={11} tickMargin={10} />
-                                <YAxis stroke="#64748b" fontSize={11} tickFormatter={(val) => `₹${val}`} />
-                                <Tooltip content={<CustomChartTooltip />} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.5} />
+                                <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickMargin={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `₹${val}`} tickLine={false} axisLine={false} />
+                                <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#475569', strokeDasharray: '3 3' }} />
                                 <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
-                                <Area type="monotone" dataKey="equity" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorEquity)" activeDot={{ r: 6 }} />
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="equity" 
+                                    stroke={stats.totalPnL >= 0 ? "#10B981" : "#EF4444"} 
+                                    strokeWidth={3} 
+                                    fill={stats.totalPnL >= 0 ? "url(#colorEquity)" : "url(#colorEquityLoss)"} 
+                                    activeDot={{ r: 6, strokeWidth: 0, fill: '#fff' }} 
+                                    animationDuration={1500}
+                                />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
-                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center">
-                    <h3 className="text-white font-semibold mb-2 text-sm uppercase tracking-wide w-full text-left">Long vs Short</h3>
-                    <div className="h-56 w-full relative cursor-pointer">
+
+                {/* 2. CE vs PE Mastery (Pie Chart) */}
+                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Target size={80}/></div>
+                    
+                    <div className="mb-4 relative z-10">
+                        <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
+                            <Target size={16} className="text-blue-400"/> CE vs PE Mastery
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">Win Rate by Option Type</p>
+                    </div>
+
+                    <div className="h-64 w-full relative cursor-pointer z-10 flex-1">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie data={directionalData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" onClick={(data) => setSelectedFilter({ type: 'direction', value: data.type === 'Long' ? 'Long' : 'Short' })}>
-                                {directionalData.map((entry, index) => ( <Cell key={`cell-${index}`} fill={entry.fill} /> ))}
+                                <Pie 
+                                    data={optionTypeData} 
+                                    cx="50%" 
+                                    cy="50%" 
+                                    innerRadius={60} 
+                                    outerRadius={85} 
+                                    paddingAngle={5} 
+                                    dataKey="value" 
+                                    onClick={(data) => setSelectedFilter({ type: 'optionType', value: data.type })}
+                                    stroke="none"
+                                >
+                                    {optionTypeData.map((entry, index) => ( 
+                                        <Cell key={`cell-${index}`} fill={entry.fill} /> 
+                                    ))}
                                 </Pie>
                                 <Tooltip content={<CustomChartTooltip />} />
-                                <Legend verticalAlign="bottom" height={36}/>
+                                <Legend 
+                                    verticalAlign="bottom" 
+                                    height={36} 
+                                    iconType="circle"
+                                    formatter={(value, entry: any) => (
+                                        <span className="text-xs font-bold text-slate-300 ml-1">{value}</span>
+                                    )}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center -mt-4 pointer-events-none">
-                            <span className="text-xs text-slate-500 block">Total Win%</span>
-                            <span className="text-xl font-bold text-white">{stats.winRate.toFixed(0)}%</span>
+                        
+                        {/* Center Metric */}
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[60%] text-center pointer-events-none">
+                            <span className="text-[10px] text-slate-500 uppercase font-bold block tracking-wider">Win Rate</span>
+                            <span className="text-2xl font-black text-white">{stats.winRate.toFixed(0)}%</span>
                         </div>
                     </div>
                 </div>
