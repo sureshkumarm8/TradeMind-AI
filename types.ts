@@ -1,5 +1,4 @@
 
-
 export enum TradeDirection {
   LONG = 'LONG',
   SHORT = 'SHORT'
@@ -68,7 +67,13 @@ export interface NewsAnalysis {
     giftNifty: string; // "Trading at 22,100 (+50)"
   };
   keyHeadlines: string[];
-  institutionalActivity?: string; // FII/DII data summary
+  // Updated to handle both string summary or structured object from AI
+  institutionalActivity?: string | {
+      FII_Activity?: string;
+      DII_Activity?: string;
+      Net_Institutional_Flow?: string;
+      [key: string]: any;
+  }; 
 }
 
 // --- PRE-MARKET ANALYSIS TYPES ---

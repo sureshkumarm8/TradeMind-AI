@@ -327,9 +327,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     // Phase 0 News Analysis
     const runNewsAnalysis = async () => {
         setError(null);
-        if (!apiKey) { setError("API Key missing."); return; }
         setIsNewsAnalyzing(true);
         try {
+            // Service handles fallback key
             const result = await fetchMarketNews(apiKey);
             if (onNewsAnalysisUpdate) onNewsAnalysisUpdate(result);
         } catch (e: any) {
@@ -342,11 +342,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const runAnalysis = async () => {
         setError(null);
         const images = getImages();
-        if (!apiKey) { setError("API Key missing."); return; }
         if (!images.market || !images.intraday || !images.oi || !images.multiStrike) { setError("Incomplete Intelligence."); return; }
         setIsAnalyzing(true);
         try {
             const newsToUse = (includeNews && newsData) ? newsData : null;
+            // Service handles fallback key
             const result = await analyzePreMarketRoutine(images, newsToUse, apiKey);
             if (onAnalysisUpdate) onAnalysisUpdate(result);
             setIsIntelFolded(true);
@@ -360,11 +360,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const runLiveCheck = async () => {
         setError(null);
         const lImages = getLiveImages();
-        if (!apiKey) { setError("API Key missing."); return; }
         if (!initialData) { setError("No Pre-Market Plan found."); return; }
         if (!lImages.liveChart || !lImages.liveOi) { setError("Upload Live Chart & OI."); return; }
         setIsLiveAnalyzing(true);
         try {
+            // Service handles fallback key
             const result = await analyzeLiveMarketRoutine(lImages, initialData, apiKey);
             // Parent handles appending to history
             if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(result);
@@ -378,10 +378,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const runPostAnalysis = async () => {
         setError(null);
         const pImages = getPostImages();
-        if (!apiKey) { setError("API Key missing."); return; }
         if (!pImages.dailyChart || !pImages.eodChart || !pImages.eodOi) { setError("Upload EOD Charts."); return; }
         setIsPostAnalyzing(true);
         try {
+            // Service handles fallback key
             const result = await analyzePostMarketRoutine(pImages, initialData || null, apiKey);
             if (onPostAnalysisUpdate) onPostAnalysisUpdate(result);
         } catch(e: any) {
@@ -419,6 +419,37 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
         if(!window.confirm("Clear Post-Market data?")) return;
         if (onPostAnalysisUpdate) onPostAnalysisUpdate(null);
         if (onPostImagesUpdate) onPostImagesUpdate({ dailyChart: '', eodChart: '', eodOi: '' });
+    };
+
+    // Helper to safely render Institutional Activity (which can be string or object)
+    const renderInstitutionalActivity = (activity: any) => {
+        if (!activity) return null;
+        if (typeof activity === 'string') return activity;
+        // Fix for React Error #31 - Check specifically for object type and not null
+        if (typeof activity === 'object') {
+            return (
+                <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-slate-900 p-2 rounded">
+                        <span className="block text-[9px] text-slate-500">FII</span>
+                        <span className="text-xs font-bold text-white">{activity.FII_Activity || activity.fii || '-'}</span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded">
+                        <span className="block text-[9px] text-slate-500">DII</span>
+                        <span className="text-xs font-bold text-white">{activity.DII_Activity || activity.dii || '-'}</span>
+                    </div>
+                    <div className="bg-slate-900 p-2 rounded">
+                        <span className="block text-[9px] text-slate-500">Net</span>
+                        <span className="text-xs font-bold text-white">{activity.Net_Institutional_Flow || activity.net || '-'}</span>
+                    </div>
+                </div>
+            );
+        }
+        // Last resort fallback
+        try {
+            return JSON.stringify(activity);
+        } catch (e) {
+            return "Data Unavailable";
+        }
     };
 
     const currentImages = getImages();
@@ -464,7 +495,7 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
             {/* PHASE CONTENT */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
 
-                {/* ... (Phase 0 & 1 Omitted for Brevity - No Changes) ... */}
+                {/* --- PHASE 0: NEWS --- */}
                 {activeView === 'phase0' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
                          {/* Header Card */}
@@ -486,18 +517,18 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
                                     {newsData && (
-                                        <button onClick={handleResetPhase0} className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1">
+                                        <button onClick={handleResetPhase0} className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
                                             <RotateCcw size={14}/> Reset
                                         </button>
                                     )}
                                     {!isNewsAnalyzing ? (
-                                        <button onClick={runNewsAnalysis} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 transition">
+                                        <button onClick={runNewsAnalysis} className="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2 transition">
                                             <Zap size={14} className="fill-current"/> Scan Markets
                                         </button>
                                     ) : (
-                                        <button disabled className="px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
+                                        <button disabled className="flex-1 md:flex-none px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center justify-center gap-2 animate-pulse cursor-not-allowed">
                                             <Loader2 size={14} className="animate-spin"/> Scanning Web...
                                         </button>
                                     )}
@@ -565,7 +596,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                     {newsData.institutionalActivity && (
                                         <div className="mt-6 pt-4 border-t border-slate-700">
                                             <h5 className="text-[10px] font-bold text-slate-500 uppercase mb-2">Institutional Data (FII/DII)</h5>
-                                            <p className="text-xs text-slate-300 font-mono">{newsData.institutionalActivity}</p>
+                                            <div className="text-xs text-slate-300 font-mono">
+                                                {renderInstitutionalActivity(newsData.institutionalActivity)}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -579,11 +612,12 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                     </div>
                 )}
 
+                {/* --- PHASE 1: PLAN --- */}
                 {activeView === 'phase1' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
                         {/* Header */}
                         <div className="bg-indigo-900/20 border border-indigo-500/20 p-6 rounded-2xl">
-                            <div className="flex justify-between items-center mb-4">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
                                         <Target size={24} />
@@ -596,19 +630,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
                                     {initialData && (
-                                        <button onClick={handleResetPhase1} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1">
+                                        <button onClick={handleResetPhase1} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
                                             <RotateCcw size={14}/> Reset
-                                        </button>
-                                    )}
-                                    {!isAnalyzing ? (
-                                        <button onClick={runAnalysis} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-indigo-900/40 flex items-center gap-2 transition transform active:scale-95">
-                                            <BrainCircuit size={16} /> Generate Plan
-                                        </button>
-                                    ) : (
-                                        <button disabled className="px-6 py-2 bg-slate-800 text-indigo-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-indigo-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
-                                            <Loader2 size={16} className="animate-spin" /> Analyzing...
                                         </button>
                                     )}
                                 </div>
@@ -642,12 +667,25 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
 
                         {/* Upload Grid */}
                         {!initialData && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
-                                <CompactUploadCard label="Market Graph" icon={BarChart2} imageSrc={currentImages.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(currentImages.market)} />
-                                <CompactUploadCard label="5m Intraday" icon={Activity} imageSrc={currentImages.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(currentImages.intraday)} />
-                                <CompactUploadCard label="Total OI" icon={Layers} imageSrc={currentImages.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(currentImages.oi)} />
-                                <CompactUploadCard label="Multi-Strike" icon={Crosshair} imageSrc={currentImages.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(currentImages.multiStrike)} />
-                            </div>
+                            <>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+                                    <CompactUploadCard label="Market Graph" icon={BarChart2} imageSrc={currentImages.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(currentImages.market)} />
+                                    <CompactUploadCard label="5m Intraday" icon={Activity} imageSrc={currentImages.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(currentImages.intraday)} />
+                                    <CompactUploadCard label="Total OI" icon={Layers} imageSrc={currentImages.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(currentImages.oi)} />
+                                    <CompactUploadCard label="Multi-Strike" icon={Crosshair} imageSrc={currentImages.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(currentImages.multiStrike)} />
+                                </div>
+                                
+                                {/* MOVED GENERATE BUTTON HERE */}
+                                {!isAnalyzing ? (
+                                    <button onClick={runAnalysis} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-indigo-900/50 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] animate-fade-in-up">
+                                        <BrainCircuit size={18} /> Generate Battle Plan
+                                    </button>
+                                ) : (
+                                    <button disabled className="w-full py-4 bg-slate-800 text-indigo-400 rounded-xl font-bold text-sm uppercase tracking-widest border border-indigo-500/30 flex items-center justify-center gap-2 cursor-not-allowed">
+                                        <Loader2 size={18} className="animate-spin" /> Analyzing Intelligence...
+                                    </button>
+                                )}
+                            </>
                         )}
 
                         {/* Analysis Result */}
@@ -733,10 +771,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                     </div>
                 )}
 
+                {/* --- PHASE 2: LIVE --- */}
                 {activeView === 'phase2' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
                         <div className="bg-red-900/20 border border-red-500/20 p-6 rounded-2xl">
-                            <div className="flex justify-between items-center mb-4">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-red-500/10 rounded-lg text-red-400">
                                         <ShieldAlert size={24} />
@@ -746,19 +785,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         <p className="text-xs text-red-400 font-bold">Phase 2: Validation (09:20 AM+)</p>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
                                     {liveHistory && liveHistory.length > 0 && (
-                                        <button onClick={handleResetPhase2} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1">
+                                        <button onClick={handleResetPhase2} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
                                             <RotateCcw size={14}/> Reset
-                                        </button>
-                                    )}
-                                    {!isLiveAnalyzing ? (
-                                        <button onClick={runLiveCheck} className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-red-900/40 flex items-center gap-2 transition transform active:scale-95">
-                                            <Zap size={16} className="fill-current"/> Run Check
-                                        </button>
-                                    ) : (
-                                        <button disabled className="px-6 py-2 bg-slate-800 text-red-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-red-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
-                                            <Loader2 size={16} className="animate-spin" /> Checking...
                                         </button>
                                     )}
                                 </div>
@@ -798,6 +828,17 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                             />
                         </div>
 
+                        {/* Run Check Button - MOVED HERE */}
+                        {!isLiveAnalyzing ? (
+                            <button onClick={runLiveCheck} className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-red-900/50 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] animate-fade-in-up">
+                                <Zap size={18} className="fill-current"/> Run Reality Check
+                            </button>
+                        ) : (
+                            <button disabled className="w-full py-4 bg-slate-800 text-red-400 rounded-xl font-bold text-sm uppercase tracking-widest border border-red-500/30 flex items-center justify-center gap-2 cursor-not-allowed">
+                                <Loader2 size={18} className="animate-spin" /> Verifying Market Action...
+                            </button>
+                        )}
+
                         {/* LATEST RESULT */}
                         {latestLiveCheck && (
                             <div className="animate-fade-in-up">
@@ -825,10 +866,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                     </div>
                 )}
 
+                {/* --- PHASE 3: POST --- */}
                 {activeView === 'phase3' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
                         <div className="bg-purple-900/20 border border-purple-500/20 p-6 rounded-2xl">
-                            <div className="flex justify-between items-center mb-4">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
                                         <Sunset size={24} />
@@ -841,19 +883,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
                                     {postData && (
-                                        <button onClick={handleResetPhase3} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1">
+                                        <button onClick={handleResetPhase3} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
                                             <RotateCcw size={14}/> Reset
-                                        </button>
-                                    )}
-                                    {!isPostAnalyzing ? (
-                                        <button onClick={runPostAnalysis} className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-purple-900/40 flex items-center gap-2 transition transform active:scale-95">
-                                            <BrainCircuit size={16} /> Analyze Day
-                                        </button>
-                                    ) : (
-                                        <button disabled className="px-6 py-2 bg-slate-800 text-purple-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-purple-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
-                                            <Loader2 size={16} className="animate-spin" /> Reviewing...
                                         </button>
                                     )}
                                 </div>
@@ -866,11 +899,24 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                         </div>
 
                         {!postData && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
-                                <CompactUploadCard label="Daily Chart" icon={BarChart2} imageSrc={currentPostImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(currentPostImages.dailyChart)} />
-                                <CompactUploadCard label="EOD 5m Chart" icon={Activity} imageSrc={currentPostImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(currentPostImages.eodChart)} />
-                                <CompactUploadCard label="EOD OI" icon={Layers} imageSrc={currentPostImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(currentPostImages.eodOi)} />
-                            </div>
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
+                                    <CompactUploadCard label="Daily Chart" icon={BarChart2} imageSrc={currentPostImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(currentPostImages.dailyChart)} />
+                                    <CompactUploadCard label="EOD 5m Chart" icon={Activity} imageSrc={currentPostImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(currentPostImages.eodChart)} />
+                                    <CompactUploadCard label="EOD OI" icon={Layers} imageSrc={currentPostImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(currentPostImages.eodOi)} />
+                                </div>
+
+                                {/* MOVED GENERATE BUTTON HERE */}
+                                {!isPostAnalyzing ? (
+                                    <button onClick={runPostAnalysis} className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-purple-900/50 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] animate-fade-in-up">
+                                        <BrainCircuit size={18} /> Generate EOD Report
+                                    </button>
+                                ) : (
+                                    <button disabled className="w-full py-4 bg-slate-800 text-purple-400 rounded-xl font-bold text-sm uppercase tracking-widest border border-purple-500/30 flex items-center justify-center gap-2 cursor-not-allowed">
+                                        <Loader2 size={18} className="animate-spin" /> Compiling Debrief...
+                                    </button>
+                                )}
+                            </>
                         )}
 
                         {postData && (

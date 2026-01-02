@@ -2,6 +2,9 @@
 import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { Trade, StrategyProfile, ParsedVoiceCommand, PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, NewsAnalysis, EdgeInsight } from "../types";
 
+// --- GLOBAL VARIABLES ---
+const API_KEY = process.env.API_KEY;
+
 // Helper to get configured models with strict fallbacks
 const getModels = () => {
   const pref = localStorage.getItem('tradeMind_aiModel') || 'gemini-3-pro-preview';
@@ -12,9 +15,6 @@ const getModels = () => {
   if (pref === 'gemini-3-flash-preview') return { fast: 'gemini-3-flash-preview', reasoning: 'gemini-3-flash-preview' };
   
   // -- GEMINI 2.5 SERIES (MID 2025) --
-  // Note: 2.5 Pro typically maps to 2.0 Pro Exp or updated 3.0 Pro in some contexts. We map to 3 Pro or 2.0 Pro Exp if available.
-  // For safety/quality, we map requested "2.5 Pro" to "3 Pro" if 2.5 isn't distinct in current types, or use a specific known ID.
-  // Using `gemini-2.0-pro-exp-02-05` as best proxy for "Late 2.0/Early 2.5 Pro" behavior if users want that specific era.
   if (pref === 'gemini-2.5-pro') return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.0-pro-exp-02-05' }; 
   if (pref === 'gemini-2.5-flash-latest') return { fast: 'gemini-2.5-flash-latest', reasoning: 'gemini-2.5-flash-latest' };
   if (pref === 'gemini-flash-lite-latest') return { fast: 'gemini-flash-lite-latest', reasoning: 'gemini-flash-lite-latest' };
@@ -85,8 +85,11 @@ const generateContentSafe = async (ai: GoogleGenAI, preferredModel: string, para
 // --- HEALTH CHECK ---
 export const checkModelHealth = async (apiKey: string, model: string): Promise<{ status: 'ok' | 'error' | 'quota', message: string, latency?: number }> => {
   const start = Date.now();
+  const key = apiKey || API_KEY;
+  if (!key) return { status: 'error', message: "No API Key Provided" };
+
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: key });
     await ai.models.generateContent({
       model: model,
       contents: { parts: [{ text: "Ping" }] }
@@ -122,8 +125,7 @@ ${rulesText}
 };
 
 export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
-  // STRICT: Use the passed apiKey argument.
-  const key = apiKey;
+  const key = apiKey || API_KEY;
   const pref = localStorage.getItem('tradeMind_aiModel');
   
   if (!key) {
@@ -290,7 +292,7 @@ export const analyzeTradeWithAI = async (trade: Trade, strategyProfile?: Strateg
 };
 
 export const analyzeBatch = async (trades: Trade[], periodDescription: string, strategyProfile?: StrategyProfile, apiKey?: string): Promise<string> => {
-  const key = apiKey;
+  const key = apiKey || API_KEY;
   if (!key) return "API Key is missing. Please add your Gemini API Key in Settings.";
   if (trades.length === 0) return "No trades to analyze for this period.";
 
@@ -354,7 +356,7 @@ export const analyzeBatch = async (trades: Trade[], periodDescription: string, s
 };
 
 export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
-  const key = apiKey;
+  const key = apiKey || API_KEY;
   if (!key) return "Add API Key for daily wisdom.";
   
   try {
@@ -369,10 +371,8 @@ export const getDailyCoachTip = async (apiKey?: string): Promise<string> => {
   }
 };
 
-// ... (Rest of exports: getMentorChatResponse, getLiveTradeCoachResponse, getEdgePatterns, queryTradeArchives, fetchMarketNews, parseVoiceCommand)
-// Ensure they use generateContentSafe and explicit key check
 export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): Promise<ParsedVoiceCommand> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     try {
         const ai = new GoogleGenAI({ apiKey: key });
@@ -387,7 +387,7 @@ export const parseVoiceCommand = async (audioBase64: string, apiKey?: string): P
 }
 
 export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<EdgeInsight[]> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const data = trades.filter(t => t.outcome !== 'OPEN').map(t => `${t.date} ${t.entryTime} | ${t.setupName} | ${t.outcome} (${t.pnl})`).join('\n');
     const prompt = `Analyze trades for patterns. Output JSON array of insights. Data: ${data}`;
@@ -405,7 +405,7 @@ export const getEdgePatterns = async (trades: Trade[], apiKey: string): Promise<
 }
 
 export const queryTradeArchives = async (query: string, trades: Trade[], apiKey: string): Promise<{ matchingIds: string[], answer: string }> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const tradeDocs = trades.map(t => `ID: ${t.id} Date: ${t.date} Outcome: ${t.outcome} Note: ${t.entryReason}`).join('\n---\n');
     const prompt = `User Query: "${query}". Trade Logs: ${tradeDocs}. Return JSON {matchingIds, answer}.`;
@@ -418,7 +418,7 @@ export const queryTradeArchives = async (query: string, trades: Trade[], apiKey:
 }
 
 export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
@@ -435,7 +435,7 @@ export const fetchMarketNews = async (apiKey?: string): Promise<NewsAnalysis> =>
 };
 
 export const getMentorChatResponse = async (chatHistory: any[], trades: Trade[], strategyProfile: StrategyProfile, apiKey?: string): Promise<string> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
@@ -453,7 +453,7 @@ export const getMentorChatResponse = async (chatHistory: any[], trades: Trade[],
 }
 
 export const getLiveTradeCoachResponse = async (chatHistory: any[], currentTradeData: any, strategyProfile: StrategyProfile, apiKey: string): Promise<string> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
@@ -472,7 +472,7 @@ export const getLiveTradeCoachResponse = async (chatHistory: any[], currentTrade
 
 // Pre-Market Routine Analysis
 export const analyzePreMarketRoutine = async (images: { market: string, intraday: string, oi: string, multiStrike: string }, newsData: NewsAnalysis | null, apiKey: string): Promise<PreMarketAnalysis> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
@@ -526,7 +526,7 @@ export const analyzePreMarketRoutine = async (images: { market: string, intraday
 
 // Live Market Routine Analysis
 export const analyzeLiveMarketRoutine = async (images: { liveChart: string, liveOi: string }, preMarketPlan: PreMarketAnalysis, apiKey: string): Promise<LiveMarketAnalysis> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
@@ -568,7 +568,7 @@ export const analyzeLiveMarketRoutine = async (images: { liveChart: string, live
 
 // Post Market Routine Analysis
 export const analyzePostMarketRoutine = async (images: { dailyChart: string, eodChart: string, eodOi: string }, preMarketPlan: PreMarketAnalysis | null, apiKey: string): Promise<PostMarketAnalysis> => {
-    const key = apiKey;
+    const key = apiKey || API_KEY;
     if (!key) throw new Error("API Key Required");
     const ai = new GoogleGenAI({ apiKey: key });
     const models = getModels();
