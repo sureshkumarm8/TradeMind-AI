@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
     X, BrainCircuit, ShieldCheck, HeartPulse, Target, 
@@ -30,7 +29,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }}></div>
                         <span className="text-xs font-medium text-slate-300 min-w-[120px]">{p.name}</span>
                         <span className="text-sm font-bold font-mono text-white">
-                            {typeof p.value === 'number' && (p.name.includes('PnL') || p.name === 'Value') ? `₹${p.value.toFixed(0)}` : p.value}
+                            {typeof p.value === 'number' && (p.name.includes('PnL') || p.name === 'Value') ? `₹${p.value.toFixed(1)}` : p.value}
                             {p.unit}
                         </span>
                     </div>
@@ -287,27 +286,27 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                             </div>
                         </div>
 
-                        {/* Discipline History Table */}
-                        <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
-                            <div className="p-4 border-b border-slate-700 bg-slate-950/50 flex justify-between items-center">
+                        {/* Discipline History Table (Scrollable & Full History) */}
+                        <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col max-h-[500px]">
+                            <div className="p-4 border-b border-slate-700 bg-slate-950/50 flex justify-between items-center sticky top-0 z-10">
                                 <h3 className="text-sm font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
                                     <History size={16} className="text-indigo-400"/> Discipline Record
                                 </h3>
                                 <span className="text-[10px] text-slate-500 font-bold uppercase">{data.historyData.length} Logs</span>
                             </div>
-                            <div className="overflow-x-auto">
+                            <div className="overflow-auto custom-scrollbar flex-1">
                                 <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-950 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800">
+                                    <thead className="bg-slate-950 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800 sticky top-0 z-10">
                                         <tr>
-                                            <th className="px-6 py-3 tracking-wider">Date</th>
-                                            <th className="px-6 py-3 tracking-wider">Instrument</th>
-                                            <th className="px-6 py-3 tracking-wider">Discipline Rating</th>
-                                            <th className="px-6 py-3 tracking-wider">Emotional State</th>
-                                            <th className="px-6 py-3 tracking-wider text-right">Result</th>
+                                            <th className="px-6 py-3 tracking-wider bg-slate-950">Date</th>
+                                            <th className="px-6 py-3 tracking-wider bg-slate-950">Instrument</th>
+                                            <th className="px-6 py-3 tracking-wider bg-slate-950">Discipline Rating</th>
+                                            <th className="px-6 py-3 tracking-wider bg-slate-950">Emotional State</th>
+                                            <th className="px-6 py-3 tracking-wider text-right bg-slate-950">Result</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800">
-                                        {data.historyData.slice(0, 15).map((t) => (
+                                        {data.historyData.map((t) => (
                                             <tr key={t.id} onClick={() => onViewTrade?.(t.id)} className="hover:bg-slate-800/50 transition cursor-pointer group">
                                                 <td className="px-6 py-3 font-mono text-slate-400 group-hover:text-white transition-colors">{t.date}</td>
                                                 <td className="px-6 py-3 text-indigo-300 font-bold text-xs">{t.instrument}</td>
@@ -324,7 +323,7 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                                                     </span>
                                                 </td>
                                                 <td className={`px-6 py-3 text-right font-mono font-bold ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : t.pnl && t.pnl < 0 ? 'text-red-400' : 'text-slate-500'}`}>
-                                                    {t.pnl ? `₹${t.pnl.toFixed(0)}` : '-'}
+                                                    {t.pnl ? `₹${t.pnl.toFixed(1)}` : '-'}
                                                 </td>
                                             </tr>
                                         ))}

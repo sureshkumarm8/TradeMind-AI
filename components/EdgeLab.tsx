@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
     FlaskConical, Sparkles, TrendingUp, TrendingDown, 
@@ -175,9 +174,20 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
 
     // 2. Simulator Logic
     const simulatorData = useMemo(() => {
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        
         const sortedTrades = [...trades]
-            .filter(t => t.outcome !== TradeOutcome.OPEN)
-            .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            .filter(t => t.outcome !== TradeOutcome.OPEN && t.date <= todayStr) // Exclude future trades
+            .sort((a,b) => {
+                // Fix sorting to include Time to ensure correct cumulative equity simulation
+                const tA = a.entryTime || '00:00';
+                const tB = b.entryTime || '00:00';
+                // Add seconds if missing for robustness
+                const timeA = tA.length === 5 ? tA + ':00' : tA;
+                const timeB = tB.length === 5 ? tB + ':00' : tB;
+                return new Date(`${a.date}T${timeA}`).getTime() - new Date(`${b.date}T${timeB}`).getTime();
+            });
 
         let currentEquity = 0;
         let simEquity = 0;
@@ -580,7 +590,19 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                        <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(d) => new Date(d).getDate().toString()} />
+                                        <XAxis 
+                                            dataKey="date" 
+                                            stroke="#64748b" 
+                                            fontSize={10} 
+                                            tickLine={false} 
+                                            axisLine={false} 
+                                            tickFormatter={(dateStr) => {
+                                                // Handle standard YYYY-MM-DD format to avoid UTC issues
+                                                // Simply split string to get the day part safely
+                                                const parts = dateStr.split('-');
+                                                return parts.length === 3 ? parts[2] : dateStr;
+                                            }} 
+                                        />
                                         <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                         <Tooltip content={<LabTooltip />} />
                                         <Area type="monotone" dataKey="actual" name="Actual PnL" stroke="#94a3b8" strokeWidth={2} fill="url(#colorActual)" />
@@ -628,7 +650,7 @@ const EdgeLab: React.FC<EdgeLabProps> = ({ trades, apiKey }) => {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={setupData} layout="vertical" margin={{ left: 20 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
-                                        <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                        <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `₹${val}`} />
                                         <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} width={80} />
                                         <Tooltip content={<LabTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
                                         <Bar dataKey="pnl" radius={[0, 4, 4, 0]} barSize={20}>

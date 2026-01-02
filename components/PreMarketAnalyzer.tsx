@@ -559,9 +559,23 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
                                             <BarChart2 size={14} className="text-slate-400"/> FII / DII Data
                                         </h4>
-                                        <p className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
-                                            {newsData.institutionalActivity || "Data not available in search snippet."}
-                                        </p>
+                                        <div className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                                            {(() => {
+                                                const activity = newsData.institutionalActivity;
+                                                if (!activity) return "Data not available.";
+                                                if (typeof activity === 'string') return activity;
+                                                return (
+                                                    <div className="space-y-2">
+                                                        {Object.entries(activity).map(([k, v]) => (
+                                                            <div key={k} className="flex justify-between items-center border-b border-slate-800 pb-1 last:border-0 last:pb-0">
+                                                                <span className="opacity-60 capitalize">{k.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}</span>
+                                                                <span className="font-mono font-bold text-white">{String(v)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
                              </div>

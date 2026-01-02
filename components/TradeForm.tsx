@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trade, TradeDirection, TradeOutcome, OptionType, Timeframe, OpeningType, NotificationType, TradeNote, StrategyProfile } from '../types';
 import { Save, X, AlertTriangle, CheckCircle2, Clock, Target, Calculator, TrendingUp, TrendingDown, Zap, Loader2, Image as ImageIcon, UploadCloud, Trash2, Send, Plus, CircleDollarSign, Bot, Shield, Ban, FileText, Layout, Info, ChevronRight, MessageSquare, ChevronDown, ChevronUp, Mic, MicOff, Volume2, Edit2, Check } from 'lucide-react';
@@ -123,27 +122,36 @@ const LiveCoachWidget = ({ apiKey, currentTradeData, strategyProfile }: { apiKey
 };
 
 const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, apiKey, notify, onDelete, preMarketDone, strategyProfile }) => {
-  const [formData, setFormData] = useState<Partial<Trade>>(initialData || {
-    id: crypto.randomUUID(),
-    date: new Date().toISOString().split('T')[0],
-    entryTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-    instrument: 'NIFTY',
-    optionType: OptionType.CE,
-    direction: TradeDirection.LONG,
-    quantity: 75, // Updated default to 75
-    timeframe: Timeframe.M5,
-    systemChecks: {
-      analyzedPreMarket: preMarketDone || false,
-      waitedForOpen: false,
-      checkedSensibullOI: false,
-      exitTimeLimit: false
-    },
-    confluences: [],
-    mistakes: [],
-    notes: [],
-    executionType: 'PAPER',
-    openingType: OpeningType.FLAT,
-    outcome: TradeOutcome.OPEN
+  const [formData, setFormData] = useState<Partial<Trade>>(() => {
+      // Ensure notes array exists even if initialData has it undefined (legacy data fix)
+      const base = initialData || {
+        id: crypto.randomUUID(),
+        date: new Date().toISOString().split('T')[0],
+        entryTime: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        instrument: 'NIFTY',
+        optionType: OptionType.CE,
+        direction: TradeDirection.LONG,
+        quantity: 75,
+        timeframe: Timeframe.M5,
+        systemChecks: {
+          analyzedPreMarket: preMarketDone || false,
+          waitedForOpen: false,
+          checkedSensibullOI: false,
+          exitTimeLimit: false
+        },
+        confluences: [],
+        mistakes: [],
+        notes: [], // Default empty
+        executionType: 'PAPER',
+        openingType: OpeningType.FLAT,
+        outcome: TradeOutcome.OPEN
+      };
+      
+      // If initialData exists but notes is missing/undefined, default it to []
+      if (initialData && !initialData.notes) {
+          return { ...base, notes: [] };
+      }
+      return base;
   });
 
   const [noteInput, setNoteInput] = useState('');
@@ -465,6 +473,18 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                                 <datalist id="setups">{COMMON_SETUPS.map(s => <option key={s} value={s}/>)}</datalist>
                             </div>
 
+                            {/* Added Entry Logic Text Area */}
+                            <div className="mt-2">
+                                <textarea 
+                                    name="entryReason" 
+                                    value={formData.entryReason || ''} 
+                                    onChange={handleInputChange} 
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white text-sm focus:border-indigo-500 outline-none resize-none placeholder:text-slate-600"
+                                    rows={2}
+                                    placeholder="Logic: Why are you entering? (e.g. 5m Candle closed above VWAP, RSI Div)"
+                                />
+                            </div>
+
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-700">
                                     <button type="button" onClick={() => setFormData(p => ({...p, direction: TradeDirection.LONG}))} className={`flex-1 py-2 rounded text-xs font-black uppercase flex items-center justify-center gap-1 transition-all ${formData.direction === TradeDirection.LONG ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>
@@ -527,7 +547,17 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                                         <input type="number" name="quantity" value={formData.quantity || ''} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="75" />
                                     </div>
                                 </div>
+
+                                {/* Added Exit Reason */}
                                 <div className="pt-2 border-t border-slate-800">
+                                    <textarea 
+                                        name="exitReason" 
+                                        value={formData.exitReason || ''} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white text-xs focus:border-indigo-500 outline-none resize-none placeholder:text-slate-600 mb-2"
+                                        rows={1}
+                                        placeholder="Exit Reason: (e.g. Target Hit, Trailing SL)"
+                                    />
                                     <div className="flex justify-between items-center">
                                         <span className="text-[10px] font-bold text-slate-500 uppercase">Est. PnL</span>
                                         <span className={`font-mono font-bold ${pnl && pnl > 0 ? 'text-emerald-400' : pnl && pnl < 0 ? 'text-red-400' : 'text-slate-600'}`}>
@@ -558,7 +588,21 @@ const TradeForm: React.FC<TradeFormProps> = ({ onSave, onCancel, initialData, ap
                     
                     <div className="bg-slate-950 border border-slate-800 rounded-lg flex flex-col overflow-hidden min-h-[300px]">
                         <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                            {(!formData.notes || formData.notes.length === 0) && (
+                            
+                            {/* INJECTED ENTRY REASON */}
+                            {formData.entryReason && (
+                                <div className="flex gap-3 text-xs animate-fade-in group items-start hover:bg-slate-900/50 p-2 rounded transition border-l-2 border-indigo-500 bg-indigo-900/10">
+                                    <span className="text-indigo-400 font-mono text-[10px] pt-1 whitespace-nowrap min-w-[40px]">{formData.entryTime}</span>
+                                    <div className="flex-1">
+                                        <div className="text-indigo-200 font-medium">
+                                            <span className="text-[9px] uppercase font-bold text-indigo-500 mr-2">ENTRY LOGIC</span>
+                                            {formData.entryReason}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {(!formData.notes || (formData.notes.length === 0 && !formData.entryReason)) && (
                                 <div className="h-full flex items-center justify-center text-slate-700 text-xs italic flex-col min-h-[200px]">
                                     <Mic size={24} className="mb-2 opacity-50"/>
                                     <span>Speak or Type your thoughts live...</span>

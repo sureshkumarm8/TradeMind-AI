@@ -1,8 +1,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
-import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis, AiAnalysisResponse, OptionType } from '../types';
-import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, X, Target, ShieldAlert, Trophy, ListFilter, ArrowRight, ShieldCheck, HeartPulse, Info, Calculator, ChevronDown, ChevronUp, Book, Dice6, Flame, Sword, AlertTriangle, Zap, Wallet, Percent, ArrowUpRight, Scale, Bot, Loader2, Lightbulb, GraduationCap, RefreshCw, History, LineChart } from 'lucide-react';
+import { DashboardStats, Trade, TradeOutcome, TradeDirection, StrategyProfile, PlaybookStat, PreMarketAnalysis, OptionType } from '../types';
+import { TrendingUp, TrendingDown, Activity, AlertCircle, BrainCircuit, Sparkles, Target, ShieldAlert, Trophy, ArrowRight, ShieldCheck, HeartPulse, Lightbulb, GraduationCap, RefreshCw, LineChart, Clock, Book, Dice6, Sword, Zap, AlertTriangle, Layers, Flame } from 'lucide-react';
 import { analyzeBatch } from '../services/geminiService';
 
 interface DashboardProps {
@@ -27,7 +27,7 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
            <div key={index} className="flex items-center gap-2 mb-1">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || p.payload.fill }}></div>
               <p className="text-sm font-mono font-bold text-white">
-                  {p.name}: {typeof p.value === 'number' && (p.name === 'Equity' || p.name.includes('PnL')) ? `₹${p.value.toLocaleString()}` : `${p.value}%`}
+                  {p.name}: {typeof p.value === 'number' && (p.name === 'Equity' || p.name.includes('PnL')) ? `₹${p.value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}` : `${p.value}%`}
               </p>
            </div>
         ))}
@@ -300,15 +300,35 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
     };
   }, [trades]);
 
+  // Open Trades Count
+  const openTradesCount = useMemo(() => trades.filter(t => t.outcome === TradeOutcome.OPEN).length, [trades]);
+
   const equityCurveData = useMemo(() => {
     let runningTotal = 0;
+    // Get today's date in YYYY-MM-DD local time to prevent filtering out live trades, 
+    // but exclude anything AFTER today (future dates)
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
     return trades
-      .filter(t => t.outcome !== TradeOutcome.OPEN)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .filter(t => t.outcome !== TradeOutcome.OPEN && t.date <= todayStr) // Exclude future trades
+      .sort((a, b) => {
+          // Robust sort by Date + Time to ensure Financial Velocity is accurate intraday
+          const timeA = a.entryTime ? (a.entryTime.length === 5 ? a.entryTime + ':00' : a.entryTime) : '00:00:00';
+          const timeB = b.entryTime ? (b.entryTime.length === 5 ? b.entryTime + ':00' : b.entryTime) : '00:00:00';
+          return new Date(`${a.date}T${timeA}`).getTime() - new Date(`${b.date}T${timeB}`).getTime();
+      })
       .map(t => {
         runningTotal += (t.pnl || 0);
+        // Force local time interpretation by appending T00:00:00 to avoid UTC shifting
+        // YYYY-MM-DD defaults to UTC midnight, which shows as previous day in Western hemispheres.
+        const d = new Date(t.date + 'T00:00:00');
+        const dateStr = !isNaN(d.getTime()) 
+            ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) 
+            : t.date;
+
         return {
-          date: new Date(t.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          date: dateStr,
           fullDate: t.date,
           equity: runningTotal,
           pnl: t.pnl || 0,
@@ -553,6 +573,29 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
          </div>
       </div>
 
+      {/* ⚠️ OPEN TRADES ALERT - Ensures visibility of new trades without outcome */}
+      {openTradesCount > 0 && (
+          <div className="bg-amber-900/20 border border-amber-500/30 p-4 rounded-xl flex justify-between items-center animate-fade-in">
+              <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/10 rounded-lg text-amber-400 animate-pulse">
+                      <Clock size={20} />
+                  </div>
+                  <div>
+                      <h3 className="text-white font-bold text-sm uppercase tracking-wider">Active Missions</h3>
+                      <p className="text-xs text-amber-400/80">
+                          {openTradesCount} trade{openTradesCount > 1 ? 's' : ''} currently open. PnL stats will update upon closure.
+                      </p>
+                  </div>
+              </div>
+              <button 
+                  onClick={() => onViewTrade?.(trades.find(t => t.outcome === TradeOutcome.OPEN)?.id || '')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase rounded-lg transition"
+              >
+                  Manage
+              </button>
+          </div>
+      )}
+
       {/* 🛡️ PRE-MARKET BATTLE PLAN */}
       {/* Show if morning OR if we have data for today */}
       {(isMorning || hasPreMarketToday || hasAiAnalysisToday) && (
@@ -667,7 +710,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                     </span>
                 </div>
                 <p className={`text-2xl lg:text-3xl font-black font-mono relative z-10 ${stats.totalPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {stats.totalPnL >= 0 ? '+' : ''}₹{stats.totalPnL.toFixed(2)}
+                    {stats.totalPnL >= 0 ? '+' : ''}₹{stats.totalPnL.toFixed(1)}
                 </p>
                 <div className="flex justify-between items-center mt-3 text-[10px] font-medium text-slate-500 uppercase relative z-10">
                     <span>{stats.totalTrades} Trades</span>
@@ -703,7 +746,7 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                     <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Profit Factor</h3>
                     <span className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500"><Sparkles size={16} /></span>
                 </div>
-                <p className="text-2xl lg:text-3xl font-black text-white relative z-10">{stats.profitFactor.toFixed(2)}<span className="text-sm text-slate-600 ml-1 font-normal">x</span></p>
+                <p className="text-2xl lg:text-3xl font-black text-white relative z-10">{stats.profitFactor.toFixed(1)}<span className="text-sm text-slate-600 ml-1 font-normal">x</span></p>
                 <div className="mt-3 flex justify-between items-center text-[10px] text-slate-500 font-medium uppercase relative z-10">
                     <span>Target: {'>'} 1.5</span>
                     <span className="group-hover:text-rose-400 transition-colors flex items-center">Check Leaks <ArrowRight size={10} className="ml-1"/></span>
@@ -806,210 +849,142 @@ const Dashboard: React.FC<DashboardProps> = ({ trades, strategyProfile, apiKey, 
                                         <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.5} />
-                                <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickMargin={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `₹${val}`} tickLine={false} axisLine={false} />
-                                <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#475569', strokeDasharray: '3 3' }} />
-                                <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                <XAxis 
+                                    dataKey="date" 
+                                    stroke="#64748b" 
+                                    fontSize={10} 
+                                    tickLine={false} 
+                                    axisLine={false}
+                                />
+                                <YAxis 
+                                    stroke="#64748b" 
+                                    fontSize={10} 
+                                    tickLine={false} 
+                                    axisLine={false} 
+                                    tickFormatter={(val) => `₹${val}`} 
+                                />
+                                <Tooltip content={<CustomChartTooltip />} />
                                 <Area 
                                     type="monotone" 
                                     dataKey="equity" 
-                                    stroke={stats.totalPnL >= 0 ? "#10B981" : "#EF4444"} 
-                                    strokeWidth={3} 
-                                    fill={stats.totalPnL >= 0 ? "url(#colorEquity)" : "url(#colorEquityLoss)"} 
-                                    activeDot={{ r: 6, strokeWidth: 0, fill: '#fff' }} 
-                                    animationDuration={1500}
+                                    stroke="#10B981" 
+                                    fill="url(#colorEquity)" 
+                                    strokeWidth={2}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* 2. CE vs PE Mastery (Pie Chart) */}
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><Target size={80}/></div>
-                    
-                    <div className="mb-4 relative z-10">
-                        <h3 className="text-white font-black text-sm uppercase tracking-widest flex items-center gap-2">
-                            <Target size={16} className="text-blue-400"/> CE vs PE Mastery
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1">Win Rate by Option Type</p>
-                    </div>
-
-                    <div className="h-64 w-full relative cursor-pointer z-10 flex-1">
+                {/* 2. Win Rate / Option Type Distribution */}
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-xl flex flex-col justify-center items-center relative">
+                    <h3 className="absolute top-6 left-6 text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Target size={16} className="text-blue-400"/> Strike Mastery
+                    </h3>
+                    <div className="w-full h-64 mt-4">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie 
-                                    data={optionTypeData} 
-                                    cx="50%" 
-                                    cy="50%" 
-                                    innerRadius={60} 
-                                    outerRadius={85} 
-                                    paddingAngle={5} 
-                                    dataKey="value" 
-                                    onClick={(data) => setSelectedFilter({ type: 'optionType', value: data.type })}
-                                    stroke="none"
+                                <Pie
+                                    data={optionTypeData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
                                 >
-                                    {optionTypeData.map((entry, index) => ( 
-                                        <Cell key={`cell-${index}`} fill={entry.fill} /> 
+                                    {optionTypeData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(0,0,0,0)" />
                                     ))}
                                 </Pie>
                                 <Tooltip content={<CustomChartTooltip />} />
-                                <Legend 
-                                    verticalAlign="bottom" 
-                                    height={36} 
-                                    iconType="circle"
-                                    formatter={(value, entry: any) => (
-                                        <span className="text-xs font-bold text-slate-300 ml-1">{value}</span>
-                                    )}
-                                />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
                             </PieChart>
                         </ResponsiveContainer>
-                        
-                        {/* Center Metric */}
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-[60%] text-center pointer-events-none">
-                            <span className="text-[10px] text-slate-500 uppercase font-bold block tracking-wider">Win Rate</span>
-                            <span className="text-2xl font-black text-white">{stats.winRate.toFixed(0)}%</span>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
       )}
 
-      {/* ======================= TAB: PLAYBOOK (Analytics) ======================= */}
+      {/* ======================= TAB: PLAYBOOK ======================= */}
       {activeTab === 'playbook' && (
           <div className="space-y-6 animate-fade-in">
-              <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-xl border border-indigo-500/20 shadow-lg">
-                  <div className="flex items-center gap-4 mb-2">
-                      <Book size={32} className="text-indigo-400"/>
-                      <div>
-                          <h3 className="text-xl font-bold text-white">The Playbook</h3>
-                          <p className="text-sm text-slate-400">Discover which setups are making you money and which are draining you.</p>
-                      </div>
-                  </div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {playbookStats.map((stat, idx) => (
-                      <div key={idx} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden hover:border-slate-500 transition shadow-lg">
-                          <div className={`h-2 w-full ${stat.totalPnL > 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                          <div className="p-5">
-                              <h4 className="font-bold text-white text-lg mb-4 flex justify-between items-start">
-                                  {stat.setupName}
-                                  <span className="text-xs font-medium text-slate-500 bg-slate-900 px-2 py-1 rounded">{stat.count} trades</span>
-                              </h4>
+                  {playbookStats.map((stat) => (
+                      <div key={stat.setupName} className="bg-slate-900 border border-slate-800 p-5 rounded-xl hover:border-indigo-500/50 transition group">
+                          <div className="flex justify-between items-start mb-4">
+                              <div>
+                                  <h3 className="text-white font-bold text-lg">{stat.setupName}</h3>
+                                  <p className="text-xs text-slate-500 font-medium">{stat.count} Trades</p>
+                              </div>
+                              <div className={`px-2 py-1 rounded text-xs font-bold ${stat.totalPnL > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  {stat.totalPnL > 0 ? '+' : ''}₹{stat.totalPnL}
+                              </div>
+                          </div>
+                          
+                          <div className="space-y-3">
+                              <div>
+                                  <div className="flex justify-between text-xs mb-1">
+                                      <span className="text-slate-400">Win Rate</span>
+                                      <span className="text-white font-bold">{stat.winRate}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full ${stat.winRate >= 50 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${stat.winRate}%` }}></div>
+                                  </div>
+                              </div>
                               
-                              <div className="space-y-3">
-                                  <div className="flex justify-between items-center">
-                                      <span className="text-xs text-slate-400 uppercase font-bold">Win Rate</span>
-                                      <span className={`text-sm font-bold ${stat.winRate >= 50 ? 'text-emerald-400' : 'text-amber-400'}`}>{stat.winRate}%</span>
-                                  </div>
-                                  <div className="w-full bg-slate-900 rounded-full h-1.5">
-                                      <div className={`h-1.5 rounded-full ${stat.winRate >= 50 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{width: `${stat.winRate}%`}}></div>
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-2 gap-4 pt-2 mt-2 border-t border-slate-700/50">
-                                      <div>
-                                          <span className="text-[10px] text-slate-500 uppercase font-bold block">Avg PnL</span>
-                                          <span className={`font-mono font-bold ${stat.avgPnL > 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{stat.avgPnL.toFixed(0)}</span>
-                                      </div>
-                                      <div className="text-right">
-                                          <span className="text-[10px] text-slate-500 uppercase font-bold block">Total</span>
-                                          <span className={`font-mono font-bold ${stat.totalPnL > 0 ? 'text-emerald-400' : 'text-red-400'}`}>₹{stat.totalPnL.toFixed(0)}</span>
-                                      </div>
-                                  </div>
+                              <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                                  <span className="text-xs text-slate-500 font-bold uppercase">Avg PnL</span>
+                                  <span className={`text-sm font-mono font-bold ${stat.avgPnL > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {stat.avgPnL > 0 ? '+' : ''}₹{stat.avgPnL}
+                                  </span>
                               </div>
                           </div>
                       </div>
                   ))}
-                  
-                  {playbookStats.length === 0 && (
-                      <div className="col-span-full text-center py-12 text-slate-500">
-                          <Book size={48} className="mx-auto mb-4 opacity-20"/>
-                          <p>No classified trades yet. Add a "Setup Name" when logging trades to populate your Playbook.</p>
-                      </div>
-                  )}
               </div>
-          </div>
-      )}
-
-      {/* ======================= TAB: SIMULATOR (Risk) ======================= */}
-      {activeTab === 'simulator' && (
-          <div className="space-y-6 animate-fade-in">
-              <div className="bg-gradient-to-r from-slate-900 to-rose-950 p-6 rounded-xl border border-rose-500/20 shadow-lg">
-                  <div className="flex items-center gap-4 mb-2">
-                      <ShieldAlert size={32} className="text-rose-400"/>
-                      <div>
-                          <h3 className="text-xl font-bold text-white">Risk Simulator</h3>
-                          <p className="text-sm text-slate-400">Monte Carlo projection based on your current performance stats.</p>
-                      </div>
-                  </div>
-              </div>
-
-              {riskSimData ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                          <h4 className="text-slate-400 font-bold text-xs uppercase mb-4 tracking-widest">Current Metrics</h4>
-                          <div className="space-y-4">
-                              <div className="flex justify-between border-b border-slate-700 pb-2">
-                                  <span>Win Rate</span>
-                                  <span className="font-mono text-white">{(riskSimData.winRate * 100).toFixed(1)}%</span>
-                              </div>
-                              <div className="flex justify-between border-b border-slate-700 pb-2">
-                                  <span>Avg Win</span>
-                                  <span className="font-mono text-emerald-400">₹{riskSimData.avgWin.toFixed(0)}</span>
-                              </div>
-                              <div className="flex justify-between border-b border-slate-700 pb-2">
-                                  <span>Avg Loss</span>
-                                  <span className="font-mono text-red-400">₹{riskSimData.avgLoss.toFixed(0)}</span>
-                              </div>
-                          </div>
-                      </div>
-
-                      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center text-center">
-                          <h4 className="text-rose-400 font-bold text-xs uppercase mb-4 tracking-widest">Risk of Ruin (50% Drawdown)</h4>
-                          <div className="text-5xl font-black text-white mb-2">
-                              {(riskSimData.probRuin * 100).toFixed(1)}%
-                          </div>
-                          <p className="text-xs text-slate-400 px-8">
-                              Probability of losing 50% of your account if you continue trading exactly like this.
-                          </p>
-                          <div className={`mt-4 px-3 py-1 rounded text-xs font-bold uppercase ${riskSimData.probRuin < 0.05 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                              {riskSimData.probRuin < 0.05 ? 'Safe Zone' : 'Danger Zone'}
-                          </div>
-                      </div>
-                  </div>
-              ) : (
-                  <div className="text-center py-12 text-slate-500">
-                      <p>Need at least 10 trades (with wins and losses) to run simulation.</p>
-                  </div>
+              {playbookStats.length === 0 && (
+                  <div className="text-center py-20 text-slate-500 italic">No setup data available yet. Tag your trades with Setup Names.</div>
               )}
           </div>
       )}
 
-      {selectedFilter && (
-        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md animate-fade-in">
-            <div className="bg-slate-900 w-full max-w-5xl rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center sticky top-0 z-20">
-                     <div className="flex items-center gap-3"><div className="bg-indigo-900/50 p-2 rounded-lg text-indigo-400"><ListFilter size={20}/></div><div><h3 className="font-bold text-white text-base">{getFilterTitle(selectedFilter)}</h3><p className="text-xs text-slate-500">{filteredTrades.length} mission logs found</p></div></div>
-                    <button onClick={() => setSelectedFilter(null)} className="p-2 hover:bg-slate-800 rounded-full transition text-slate-400 hover:text-white"><X size={20}/></button>
-                </div>
-                <div className="overflow-y-auto custom-scrollbar p-0">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-500 uppercase bg-slate-950/50 border-b border-slate-800 sticky top-0"><tr><th className="px-6 py-4 font-bold tracking-wider">Date</th><th className="px-6 py-4 font-bold tracking-wider">Instrument</th><th className="px-6 py-4 font-bold tracking-wider text-right">PnL</th></tr></thead>
-                        <tbody className="divide-y divide-slate-800/50">
-                            {filteredTrades.map(t => (
-                                <tr key={t.id} onClick={() => { setSelectedFilter(null); onViewTrade?.(t.id); }} className="hover:bg-slate-800/30 transition-colors cursor-pointer group"><td className="px-6 py-4 text-white font-mono group-hover:text-indigo-400 transition-colors">{t.date}</td><td className="px-6 py-4 text-indigo-300 font-bold">{t.instrument}</td><td className={`px-6 py-4 text-right font-mono font-bold ${t.pnl && t.pnl > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {t.pnl && t.pnl > 0 ? '+' : ''}₹{t.pnl?.toFixed(0)}
-                                </td></tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    )}
+      {/* ======================= TAB: SIMULATOR ======================= */}
+      {activeTab === 'simulator' && (
+          <div className="space-y-6 animate-fade-in">
+              <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center">
+                  <Dice6 size={48} className="mx-auto text-indigo-500 mb-4 opacity-80"/>
+                  <h3 className="text-2xl font-bold text-white mb-2">Monte Carlo Risk Simulator</h3>
+                  <p className="text-slate-400 max-w-lg mx-auto mb-8 text-sm">
+                      Based on your current metrics (Win Rate: {stats.winRate.toFixed(1)}%, Avg Win: ₹{stats.avgWin.toFixed(0)}, Avg Loss: ₹{stats.avgLoss.toFixed(0)}), 
+                      we simulate your risk of ruin.
+                  </p>
+                  
+                  {riskSimData ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                          <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
+                              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Win Probability</p>
+                              <p className="text-xl font-bold text-white">{(riskSimData.winRate * 100).toFixed(1)}%</p>
+                          </div>
+                          <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
+                              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Reward : Risk</p>
+                              <p className="text-xl font-bold text-white">{(riskSimData.avgWin / (riskSimData.avgLoss || 1)).toFixed(2)}</p>
+                          </div>
+                          <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
+                              <p className="text-xs text-slate-500 uppercase font-bold mb-1">Risk of Ruin</p>
+                              <p className={`text-xl font-bold ${riskSimData.probRuin < 0.01 ? 'text-emerald-400' : riskSimData.probRuin < 0.05 ? 'text-amber-400' : 'text-red-400'}`}>
+                                  {(riskSimData.probRuin * 100).toFixed(4)}%
+                              </p>
+                          </div>
+                      </div>
+                  ) : (
+                      <p className="text-amber-400 text-sm font-bold">Need at least 10 trades (Wins & Losses) to calculate risk models.</p>
+                  )}
+              </div>
+          </div>
+      )}
 
     </div>
   );
