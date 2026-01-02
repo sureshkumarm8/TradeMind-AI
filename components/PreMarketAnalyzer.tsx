@@ -51,6 +51,7 @@ const getImageSizeKB = (base64String: string): string => {
 const formatAnalysisTime = (isoString?: string) => {
     if (!isoString) return null;
     const date = new Date(isoString);
+    if (isNaN(date.getTime())) return null; // Fix RangeError
     return date.toLocaleString('en-US', {
         month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit'
@@ -137,6 +138,10 @@ const DirectionBadge = ({ dir }: { dir: string }) => {
 const LiveCheckCard: React.FC<{ checkData: LiveMarketAnalysis, timestamp: string, isFoldable?: boolean }> = ({ checkData, timestamp, isFoldable = false }) => {
     const [isOpen, setIsOpen] = useState(!isFoldable);
 
+    // Safe Time Formatting
+    const dateObj = new Date(timestamp);
+    const timeDisplay = isNaN(dateObj.getTime()) ? '' : dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
     const content = (
         <div className="space-y-4 animate-fade-in">
             {/* Status Banner */}
@@ -201,7 +206,7 @@ const LiveCheckCard: React.FC<{ checkData: LiveMarketAnalysis, timestamp: string
                 className="w-full flex justify-between items-center p-3 hover:bg-slate-800 transition"
             >
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded">{new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded">{timeDisplay}</span>
                     <span className={`text-xs font-bold uppercase ${checkData.status === 'CONFIRMED' ? 'text-emerald-400' : 'text-slate-300'}`}>
                         {checkData.status}
                     </span>
@@ -428,18 +433,18 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
         // Fix for React Error #31 - Check specifically for object type and not null
         if (typeof activity === 'object') {
             return (
-                <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-900 p-2 rounded">
-                        <span className="block text-[9px] text-slate-500">FII</span>
-                        <span className="text-xs font-bold text-white">{activity.FII_Activity || activity.fii || '-'}</span>
+                <div className="grid grid-cols-3 gap-2 text-center mt-3 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                    <div className="p-1">
+                        <span className="block text-[9px] text-slate-500 uppercase font-bold">FII</span>
+                        <span className="text-xs font-mono font-bold text-white">{activity.FII_Activity || activity.fii || '-'}</span>
                     </div>
-                    <div className="bg-slate-900 p-2 rounded">
-                        <span className="block text-[9px] text-slate-500">DII</span>
-                        <span className="text-xs font-bold text-white">{activity.DII_Activity || activity.dii || '-'}</span>
+                    <div className="p-1 border-l border-slate-800">
+                        <span className="block text-[9px] text-slate-500 uppercase font-bold">DII</span>
+                        <span className="text-xs font-mono font-bold text-white">{activity.DII_Activity || activity.dii || '-'}</span>
                     </div>
-                    <div className="bg-slate-900 p-2 rounded">
-                        <span className="block text-[9px] text-slate-500">Net</span>
-                        <span className="text-xs font-bold text-white">{activity.Net_Institutional_Flow || activity.net || '-'}</span>
+                    <div className="p-1 border-l border-slate-800">
+                        <span className="block text-[9px] text-slate-500 uppercase font-bold">Net</span>
+                        <span className={`text-xs font-mono font-bold ${String(activity.Net_Institutional_Flow).includes('-') ? 'text-red-400' : 'text-emerald-400'}`}>{activity.Net_Institutional_Flow || activity.net || '-'}</span>
                     </div>
                 </div>
             );
@@ -844,7 +849,14 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                             <div className="animate-fade-in-up">
                                 <div className="mb-2 flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400">Latest Intelligence ({new Date(latestLiveCheck.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>
+                                    <span className="text-[10px] font-bold uppercase text-slate-400">
+                                        Latest Intelligence ({(() => {
+                                            try {
+                                                const d = new Date(latestLiveCheck.timestamp);
+                                                return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                                            } catch { return ''; }
+                                        })()})
+                                    </span>
                                 </div>
                                 <LiveCheckCard checkData={latestLiveCheck.data} timestamp={latestLiveCheck.timestamp} />
                             </div>

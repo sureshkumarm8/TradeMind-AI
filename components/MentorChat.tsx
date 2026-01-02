@@ -285,7 +285,9 @@ const MentorChat: React.FC<MentorChatProps> = ({ trades, strategyProfile, apiKey
                                     <div className="whitespace-pre-wrap">{renderText(msg.text)}</div>
                                 </div>
                                 <span className="text-[9px] text-slate-600 font-mono uppercase px-1">
-                                    {msg.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    {msg.timestamp && !isNaN(new Date(msg.timestamp).getTime()) 
+                                        ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                        : ''}
                                 </span>
                             </div>
 
