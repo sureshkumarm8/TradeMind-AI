@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw, Globe, Newspaper, Info, Trash2 } from 'lucide-react';
+import { UploadCloud, Zap, Target, ArrowRight, Activity, TrendingUp, TrendingDown, Layers, Crosshair, BarChart2, CheckCircle, ShieldAlert, Lock, Clock, AlertTriangle, MonitorPlay, Sunset, Flag, Layers as LayersIcon, ChevronDown, ChevronUp, Save, Loader2, BrainCircuit, X, Maximize2, RotateCcw, Globe, Newspaper, Info } from 'lucide-react';
 import { PreMarketAnalysis, LiveMarketAnalysis, PostMarketAnalysis, TradeDirection, NewsAnalysis } from '../types';
 import { analyzePreMarketRoutine, analyzeLiveMarketRoutine, analyzePostMarketRoutine, fetchMarketNews } from '../services/geminiService';
 import { compressImage } from '../services/imageService';
@@ -58,7 +57,7 @@ const formatAnalysisTime = (isoString?: string) => {
 }
 
 // Helper: Compact Upload Card
-const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange, onClick, onRemove }: any) => (
+const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange, onClick }: any) => (
     <div className={`relative flex flex-col items-center justify-center p-2 rounded-lg border-2 border-dashed transition-all h-24 group overflow-hidden ${imageSrc ? 'border-indigo-500/50' : 'border-slate-700 hover:border-indigo-500/30 bg-slate-800'}`}>
         {imageSrc && (
             <div className="absolute inset-0 z-0 cursor-pointer" onClick={onClick}>
@@ -87,25 +86,13 @@ const CompactUploadCard = ({ label, icon: Icon, imageSrc, onChange, onClick, onR
              <input type="file" accept="image/*" onChange={onChange} className="absolute inset-0 opacity-0 cursor-pointer z-20" />
         )}
         {imageSrc && (
-             <>
-                <button onClick={onClick} className="absolute bottom-1 right-1 p-1.5 bg-slate-900/50 rounded hover:bg-slate-700 text-white opacity-0 group-hover:opacity-100 transition-opacity z-20" title="Preview">
-                    <Maximize2 size={12}/>
-                </button>
-                {onRemove && (
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onRemove(); }} 
-                        className="absolute top-1 right-1 p-1.5 bg-red-500/80 hover:bg-red-600 text-white rounded z-30 transition-colors shadow-sm cursor-pointer pointer-events-auto" 
-                        title="Remove / Re-upload"
-                    >
-                        <Trash2 size={12}/>
-                    </button>
-                )}
-             </>
+             <button onClick={onClick} className="absolute bottom-1 right-1 p-1 bg-slate-900/50 rounded hover:bg-slate-700 text-white opacity-0 group-hover:opacity-100 transition-opacity z-20" title="Preview">
+                 <Maximize2 size={12}/>
+             </button>
         )}
-        {/* Helper overlay for re-uploading without removing first (optional, but keep for drag-drop feel) */}
-        {imageSrc && !onRemove && (
+        {imageSrc && (
              <div className="absolute top-0 right-0 w-full h-full z-10">
-                 <input type="file" accept="image/*" onChange={onChange} className="absolute top-0 right-0 w-full h-full opacity-0 cursor-pointer" title="Change Image"/> 
+                 <input type="file" accept="image/*" onChange={onChange} className="absolute top-0 right-0 w-6 h-6 opacity-0 cursor-pointer" title="Change Image"/> 
              </div>
         )}
     </div>
@@ -303,13 +290,6 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
         }
     };
 
-    // Specific handler to remove a Live image to allow re-runs
-    const handleRemoveLiveImage = (field: string) => {
-        const current = getLiveImages();
-        const updated = { ...current, [field]: '' }; // Set to empty string
-        if(onLiveImagesUpdate) onLiveImagesUpdate(updated);
-    };
-
     const handlePostUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -327,9 +307,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     // Phase 0 News Analysis
     const runNewsAnalysis = async () => {
         setError(null);
+        if (!apiKey) { setError("API Key missing."); return; }
         setIsNewsAnalyzing(true);
         try {
-            // Service handles fallback key
             const result = await fetchMarketNews(apiKey);
             if (onNewsAnalysisUpdate) onNewsAnalysisUpdate(result);
         } catch (e: any) {
@@ -342,11 +322,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const runAnalysis = async () => {
         setError(null);
         const images = getImages();
+        if (!apiKey) { setError("API Key missing."); return; }
         if (!images.market || !images.intraday || !images.oi || !images.multiStrike) { setError("Incomplete Intelligence."); return; }
         setIsAnalyzing(true);
         try {
             const newsToUse = (includeNews && newsData) ? newsData : null;
-            // Service handles fallback key
             const result = await analyzePreMarketRoutine(images, newsToUse, apiKey);
             if (onAnalysisUpdate) onAnalysisUpdate(result);
             setIsIntelFolded(true);
@@ -360,11 +340,11 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const runLiveCheck = async () => {
         setError(null);
         const lImages = getLiveImages();
+        if (!apiKey) { setError("API Key missing."); return; }
         if (!initialData) { setError("No Pre-Market Plan found."); return; }
         if (!lImages.liveChart || !lImages.liveOi) { setError("Upload Live Chart & OI."); return; }
         setIsLiveAnalyzing(true);
         try {
-            // Service handles fallback key
             const result = await analyzeLiveMarketRoutine(lImages, initialData, apiKey);
             // Parent handles appending to history
             if (onLiveAnalysisUpdate) onLiveAnalysisUpdate(result);
@@ -378,10 +358,10 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
     const runPostAnalysis = async () => {
         setError(null);
         const pImages = getPostImages();
+        if (!apiKey) { setError("API Key missing."); return; }
         if (!pImages.dailyChart || !pImages.eodChart || !pImages.eodOi) { setError("Upload EOD Charts."); return; }
         setIsPostAnalyzing(true);
         try {
-            // Service handles fallback key
             const result = await analyzePostMarketRoutine(pImages, initialData || null, apiKey);
             if (onPostAnalysisUpdate) onPostAnalysisUpdate(result);
         } catch(e: any) {
@@ -419,37 +399,6 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
         if(!window.confirm("Clear Post-Market data?")) return;
         if (onPostAnalysisUpdate) onPostAnalysisUpdate(null);
         if (onPostImagesUpdate) onPostImagesUpdate({ dailyChart: '', eodChart: '', eodOi: '' });
-    };
-
-    // Helper to safely render Institutional Activity (which can be string or object)
-    const renderInstitutionalActivity = (activity: any) => {
-        if (!activity) return null;
-        if (typeof activity === 'string') return activity;
-        // Fix for React Error #31 - Check specifically for object type and not null
-        if (typeof activity === 'object') {
-            return (
-                <div className="grid grid-cols-3 gap-2 text-center mt-3 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                    <div className="p-1">
-                        <span className="block text-[9px] text-slate-500 uppercase font-bold">FII</span>
-                        <span className="text-xs font-mono font-bold text-white">{activity.FII_Activity || activity.fii || '-'}</span>
-                    </div>
-                    <div className="p-1 border-l border-slate-800">
-                        <span className="block text-[9px] text-slate-500 uppercase font-bold">DII</span>
-                        <span className="text-xs font-mono font-bold text-white">{activity.DII_Activity || activity.dii || '-'}</span>
-                    </div>
-                    <div className="p-1 border-l border-slate-800">
-                        <span className="block text-[9px] text-slate-500 uppercase font-bold">Net</span>
-                        <span className={`text-xs font-mono font-bold ${String(activity.Net_Institutional_Flow).includes('-') ? 'text-red-400' : 'text-emerald-400'}`}>{activity.Net_Institutional_Flow || activity.net || '-'}</span>
-                    </div>
-                </div>
-            );
-        }
-        // Last resort fallback
-        try {
-            return JSON.stringify(activity);
-        } catch (e) {
-            return "Data Unavailable";
-        }
     };
 
     const currentImages = getImages();
@@ -492,10 +441,9 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                 </div>
             </div>
 
-            {/* PHASE CONTENT */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
 
-                {/* --- PHASE 0: NEWS --- */}
+                {/* ========================== PHASE 0: NEWS INTEL ========================== */}
                 {activeView === 'phase0' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
                          {/* Header Card */}
@@ -517,18 +465,18 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
+                                <div className="flex gap-2">
                                     {newsData && (
-                                        <button onClick={handleResetPhase0} className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
+                                        <button onClick={handleResetPhase0} className="px-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1">
                                             <RotateCcw size={14}/> Reset
                                         </button>
                                     )}
                                     {!isNewsAnalyzing ? (
-                                        <button onClick={runNewsAnalysis} className="flex-1 md:flex-none px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center justify-center gap-2 transition">
+                                        <button onClick={runNewsAnalysis} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-blue-900/40 flex items-center gap-2 transition">
                                             <Zap size={14} className="fill-current"/> Scan Markets
                                         </button>
                                     ) : (
-                                        <button disabled className="flex-1 md:flex-none px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center justify-center gap-2 animate-pulse cursor-not-allowed">
+                                        <button disabled className="px-6 py-2.5 bg-slate-800 text-blue-400 text-xs font-bold uppercase tracking-widest rounded-xl border border-blue-500/30 flex items-center gap-2 animate-pulse cursor-not-allowed">
                                             <Loader2 size={14} className="animate-spin"/> Scanning Web...
                                         </button>
                                     )}
@@ -538,445 +486,539 @@ const PreMarketAnalyzer: React.FC<PreMarketAnalyzerProps> = ({
                             {error && (
                                 <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in">
                                     <AlertTriangle size={16} className="text-red-400 shrink-0"/>
-                                    <span className="text-red-200 text-xs font-medium">{error}</span>
+                                    <span className="text-xs text-red-200 font-bold">{error}</span>
                                 </div>
                             )}
                         </div>
 
-                        {newsData ? (
-                            <div className="space-y-6">
-                                {/* Sentiment Score */}
+                        {/* System Link Info Banner */}
+                        <div className="bg-indigo-900/10 border border-indigo-500/20 p-3 rounded-xl flex items-start md:items-center gap-3 animate-fade-in">
+                            <Info size={16} className="text-indigo-400 shrink-0 mt-0.5 md:mt-0" />
+                            <p className="text-xs text-indigo-200 leading-relaxed">
+                                <span className="font-bold text-indigo-300 uppercase tracking-wide mr-1">System Calibration:</span> 
+                                This intelligence data is used to calculate the Market Bias for your <span className="font-bold text-white bg-indigo-500/20 px-1 rounded mx-1">09:25 - 09:45 AM Attack Plan</span> in Phase 1.
+                            </p>
+                        </div>
+
+                        {newsData && (
+                             <div className="space-y-4 animate-fade-in">
+                                {/* Sentiment & Gift Nifty Row */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col items-center justify-center text-center">
-                                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-2">Market Sentiment</span>
-                                        <div className={`text-3xl font-black ${newsData.sentiment === 'Bullish' ? 'text-emerald-400' : newsData.sentiment === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>
+                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                                        <div className={`absolute top-0 w-full h-1 ${newsData.sentiment === 'Bullish' ? 'bg-emerald-500' : newsData.sentiment === 'Bearish' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Overall Sentiment</div>
+                                        <div className={`text-2xl font-black uppercase mb-1 ${newsData.sentiment === 'Bullish' ? 'text-emerald-400' : newsData.sentiment === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>
                                             {newsData.sentiment}
                                         </div>
-                                        <div className="mt-2 text-xs font-bold bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+                                        <div className="text-[10px] text-slate-500 font-bold bg-slate-900 px-2 py-0.5 rounded-full border border-slate-700">
                                             Score: {newsData.sentimentScore}/10
                                         </div>
                                     </div>
+                                    <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Activity size={14} className="text-indigo-400"/>
+                                            <span className="text-[10px] text-indigo-400 font-bold uppercase">Executive Summary</span>
+                                        </div>
+                                        <p className="text-sm text-slate-200 leading-relaxed font-medium italic">
+                                            "{newsData.summary.replace(/^"|"$/g, '')}"
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Global Cues Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                         <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Globe size={10}/> US Markets</div>
+                                         <div className="text-sm font-bold text-slate-200">{newsData.globalCues.usMarket}</div>
+                                     </div>
+                                     <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                         <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center gap-1"><Globe size={10}/> Asian Markets</div>
+                                         <div className="text-sm font-bold text-slate-200">{newsData.globalCues.asianMarket}</div>
+                                     </div>
+                                     <div className="bg-indigo-900/20 p-4 rounded-xl border border-indigo-500/30">
+                                         <div className="text-[10px] text-indigo-400 font-bold uppercase mb-1 flex items-center gap-1"><Activity size={10}/> Gift Nifty</div>
+                                         <div className="text-sm font-bold text-white">{newsData.globalCues.giftNifty}</div>
+                                     </div>
+                                </div>
+                                
+                                {/* Headlines & FII */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700">
-                                        <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2"><Activity size={14} className="text-blue-400"/> Global Cues</h4>
-                                        <div className="grid grid-cols-3 gap-4 text-center">
-                                            <div className="bg-slate-900 p-3 rounded-lg">
-                                                <span className="block text-[9px] text-slate-500 uppercase mb-1">US Markets</span>
-                                                <span className="text-xs font-bold text-slate-200">{newsData.globalCues.usMarket}</span>
-                                            </div>
-                                            <div className="bg-slate-900 p-3 rounded-lg">
-                                                <span className="block text-[9px] text-slate-500 uppercase mb-1">Asian Markets</span>
-                                                <span className="text-xs font-bold text-slate-200">{newsData.globalCues.asianMarket}</span>
-                                            </div>
-                                            <div className="bg-slate-900 p-3 rounded-lg border border-indigo-500/30 bg-indigo-900/10">
-                                                <span className="block text-[9px] text-indigo-300 uppercase mb-1">Gift Nifty</span>
-                                                <span className="text-xs font-bold text-white">{newsData.globalCues.giftNifty}</span>
-                                            </div>
-                                        </div>
+                                        <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
+                                            <Newspaper size={14} className="text-slate-400"/> Key Headlines
+                                        </h4>
+                                        <ul className="space-y-2">
+                                            {newsData.keyHeadlines.map((headline, idx) => (
+                                                <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
+                                                    <span className="text-slate-600 mt-0.5">•</span> {headline}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                        <h4 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2">
+                                            <BarChart2 size={14} className="text-slate-400"/> FII / DII Data
+                                        </h4>
+                                        <p className="text-xs text-slate-300 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                                            {newsData.institutionalActivity || "Data not available in search snippet."}
+                                        </p>
                                     </div>
                                 </div>
-
-                                {/* Summary & Headlines */}
-                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
-                                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
-                                        <Info size={14}/> Executive Summary
-                                    </h4>
-                                    <p className="text-sm text-slate-300 leading-relaxed mb-6 border-l-2 border-blue-500 pl-4">
-                                        {newsData.summary}
-                                    </p>
-                                    
-                                    <div className="space-y-2">
-                                        {newsData.keyHeadlines.map((headline, idx) => (
-                                            <div key={idx} className="flex items-start gap-3 p-3 bg-slate-900/50 rounded-lg">
-                                                <span className="text-blue-500 mt-1">•</span>
-                                                <span className="text-xs text-slate-300 font-medium">{headline}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {newsData.institutionalActivity && (
-                                        <div className="mt-6 pt-4 border-t border-slate-700">
-                                            <h5 className="text-[10px] font-bold text-slate-500 uppercase mb-2">Institutional Data (FII/DII)</h5>
-                                            <div className="text-xs text-slate-300 font-mono">
-                                                {renderInstitutionalActivity(newsData.institutionalActivity)}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl">
-                                <Globe size={48} className="mx-auto text-slate-700 mb-4"/>
-                                <p className="text-slate-500 text-sm">Run a scan to pull real-time global cues.</p>
-                            </div>
+                             </div>
                         )}
                     </div>
                 )}
 
-                {/* --- PHASE 1: PLAN --- */}
+                {/* ========================== PHASE 1 VIEW ========================== */}
                 {activeView === 'phase1' && (
-                    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
-                        {/* Header */}
-                        <div className="bg-indigo-900/20 border border-indigo-500/20 p-6 rounded-2xl">
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                                        <Target size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white uppercase tracking-wide">Mission Planning</h3>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-indigo-400 font-bold">Phase 1: Pre-Market Analysis</span>
-                                            {preMarketTimestamp && <span className="text-[10px] text-slate-500 font-mono">| {formatAnalysisTime(preMarketTimestamp)}</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
-                                    {initialData && (
-                                        <button onClick={handleResetPhase1} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
-                                            <RotateCcw size={14}/> Reset
-                                        </button>
-                                    )}
-                                </div>
+                    <div className="space-y-6 animate-fade-in-up max-w-5xl mx-auto">
+                        
+                        {/* INDEPENDENT PRE-FLIGHT SEQUENCE */}
+                        <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-1">
+                            <div className="bg-slate-900/50 p-4 rounded-xl flex items-center justify-between border-b border-slate-700/50 mb-1">
+                                <h3 className="text-white font-bold text-xs flex items-center">
+                                    <Zap className={`mr-2 ${allChecked ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500'}`} size={14} />
+                                    Pre-Flight Sequence
+                                </h3>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${allChecked ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-500'}`}>
+                                    {allChecked ? 'Ready' : 'Pending'}
+                                </span>
                             </div>
-
-                            {/* News Toggle */}
-                            <div className="flex items-center gap-2 mb-4">
-                                <input type="checkbox" id="incNews" checked={includeNews} onChange={(e) => setIncludeNews(e.target.checked)} className="rounded border-slate-600 bg-slate-800 text-indigo-500 focus:ring-offset-slate-900"/>
-                                <label htmlFor="incNews" className="text-xs text-slate-400 select-none cursor-pointer">Include News Intelligence context (if available)</label>
-                            </div>
-
-                            {/* Checklist */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                                {Object.entries(checklist).map(([key, val]) => (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-1 p-1">
+                                {[
+                                    { key: 'mindset', label: 'Calm', icon: BrainCircuit },
+                                    { key: 'environment', label: 'Focus', icon: Lock },
+                                    { key: 'levels', label: 'Levels', icon: Target },
+                                    { key: 'news', label: 'News', icon: MonitorPlay }
+                                ].map((item) => (
                                     <button 
-                                        key={key} 
-                                        onClick={() => toggleCheck(key as any)}
-                                        className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase transition-all ${val ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-600'}`}
+                                        key={item.key}
+                                        onClick={() => toggleCheck(item.key as keyof typeof checklist)} 
+                                        className={`flex items-center justify-center p-3 rounded-lg border transition-all duration-200 ${checklist[item.key as keyof typeof checklist] ? 'bg-indigo-600 border-indigo-500 text-white shadow-md' : 'bg-slate-800 border-slate-700 text-slate-500 hover:bg-slate-700'}`}
                                     >
-                                        <CheckCircle size={12} className={`mr-1.5 ${val ? 'opacity-100' : 'opacity-0'}`}/> {key}
+                                        <item.icon size={14} className={`mr-2 ${checklist[item.key as keyof typeof checklist] ? 'text-white' : 'text-slate-500'}`} />
+                                        <span className="font-bold text-[10px] uppercase tracking-wide">{item.label}</span>
                                     </button>
                                 ))}
                             </div>
+                        </div>
 
+                        {/* INPUT SECTION */}
+                        <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <UploadCloud size={14} className="text-indigo-400"/> Upload Intel
+                                </h3>
+                                <div className="flex items-center gap-3">
+                                    {(initialData || currentImages.market) && (
+                                        <button onClick={handleResetPhase1} className="text-xs flex items-center gap-1 text-slate-500 hover:text-white transition" title="Clear All Phase 1 Data">
+                                            <RotateCcw size={12}/> Reset
+                                        </button>
+                                    )}
+                                    {initialData && (
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] text-emerald-400 font-bold flex items-center bg-emerald-900/20 px-2 py-1 rounded border border-emerald-500/30">
+                                                <CheckCircle size={10} className="mr-1"/> Analysis Complete
+                                            </span>
+                                            {preMarketTimestamp && (
+                                                <span className="text-[8px] text-slate-500 mt-1 font-mono">
+                                                    {formatAnalysisTime(preMarketTimestamp)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                <CompactUploadCard label="Market Graph" icon={Activity} imageSrc={currentImages.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(currentImages.market)} />
+                                <CompactUploadCard label="5m Chart" icon={TrendingUp} imageSrc={currentImages.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(currentImages.intraday)} />
+                                <CompactUploadCard label="Total OI" icon={BarChart2} imageSrc={currentImages.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(currentImages.oi)} />
+                                <CompactUploadCard label="Multi-Strike" icon={LayersIcon} imageSrc={currentImages.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(currentImages.multiStrike)} />
+                            </div>
+
+                            {/* News Context Toggle */}
+                            {newsData && (
+                                <div className="mb-4 flex items-center justify-between bg-slate-900/50 border border-blue-500/20 p-3 rounded-xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-blue-500/20 p-2 rounded-lg text-blue-400">
+                                            <Newspaper size={16} />
+                                        </div>
+                                        <div>
+                                            <span className="text-xs font-bold text-slate-200 block">Inject News Intelligence</span>
+                                            <span className="text-[10px] text-slate-500 block">
+                                                Enhance plan with Phase 0 data ({newsData.sentiment})
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => setIncludeNews(!includeNews)}
+                                        className={`w-10 h-5 rounded-full relative transition-colors ${includeNews ? 'bg-blue-600' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${includeNews ? 'left-6' : 'left-1'}`}></div>
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Error Banner */}
                             {error && (
-                                <div className="p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in text-red-200 text-xs font-medium">
-                                    <AlertTriangle size={16} className="shrink-0"/> {error}
+                                <div className="mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in">
+                                    <AlertTriangle size={16} className="text-red-400 shrink-0"/>
+                                    <span className="text-xs text-red-200 font-bold">{error}</span>
+                                </div>
+                            )}
+
+                            {!isAnalyzing ? (
+                                <button 
+                                    onClick={runAnalysis}
+                                    className={`w-full py-3 text-xs font-black uppercase tracking-widest rounded-xl transition flex items-center justify-center gap-2 ${initialData ? 'bg-slate-700 text-indigo-300 hover:bg-slate-600 border border-indigo-500/30' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-900/50'}`}
+                                >
+                                    <Zap size={16} className={initialData ? "" : "fill-current"}/> {initialData ? "Re-Generate Plan" : "Generate Battle Plan"}
+                                </button>
+                            ) : (
+                                <div className="w-full py-3 bg-slate-800 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-indigo-400 animate-pulse border border-indigo-500/30">
+                                    <Loader2 size={16} className="animate-spin"/> Analyzing Intelligence...
                                 </div>
                             )}
                         </div>
 
-                        {/* Upload Grid */}
-                        {!initialData && (
-                            <>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
-                                    <CompactUploadCard label="Market Graph" icon={BarChart2} imageSrc={currentImages.market} onChange={(e: any) => handleUpload(e, 'market')} onClick={() => setPreviewImage(currentImages.market)} />
-                                    <CompactUploadCard label="5m Intraday" icon={Activity} imageSrc={currentImages.intraday} onChange={(e: any) => handleUpload(e, 'intraday')} onClick={() => setPreviewImage(currentImages.intraday)} />
-                                    <CompactUploadCard label="Total OI" icon={Layers} imageSrc={currentImages.oi} onChange={(e: any) => handleUpload(e, 'oi')} onClick={() => setPreviewImage(currentImages.oi)} />
-                                    <CompactUploadCard label="Multi-Strike" icon={Crosshair} imageSrc={currentImages.multiStrike} onChange={(e: any) => handleUpload(e, 'multiStrike')} onClick={() => setPreviewImage(currentImages.multiStrike)} />
+                        {/* RESULTS SECTION */}
+                        {initialData ? (
+                            <div className="space-y-4">
+                                {/* Bias & Thesis */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative overflow-hidden flex flex-col justify-center items-center text-center">
+                                        <div className={`absolute top-0 left-0 w-1 h-full ${initialData.marketBias === 'Bullish' ? 'bg-emerald-500' : initialData.marketBias === 'Bearish' ? 'bg-red-500' : 'bg-slate-500'}`}></div>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase mb-1">Market Bias</span>
+                                        <div className={`text-2xl font-black uppercase mb-1 ${initialData.marketBias === 'Bullish' ? 'text-emerald-400' : initialData.marketBias === 'Bearish' ? 'text-red-400' : 'text-slate-200'}`}>
+                                            {initialData.marketBias}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-bold bg-slate-900 px-2 py-0.5 rounded-full">
+                                            Conf: {initialData.confidenceScore}/10
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 flex flex-col justify-center">
+                                        <span className="text-[10px] text-indigo-400 font-bold uppercase mb-2 flex items-center gap-1"><BrainCircuit size={12}/> Core Thesis</span>
+                                        <p className="text-sm text-slate-200 font-medium italic leading-relaxed">{initialData.coreThesis?.replace(/^"|"$/g, '')}</p>
+                                        <div className="mt-4 flex gap-4 text-xs font-mono">
+                                             <div className="text-red-400"><span className="font-bold opacity-50">RES:</span> {initialData.keyLevels?.resistance?.join(', ') || 'None'}</div>
+                                             <div className="text-emerald-400"><span className="font-bold opacity-50">SUP:</span> {initialData.keyLevels?.support?.join(', ') || 'None'}</div>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                {/* MOVED GENERATE BUTTON HERE */}
-                                {!isAnalyzing ? (
-                                    <button onClick={runAnalysis} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-indigo-900/50 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] animate-fade-in-up">
-                                        <BrainCircuit size={18} /> Generate Battle Plan
+
+                                {/* First Hour Plan (9:25-9:45) */}
+                                <div className="bg-gradient-to-r from-slate-800 to-indigo-900/20 p-6 rounded-xl border border-indigo-500/20 shadow-lg">
+                                    <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest mb-3 flex items-center">
+                                        <Clock size={16} className="mr-2"/> 09:25 - 09:45 AM Attack Plan
+                                    </h4>
+                                    <div className="bg-slate-900/50 border-l-2 border-indigo-500 p-4 rounded-r-xl mb-4">
+                                        <p className="text-sm text-slate-200">{initialData.firstHourPlan?.action}</p>
+                                    </div>
+                                    
+                                    {initialData.firstHourPlan?.potentialTrade && (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
+                                                <div className="text-[10px] text-slate-500 uppercase font-bold">Direction</div>
+                                                <DirectionBadge dir={initialData.firstHourPlan.potentialTrade.direction} />
+                                            </div>
+                                            <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
+                                                <div className="text-[10px] text-slate-500 uppercase font-bold">Entry Zone</div>
+                                                <div className="text-sm font-bold text-white">{initialData.firstHourPlan.potentialTrade.entryZone}</div>
+                                            </div>
+                                            <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
+                                                <div className="text-[10px] text-slate-500 uppercase font-bold">Stop Loss</div>
+                                                <div className="text-sm font-bold text-red-400">{initialData.firstHourPlan.potentialTrade.stopLoss}</div>
+                                            </div>
+                                            <div className="bg-slate-900 p-3 rounded-lg border border-slate-700">
+                                                <div className="text-[10px] text-slate-500 uppercase font-bold">Target</div>
+                                                <div className="text-sm font-bold text-emerald-400">{initialData.firstHourPlan.potentialTrade.target}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Scenarios & Setups */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Primary Setup */}
+                                    {initialData.tradeSetups?.primary && (
+                                        <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                            <span className="text-[10px] text-emerald-400 font-bold uppercase mb-2 block">Primary Setup</span>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <DirectionBadge dir={initialData.tradeSetups.primary.direction} />
+                                                <span className="text-xs font-mono text-slate-400">Trigger: {initialData.tradeSetups.primary.trigger}</span>
+                                            </div>
+                                            <div className="flex gap-3 text-xs font-mono mt-3 pt-3 border-t border-slate-700">
+                                                <span className="text-red-400">SL: {initialData.tradeSetups.primary.stopLoss}</span>
+                                                <span className="text-emerald-400">TGT: {initialData.tradeSetups.primary.target}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Opening Scenarios */}
+                                    {initialData.openingScenarios && (
+                                        <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
+                                            <div>
+                                                <span className="text-[10px] text-emerald-500 font-bold uppercase block mb-1">Gap Up Scenario</span>
+                                                <p className="text-xs text-slate-300 leading-snug">{initialData.openingScenarios.gapUp}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-red-500 font-bold uppercase block mb-1">Gap Down Scenario</span>
+                                                <p className="text-xs text-slate-300 leading-snug">{initialData.openingScenarios.gapDown}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Mission Intel (Collapsible) */}
+                                <div className="border border-slate-700 rounded-xl overflow-hidden">
+                                    <button 
+                                        onClick={() => setIsIntelFolded(!isIntelFolded)} 
+                                        className="w-full flex justify-between items-center p-3 bg-slate-800 hover:bg-slate-700 transition"
+                                    >
+                                        <span className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
+                                            <LayersIcon size={14}/> Mission Intel (Source Images)
+                                        </span>
+                                        {isIntelFolded ? <ChevronDown size={14}/> : <ChevronUp size={14}/>}
                                     </button>
-                                ) : (
-                                    <button disabled className="w-full py-4 bg-slate-800 text-indigo-400 rounded-xl font-bold text-sm uppercase tracking-widest border border-indigo-500/30 flex items-center justify-center gap-2 cursor-not-allowed">
-                                        <Loader2 size={18} className="animate-spin" /> Analyzing Intelligence...
+                                    {!isIntelFolded && (
+                                        <div className="p-4 bg-slate-900 grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in">
+                                            {Object.entries(currentImages).map(([key, src]) => src && (
+                                                <div key={key} className="relative group cursor-pointer" onClick={() => setPreviewImage(src as string)}>
+                                                    <img src={src as string} className="w-full h-24 object-cover rounded border border-slate-700" alt={key} />
+                                                    <div className="absolute bottom-0 left-0 bg-black/60 text-white text-[9px] uppercase font-bold px-1 rounded-tr">{key}</div>
+                                                    <div className="absolute top-1 right-1 bg-black/60 text-white text-[8px] px-1 rounded">{getImageSizeKB(src as string)} KB</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-center pt-4">
+                                    <button onClick={handleSaveToNotes} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center transition">
+                                        <Save size={16} className="mr-2"/> Save Plan to Dashboard
                                     </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-20 opacity-50">
+                                <Target size={48} className="mx-auto mb-4 text-slate-600"/>
+                                <p className="text-slate-400 text-sm">Upload charts above to generate your battle plan.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ========================== PHASE 2 VIEW ========================== */}
+                {activeView === 'phase2' && (
+                    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
+                        {!initialData ? (
+                            <div className="bg-slate-800/50 border border-slate-700 p-8 rounded-2xl text-center flex flex-col items-center">
+                                <Lock size={48} className="text-slate-600 mb-4"/>
+                                <h3 className="text-xl font-bold text-slate-300 mb-2">Phase 2 Locked</h3>
+                                <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">
+                                    You must complete Phase 1 (Pre-Market Plan) before you can run a Live Combat Check.
+                                </p>
+                                <button onClick={() => setActiveView('phase1')} className="text-indigo-400 hover:text-white font-bold text-xs uppercase flex items-center">
+                                    Go to Phase 1 <ArrowRight size={14} className="ml-1"/>
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                {/* HEADER & UPLOAD */}
+                                <div className="bg-red-900/10 border border-red-500/30 p-6 rounded-2xl">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-red-500/10 rounded-lg text-red-500 animate-pulse">
+                                                <ShieldAlert size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-white uppercase tracking-wide">Live Combat Check</h3>
+                                                <div className="flex flex-col">
+                                                    <p className="text-xs text-red-400 font-bold">Target Time: 09:20 AM</p>
+                                                    {latestLiveCheck && (
+                                                        <span className="text-[8px] text-slate-500 mt-1 font-mono">
+                                                            Last Scan: {formatAnalysisTime(latestLiveCheck.timestamp)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {(latestLiveCheck || currentLiveImages.liveChart) && (
+                                            <button onClick={handleResetPhase2} className="text-xs flex items-center gap-1 text-red-400/70 hover:text-red-400 transition" title="Clear ALL Phase 2 Data">
+                                                <RotateCcw size={12}/> Reset
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <CompactUploadCard label="Live Chart (9:20)" icon={TrendingUp} imageSrc={currentLiveImages.liveChart} onChange={(e: any) => handleLiveUpload(e, 'liveChart')} onClick={() => setPreviewImage(currentLiveImages.liveChart)} />
+                                        <CompactUploadCard label="Live OI Data" icon={BarChart2} imageSrc={currentLiveImages.liveOi} onChange={(e: any) => handleLiveUpload(e, 'liveOi')} onClick={() => setPreviewImage(currentLiveImages.liveOi)} />
+                                    </div>
+
+                                    {/* Error Banner */}
+                                    {error && (
+                                        <div className="mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in">
+                                            <AlertTriangle size={16} className="text-red-400 shrink-0"/>
+                                            <span className="text-xs text-red-200 font-bold">{error}</span>
+                                        </div>
+                                    )}
+
+                                    {!isLiveAnalyzing ? (
+                                        <button 
+                                            onClick={runLiveCheck}
+                                            className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-black uppercase tracking-widest rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-red-900/40"
+                                        >
+                                            <Crosshair size={18}/> Run Reality Check
+                                        </button>
+                                    ) : (
+                                        <div className="w-full py-3 bg-slate-800 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-red-400 animate-pulse border border-red-500/30">
+                                            <Loader2 size={16} className="animate-spin"/> Scanning Live Data...
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* LATEST LIVE RESULT */}
+                                {latestLiveCheck && (
+                                    <div className="space-y-4 animate-fade-in">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="h-1 flex-1 bg-red-900/30 rounded-full"></div>
+                                            <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Latest Scan</span>
+                                            <div className="h-1 flex-1 bg-red-900/30 rounded-full"></div>
+                                        </div>
+                                        
+                                        <LiveCheckCard checkData={latestLiveCheck.data} timestamp={latestLiveCheck.timestamp} />
+                                    </div>
+                                )}
+
+                                {/* PAST CHECKS (Foldable History) */}
+                                {previousLiveChecks.length > 0 && (
+                                    <div className="mt-8">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Layers size={14} className="text-slate-500"/>
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mission History ({previousLiveChecks.length})</h4>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {previousLiveChecks.map((item, idx) => (
+                                                <LiveCheckCard key={idx} checkData={item.data} timestamp={item.timestamp} isFoldable={true} />
+                                            ))}
+                                        </div>
+                                    </div>
                                 )}
                             </>
                         )}
-
-                        {/* Analysis Result */}
-                        {initialData && (
-                            <div className="space-y-6 animate-fade-in-up">
-                                {/* Intel Header (Foldable) */}
-                                <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                                    <div 
-                                        className="p-4 bg-slate-900/50 flex justify-between items-center cursor-pointer hover:bg-slate-800 transition"
-                                        onClick={() => setIsIntelFolded(!isIntelFolded)}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`text-2xl font-black uppercase ${initialData.marketBias === 'Bullish' ? 'text-emerald-400' : initialData.marketBias === 'Bearish' ? 'text-red-400' : 'text-amber-400'}`}>
-                                                {initialData.marketBias}
-                                            </div>
-                                            <div className="h-8 w-[1px] bg-slate-700"></div>
-                                            <div>
-                                                <div className="text-[10px] text-slate-500 uppercase font-bold">Confidence</div>
-                                                <div className="text-sm font-bold text-white">{initialData.confidenceScore}/10</div>
-                                            </div>
-                                        </div>
-                                        {isIntelFolded ? <ChevronDown size={20} className="text-slate-500"/> : <ChevronUp size={20} className="text-slate-500"/>}
-                                    </div>
-
-                                    {!isIntelFolded && (
-                                        <div className="p-5 border-t border-slate-700 space-y-6">
-                                            {/* Thesis */}
-                                            <div>
-                                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2"><Flag size={14}/> Core Thesis</h4>
-                                                <p className="text-sm text-slate-200 leading-relaxed italic border-l-2 border-indigo-500 pl-3">
-                                                    {initialData.coreThesis}
-                                                </p>
-                                            </div>
-
-                                            {/* Levels */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-red-900/10 p-3 rounded-lg border border-red-500/20">
-                                                    <span className="text-[10px] font-bold text-red-400 uppercase block mb-1">Resistance Zones</span>
-                                                    <span className="text-sm font-mono font-bold text-white">{initialData.keyLevels.resistance.join(', ')}</span>
-                                                </div>
-                                                <div className="bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
-                                                    <span className="text-[10px] font-bold text-emerald-400 uppercase block mb-1">Support Zones</span>
-                                                    <span className="text-sm font-mono font-bold text-white">{initialData.keyLevels.support.join(', ')}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Tactical Plan */}
-                                            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                                <div className="flex justify-between items-center mb-3">
-                                                    <h4 className="text-xs font-bold text-amber-400 uppercase flex items-center gap-2"><Clock size={14}/> 09:25 - 09:45 Protocol</h4>
-                                                </div>
-                                                <p className="text-sm text-white font-medium mb-3">{initialData.firstHourPlan.action}</p>
-                                                
-                                                {initialData.firstHourPlan.potentialTrade && (
-                                                    <div className="grid grid-cols-3 gap-2 text-center bg-slate-950 p-2 rounded-lg border border-slate-800">
-                                                        <div>
-                                                            <span className="block text-[9px] text-slate-500 uppercase">Entry Zone</span>
-                                                            <span className="text-xs font-bold text-white">{initialData.firstHourPlan.potentialTrade.entryZone}</span>
-                                                        </div>
-                                                        <div>
-                                                            <span className="block text-[9px] text-slate-500 uppercase">Stop Loss</span>
-                                                            <span className="text-xs font-bold text-red-400">{initialData.firstHourPlan.potentialTrade.stopLoss}</span>
-                                                        </div>
-                                                        <div>
-                                                            <span className="block text-[9px] text-slate-500 uppercase">Target</span>
-                                                            <span className="text-xs font-bold text-emerald-400">{initialData.firstHourPlan.potentialTrade.target}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Save Button */}
-                                <div className="flex justify-end">
-                                    <button onClick={handleSaveToNotes} className="flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-white transition">
-                                        <Save size={14}/> Save Plan to Dashboard Note
-                                    </button>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
-
-                {/* --- PHASE 2: LIVE --- */}
-                {activeView === 'phase2' && (
-                    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
-                        <div className="bg-red-900/20 border border-red-500/20 p-6 rounded-2xl">
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-red-500/10 rounded-lg text-red-400">
-                                        <ShieldAlert size={24} />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white uppercase tracking-wide">Live Check</h3>
-                                        <p className="text-xs text-red-400 font-bold">Phase 2: Validation (09:20 AM+)</p>
-                                    </div>
-                                </div>
-                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
-                                    {liveHistory && liveHistory.length > 0 && (
-                                        <button onClick={handleResetPhase2} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
-                                            <RotateCcw size={14}/> Reset
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {!initialData && (
-                                <div className="bg-amber-900/20 text-amber-200 text-xs p-3 rounded-lg border border-amber-500/30 flex items-center gap-2 mb-4">
-                                    <AlertTriangle size={14} className="shrink-0"/>
-                                    Warning: No Pre-Market Plan. Analysis will be limited.
-                                </div>
-                            )}
-
-                            {error && (
-                                <div className="p-3 bg-slate-900/50 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in text-red-200 text-xs font-medium">
-                                    <AlertTriangle size={16} className="shrink-0"/> {error}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Uploads - With Remove Functionality */}
-                        <div className="grid grid-cols-2 gap-4 animate-fade-in">
-                            <CompactUploadCard 
-                                label="Live 5m Chart" 
-                                icon={Activity} 
-                                imageSrc={currentLiveImages.liveChart} 
-                                onChange={(e: any) => handleLiveUpload(e, 'liveChart')} 
-                                onClick={() => setPreviewImage(currentLiveImages.liveChart)}
-                                onRemove={() => handleRemoveLiveImage('liveChart')} 
-                            />
-                            <CompactUploadCard 
-                                label="Live OI Data" 
-                                icon={Layers} 
-                                imageSrc={currentLiveImages.liveOi} 
-                                onChange={(e: any) => handleLiveUpload(e, 'liveOi')} 
-                                onClick={() => setPreviewImage(currentLiveImages.liveOi)}
-                                onRemove={() => handleRemoveLiveImage('liveOi')}
-                            />
-                        </div>
-
-                        {/* Run Check Button - MOVED HERE */}
-                        {!isLiveAnalyzing ? (
-                            <button onClick={runLiveCheck} className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-red-900/50 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] animate-fade-in-up">
-                                <Zap size={18} className="fill-current"/> Run Reality Check
-                            </button>
-                        ) : (
-                            <button disabled className="w-full py-4 bg-slate-800 text-red-400 rounded-xl font-bold text-sm uppercase tracking-widest border border-red-500/30 flex items-center justify-center gap-2 cursor-not-allowed">
-                                <Loader2 size={18} className="animate-spin" /> Verifying Market Action...
-                            </button>
-                        )}
-
-                        {/* LATEST RESULT */}
-                        {latestLiveCheck && (
-                            <div className="animate-fade-in-up">
-                                <div className="mb-2 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                    <span className="text-[10px] font-bold uppercase text-slate-400">Latest Intelligence ({new Date(latestLiveCheck.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})</span>
-                                </div>
-                                <LiveCheckCard checkData={latestLiveCheck.data} timestamp={latestLiveCheck.timestamp} />
-                            </div>
-                        )}
-
-                        {/* HISTORY */}
-                        {previousLiveChecks.length > 0 && (
-                            <div className="pt-6 border-t border-slate-800">
-                                <h4 className="text-xs font-bold text-slate-500 uppercase mb-4 flex items-center gap-2">
-                                    <Clock size={14}/> Mission History
-                                </h4>
-                                <div className="space-y-3">
-                                    {previousLiveChecks.map((entry, idx) => (
-                                        <LiveCheckCard key={idx} checkData={entry.data} timestamp={entry.timestamp} isFoldable={true} />
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* --- PHASE 3: POST --- */}
+                
+                {/* ========================== PHASE 3 VIEW (POST MARKET) ========================== */}
                 {activeView === 'phase3' && (
                     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
-                        <div className="bg-purple-900/20 border border-purple-500/20 p-6 rounded-2xl">
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-                                <div className="flex items-center gap-3">
+                        {/* INPUTS */}
+                        <div className="bg-purple-900/10 border border-purple-500/30 p-6 rounded-2xl">
+                             <div className="flex justify-between items-start mb-6">
+                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
                                         <Sunset size={24} />
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-white uppercase tracking-wide">Post-Market Debrief</h3>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-purple-400 font-bold">Phase 3: EOD Review</span>
-                                            {postTimestamp && <span className="text-[10px] text-slate-500 font-mono">| {formatAnalysisTime(postTimestamp)}</span>}
+                                        <div className="flex flex-col">
+                                            <p className="text-xs text-purple-400 font-bold">End of Day Analysis</p>
+                                            {postTimestamp && (
+                                                <span className="text-[8px] text-slate-500 mt-1 font-mono">
+                                                    Recorded: {formatAnalysisTime(postTimestamp)}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2 w-full md:w-auto mt-2 md:mt-0">
-                                    {postData && (
-                                        <button onClick={handleResetPhase3} className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase rounded-xl border border-slate-600 transition flex items-center gap-1 justify-center flex-1 md:flex-none">
-                                            <RotateCcw size={14}/> Reset
-                                        </button>
-                                    )}
-                                </div>
+                                {(postData || currentPostImages.dailyChart) && (
+                                    <button onClick={handleResetPhase3} className="text-xs flex items-center gap-1 text-purple-400/70 hover:text-purple-400 transition" title="Clear Phase 3 Data">
+                                        <RotateCcw size={12}/> Reset
+                                    </button>
+                                )}
                             </div>
+                            
+                            <div className="grid grid-cols-3 gap-3 mb-6">
+                                <CompactUploadCard label="Daily Candle" icon={Activity} imageSrc={currentPostImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(currentPostImages.dailyChart)} />
+                                <CompactUploadCard label="EOD 5m Chart" icon={TrendingUp} imageSrc={currentPostImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(currentPostImages.eodChart)} />
+                                <CompactUploadCard label="EOD OI Data" icon={BarChart2} imageSrc={currentPostImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(currentPostImages.eodOi)} />
+                            </div>
+
                             {error && (
-                                <div className="p-3 bg-slate-900/50 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in text-red-200 text-xs font-medium">
-                                    <AlertTriangle size={16} className="shrink-0"/> {error}
+                                <div className="mb-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg flex items-center gap-2 animate-fade-in">
+                                    <AlertTriangle size={16} className="text-red-400 shrink-0"/>
+                                    <span className="text-xs text-red-200 font-bold">{error}</span>
+                                </div>
+                            )}
+
+                            {!isPostAnalyzing ? (
+                                <button 
+                                    onClick={runPostAnalysis}
+                                    className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase tracking-widest rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-purple-900/40"
+                                >
+                                    <Flag size={18}/> Generate EOD Report
+                                </button>
+                            ) : (
+                                <div className="w-full py-3 bg-slate-800 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-purple-400 animate-pulse border border-purple-500/30">
+                                    <Loader2 size={16} className="animate-spin"/> Crunching Day's Data...
                                 </div>
                             )}
                         </div>
 
-                        {!postData && (
-                            <>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
-                                    <CompactUploadCard label="Daily Chart" icon={BarChart2} imageSrc={currentPostImages.dailyChart} onChange={(e: any) => handlePostUpload(e, 'dailyChart')} onClick={() => setPreviewImage(currentPostImages.dailyChart)} />
-                                    <CompactUploadCard label="EOD 5m Chart" icon={Activity} imageSrc={currentPostImages.eodChart} onChange={(e: any) => handlePostUpload(e, 'eodChart')} onClick={() => setPreviewImage(currentPostImages.eodChart)} />
-                                    <CompactUploadCard label="EOD OI" icon={Layers} imageSrc={currentPostImages.eodOi} onChange={(e: any) => handlePostUpload(e, 'eodOi')} onClick={() => setPreviewImage(currentPostImages.eodOi)} />
-                                </div>
-
-                                {/* MOVED GENERATE BUTTON HERE */}
-                                {!isPostAnalyzing ? (
-                                    <button onClick={runPostAnalysis} className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg shadow-purple-900/50 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] animate-fade-in-up">
-                                        <BrainCircuit size={18} /> Generate EOD Report
-                                    </button>
-                                ) : (
-                                    <button disabled className="w-full py-4 bg-slate-800 text-purple-400 rounded-xl font-bold text-sm uppercase tracking-widest border border-purple-500/30 flex items-center justify-center gap-2 cursor-not-allowed">
-                                        <Loader2 size={18} className="animate-spin" /> Compiling Debrief...
-                                    </button>
-                                )}
-                            </>
-                        )}
-
+                        {/* RESULTS */}
                         {postData && (
-                            <div className="space-y-6 animate-fade-in-up">
-                                {/* Accuracy Badge */}
-                                <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 flex justify-between items-center">
-                                    <div>
-                                        <h4 className="text-[10px] uppercase font-bold text-slate-500 mb-1">Prediction Accuracy</h4>
-                                        <div className={`text-xl font-black uppercase ${postData.predictionAccuracy === 'High' ? 'text-emerald-400' : postData.predictionAccuracy === 'Low' ? 'text-red-400' : 'text-amber-400'}`}>
+                             <div className="space-y-4 animate-fade-in">
+                                 {/* Accuracy Grade */}
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-center items-center text-center">
+                                         <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Morning Prediction</div>
+                                         <div className={`text-2xl font-black uppercase ${postData.predictionAccuracy === 'High' ? 'text-emerald-400' : postData.predictionAccuracy === 'Medium' ? 'text-amber-400' : 'text-red-400'}`}>
                                             {postData.predictionAccuracy}
-                                        </div>
-                                    </div>
-                                    <div className="text-right max-w-md">
-                                        <h4 className="text-[10px] uppercase font-bold text-slate-500 mb-1">Actual Trend</h4>
-                                        <p className="text-sm font-bold text-white">{postData.actualTrend}</p>
-                                    </div>
-                                </div>
+                                         </div>
+                                         <div className="text-[10px] text-slate-500 font-bold mt-1">Accuracy</div>
+                                     </div>
+                                     <div className="md:col-span-2 bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                         <div className="text-[10px] text-indigo-400 font-bold uppercase mb-2">Plan vs Reality</div>
+                                         <p className="text-sm text-slate-300 italic">{postData.planVsReality?.replace(/^"|"$/g, '')}</p>
+                                     </div>
+                                 </div>
 
-                                {/* Plan vs Reality */}
-                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
-                                    <h4 className="text-xs font-bold text-white uppercase mb-4 flex items-center gap-2"><Activity size={14} className="text-blue-400"/> Plan vs Reality</h4>
-                                    <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-slate-600 pl-4">
-                                        {postData.planVsReality}
-                                    </p>
-                                </div>
+                                 {/* Key Lesson */}
+                                 <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                     <h4 className="text-xs font-bold text-white uppercase mb-2 flex items-center gap-2">
+                                        <Target size={14} className="text-emerald-400"/> Key Takeaway
+                                     </h4>
+                                     <p className="text-sm text-emerald-100 bg-emerald-900/10 p-3 rounded-lg border border-emerald-500/20">
+                                         {postData.keyTakeaways?.replace(/^"|"$/g, '')}
+                                     </p>
+                                 </div>
 
-                                {/* Key Takeaway */}
-                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><Target size={80}/></div>
-                                    <h4 className="text-xs font-bold text-amber-400 uppercase mb-4 flex items-center gap-2"><Target size={14}/> Major Lesson</h4>
-                                    <p className="text-lg font-medium text-white italic">"{postData.keyTakeaways}"</p>
-                                </div>
+                                 {/* Tomorrow's Prelude */}
+                                 <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-xl border border-indigo-500/30">
+                                     <h4 className="text-sm font-black text-indigo-400 uppercase tracking-widest mb-4">Tomorrow's Prelude</h4>
+                                     
+                                     <div className="flex items-center gap-4 mb-4">
+                                         <DirectionBadge dir={postData.tomorrowOutlook?.bias || 'Neutral'} />
+                                         <span className="text-xs text-slate-400">Early Bias</span>
+                                     </div>
 
-                                {/* Tomorrow's Outlook */}
-                                <div className="bg-gradient-to-br from-indigo-900/30 to-slate-800 p-6 rounded-2xl border border-indigo-500/30">
-                                    <h4 className="text-sm font-bold text-white uppercase mb-4 flex items-center gap-2"><Sunset size={16} className="text-purple-400"/> Tomorrow's Prep</h4>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                        <div>
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Bias</span>
-                                            <DirectionBadge dir={postData.tomorrowOutlook.bias} />
-                                        </div>
-                                        <div>
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Watch For</span>
-                                            <p className="text-xs text-white font-medium">{postData.tomorrowOutlook.watchFor}</p>
-                                        </div>
-                                    </div>
+                                     <div className="grid grid-cols-2 gap-4 text-xs font-mono mb-4">
+                                         <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
+                                            <span className="text-red-400 font-bold block mb-1">Watch Res</span>
+                                            {postData.tomorrowOutlook?.earlyLevels?.resistance?.join(', ') || 'None'}
+                                         </div>
+                                         <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
+                                            <span className="text-emerald-400 font-bold block mb-1">Watch Sup</span>
+                                            {postData.tomorrowOutlook?.earlyLevels?.support?.join(', ') || 'None'}
+                                         </div>
+                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
-                                            <span className="text-[10px] font-bold text-red-400 uppercase block mb-1">Early Resistance</span>
-                                            <span className="text-sm font-mono font-bold text-white">{postData.tomorrowOutlook.earlyLevels.resistance.join(', ')}</span>
-                                        </div>
-                                        <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
-                                            <span className="text-[10px] font-bold text-emerald-400 uppercase block mb-1">Early Support</span>
-                                            <span className="text-sm font-mono font-bold text-white">{postData.tomorrowOutlook.earlyLevels.support.join(', ')}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                     <div className="text-sm text-slate-300 bg-slate-900 p-3 rounded border border-slate-800">
+                                        <span className="text-indigo-400 font-bold uppercase text-[10px] block mb-1">Watch For</span>
+                                        {postData.tomorrowOutlook?.watchFor?.replace(/^"|"$/g, '')}
+                                     </div>
+                                 </div>
+                             </div>
                         )}
                     </div>
                 )}
