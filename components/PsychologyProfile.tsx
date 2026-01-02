@@ -96,9 +96,15 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
         const weeklyMap: Record<string, number> = {};
         closedTrades.forEach(t => {
             const d = new Date(t.date);
+            if (isNaN(d.getTime())) return; // Safe check for invalid date
+
             const day = d.getDay();
             const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
-            const weekDate = new Date(d.setDate(diff)).toISOString().split('T')[0];
+            const weekStart = new Date(d.setDate(diff));
+            
+            if (isNaN(weekStart.getTime())) return; // Double check
+
+            const weekDate = weekStart.toISOString().split('T')[0];
             weeklyMap[weekDate] = (weeklyMap[weekDate] || 0) + (t.pnl || 0);
         });
         
@@ -123,7 +129,14 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
             .map(x => x[0]);
 
         // 6. History Data
-        const historyData = [...closedTrades].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const historyData = [...closedTrades].sort((a,b) => {
+            // Safer sort
+            const dA = new Date(a.date);
+            const dB = new Date(b.date);
+            if (isNaN(dA.getTime())) return 1; 
+            if (isNaN(dB.getTime())) return -1;
+            return dB.getTime() - dA.getTime();
+        });
 
         return {
             disciplineIndex,
@@ -222,7 +235,10 @@ const PsychologyProfile: React.FC<PsychologyProfileProps> = ({ trades, onBack, o
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={data.weeklyTrajectory}>
                                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                            <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickFormatter={(d) => new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric'})} />
+                                            <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickFormatter={(d) => {
+                                                const dt = new Date(d);
+                                                return isNaN(dt.getTime()) ? '' : dt.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+                                            }} />
                                             <YAxis stroke="#64748b" fontSize={10} tickFormatter={(val) => `₹${val}`} />
                                             <Tooltip content={<CustomTooltip />} cursor={{fill: '#334155', opacity: 0.2}} />
                                             <ReferenceLine y={0} stroke="#475569" />
